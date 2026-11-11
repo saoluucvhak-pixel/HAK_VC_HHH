@@ -1,5 +1,10 @@
 # CHANGELOG
 
+## Chưa phát hành
+- Import: header ngắn "Cân 1" / "Cân 2" (và "TL cân 1/2", "Trọng lượng cân 1/2") nay được nhận là cân lần 1/2, nên kiểm tra KL hàng = |Cân 1 − Cân 2| được áp dụng; trước đây các cột này bị bỏ qua và phiếu lệch KL vẫn vào hệ thống.
+- Backend: kênh API chỉ nhận tên kênh có thật (`constructor`, `__proto__`… bị từ chối "Kênh không tồn tại").
+- Thêm `tests/import-weight.test.js`; cập nhật README (phiên bản, chức năng, lệnh chạy, cấu trúc).
+
 ## 0.6.17
 - Bảng tổng hợp, Bảng chi tiết, Bảng tính đơn giá (PDF + Excel): bỏ hẳn phần tên công ty/địa chỉ/MST ở đầu trang; chỉ còn quốc hiệu căn giữa. Thông tin Bên A/Bên B vẫn nằm ở khối "Bên thuê vận chuyển / Bên vận chuyển" bên dưới tiêu đề. Sửa nhãn "Bên thuê vận chuyển" bị cắt chữ ở Excel Bảng chi tiết.
 
