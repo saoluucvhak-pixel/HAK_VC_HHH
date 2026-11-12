@@ -22,7 +22,7 @@ Lịch sử thay đổi: `CHANGELOG.md`.
 ## Chạy thử (cần Node.js ≥ 22.5)
 ```bash
 npm install
-npm test                                           # unit + integration test (68)
+npm test                                           # unit + integration test (75)
 npm run test:ui                                    # smoke test giao diện (cần Chromium cho Playwright)
 npm run validate -- tests/fixtures/sample-v47.xlsx # so engine với Excel → docs/EXCEL_VS_APP_VALIDATION.md
 npm run dev                                        # chạy giao diện trong trình duyệt (dev server, không cần Electron)
@@ -42,7 +42,7 @@ src/ipc/        handlers.js — bảng kênh API duy nhất giữa giao diện v
 src/utils/      money (Decimal, làm tròn kiểu Excel), plate (biển số), datetime
 data/seed/      sample-v47.json — danh mục & bảng giá rút từ file mẫu (dữ liệu, không phải code)
 scripts/        validate-sample.js
-tools/          dev-server.js (bản dùng cho `npm run dev`)
+tools/          dev-server.js (dùng cho `npm run dev`)
 tests/          *.test.js, ui-smoke.mjs, fixtures/
 docs/           tài liệu dự án
 setup/          bộ cài Windows chia phần + hướng dẫn

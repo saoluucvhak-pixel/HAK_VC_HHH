@@ -97,8 +97,8 @@
   --brand:#0e7c86;--brand-2:#14a3ad;--brand-dark:#0b6870;--brand-soft:rgba(14,124,134,.12);
   --sidebar-bg:#0f2740;--sidebar-grad:linear-gradient(180deg,#0f2740 0%,#0a1c30 100%);--sidebar-active:rgba(20,163,173,.3);
   --accent:var(--brand-2);--green:var(--brand);--green-d:var(--brand-dark);
-  --bg:#f3f6fa;--card:#fff;--text:#16202c;--text-mute:#6b7a8c;--line:#e3e9f0;
-  --red:#e5484d;--amber:#eda100;--purple:#6b4fa0;--blue:#2a78d6;--radius:14px;
+  --bg:#f3f6fa;--card:#fff;--text:#16202c;--text-mute:#5f6e80;--line:#e3e9f0;
+  --red:#c9302f;--amber:#eda100;--purple:#6b4fa0;--blue:#2a78d6;--radius:14px;
   --shadow:0 1px 2px rgba(16,35,58,.05),0 6px 18px rgba(16,35,58,.06);
   --sans:'Be Vietnam Pro',-apple-system,'Segoe UI',Roboto,Arial,sans-serif;--mono:'IBM Plex Mono',Consolas,monospace;
 }
@@ -178,3 +178,7 @@ table.t th{text-align:left}table.t th.r{text-align:right}table.t th.c,table.t td
 table.t td.num{text-align:right;font-variant-numeric:tabular-nums}
 table.t td.mono:not(.num):not(.ctr){text-align:left}
 input[inputmode="decimal"]{text-align:right}
+
+/* Truy cập: viền focus rõ khi dùng bàn phím; tôn trọng "giảm chuyển động" của hệ điều hành (HAK Design System). */
+:focus-visible{outline:2px solid var(--brand);outline-offset:2px}
+@media (prefers-reduced-motion:reduce){*,*::before,*::after{animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important;scroll-behavior:auto!important}}
