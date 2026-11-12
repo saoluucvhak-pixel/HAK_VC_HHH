@@ -1,0 +1,80 @@
+name: Windows build
+
+# Kiểm tra trên Windows: test, nạp module native better-sqlite3 cho Electron, đóng gói và khởi động THẬT bản đóng gói
+# (cửa sổ, preload → IPC → CSDL). Chạy tay (workflow_dispatch) có thể tick "installers" để build thêm Portable + Setup.
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      installers:
+        description: 'Build thêm bộ cài Portable + Setup (NSIS) và đính kèm artifact'
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: windows-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Cài gói (tải Electron + module native)
+        run: npm ci
+
+      - name: "Test (Windows - đường dẫn, CRLF, node:sqlite)"
+        run: npm test
+
+      - name: Nạp better-sqlite3 cho Electron
+        run: npx electron-builder install-app-deps
+
+      - name: Đóng gói (win-unpacked)
+        run: npx electron-builder --win dir --x64
+
+      - name: Khởi động thử bản đóng gói
+        shell: pwsh
+        run: |
+          $out = Join-Path $env:RUNNER_TEMP 'smoke.json'
+          $env:VCCOST_SMOKE = '1'
+          $env:VCCOST_SMOKE_OUT = $out
+          $env:VCCOST_DATA_DIR = Join-Path $env:RUNNER_TEMP 'vccost-data'
+          $p = Start-Process -FilePath (Resolve-Path 'dist\win-unpacked\VC Cost.exe') -PassThru -Wait
+          if (Test-Path $out) { Get-Content $out -Raw } else { Write-Host 'Không có file kết quả smoke' }
+          if ($p.ExitCode -ne 0) { throw "Khởi động bản đóng gói thất bại (exit $($p.ExitCode))" }
+          $r = Get-Content $out -Raw | ConvertFrom-Json
+          if (-not $r.ok -or $r.driver -ne 'better-sqlite3') { throw 'Smoke không đạt: cần ok=true và driver=better-sqlite3' }
+
+      - name: Đính kèm kết quả khởi động
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: smoke-result
+          path: ${{ runner.temp }}/smoke.json
+          if-no-files-found: ignore
+
+      - name: Build bộ cài Portable + Setup
+        if: github.event_name == 'workflow_dispatch' && inputs.installers
+        run: npx electron-builder --win --x64
+
+      - name: Đính kèm bộ cài
+        if: github.event_name == 'workflow_dispatch' && inputs.installers
+        uses: actions/upload-artifact@v4
+        with:
+          name: vc-cost-installers
+          path: |
+            dist/VC-Cost-*-Setup.exe
+            dist/VC-Cost-*-Portable.exe
+          retention-days: 14

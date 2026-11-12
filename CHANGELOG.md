@@ -1,6 +1,8 @@
 # CHANGELOG
 
 ## Chưa phát hành
+- CI Windows (`.github/workflows/windows.yml`): trên `windows-latest` chạy `npm test`, nạp `better-sqlite3` cho Electron, đóng gói `win-unpacked` rồi KHỞI ĐỘNG THẬT bản đóng gói (cửa sổ → preload → IPC → CSDL) và kiểm tra driver = better-sqlite3. Chạy tay (workflow_dispatch) tick "installers" để build thêm Portable + Setup (artifact giữ 14 ngày).
+- Electron: chế độ kiểm tra khởi động cho CI (`VCCOST_SMOKE=1`, kết quả ghi vào `VCCOST_SMOKE_OUT`, thoát 0/1; không ảnh hưởng khi chạy bình thường). Nếu không mở được CSDL (thiếu module native, file hỏng) app hiện hộp thoại lỗi rõ ràng rồi thoát, thay vì treo không có cửa sổ.
 - CSDL (migration 005): `chot_ky_snapshot` (số đã chốt/ký) và `audit_log` bất biến ở mức CSDL — trigger chặn UPDATE/DELETE, kể cả sửa tay bằng SQL. Trước đây chỉ service chặn. Mở khóa kỳ vẫn giữ snapshot làm lịch sử.
 - Electron: kênh `dialog.saveExport` chỉ chép file nằm trong thư mục `exports` của app; bỏ kênh `shell.openPath` (giao diện không dùng); CSP thêm `object-src`, `base-uri`, `form-action` = 'none'.
 - Định dạng số (giao diện, PDF/in, biểu mẫu): số âm làm tròn về 0 hiển thị "0", không còn "-0" / "-0,00" (cùng quy tắc HAK_ACCOUNTING_REPORT_STANDARD).
