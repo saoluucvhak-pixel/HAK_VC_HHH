@@ -27,7 +27,7 @@ npm run test:ui                                    # smoke test giao diện (c�
 npm run validate -- tests/fixtures/sample-v47.xlsx # so engine với Excel → docs/EXCEL_VS_APP_VALIDATION.md
 npm run dev                                        # chạy giao diện trong trình duyệt (dev server, không cần Electron)
 ```
-Đóng gói Windows: `npm run dist:win` (portable + NSIS) hoặc `npm run dist:setup`. Bộ cài chia phần nằm trong `setup/` (xem `setup/HUONG_DAN.md`).
+Đóng gói Windows: `npm run dist:win` (portable + NSIS) hoặc `npm run dist:setup`. CI Windows (`.github/workflows/windows.yml`) tự build `win-unpacked` và khởi động thử; chạy tay workflow và tick "installers" để lấy bộ cài Portable/Setup. Kiểm tra khởi động cục bộ: `VCCOST_SMOKE=1 VCCOST_SMOKE_OUT=smoke.json VCCOST_DATA_DIR=<thư mục tạm> npx electron .` (thoát 0 = đạt). Bộ cài chia phần nằm trong `setup/` (xem `setup/HUONG_DAN.md`).
 
 ## Cấu trúc
 ```

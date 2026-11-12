@@ -40,6 +40,49 @@ function createWindow() {
   win.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
 }
 
+/**
+ * Chế độ kiểm tra khởi động cho CI (chỉ bật khi có biến môi trường VCCOST_SMOKE=1): mở cửa sổ thật, gọi app.info qua
+ * preload → IPC → CSDL, kiểm tra module native (better-sqlite3) đã nạp trong bản đóng gói, ghi kết quả JSON vào
+ * VCCOST_SMOKE_OUT rồi thoát (0 = đạt, 1 = lỗi). Không ảnh hưởng khi chạy bình thường.
+ */
+const smokeFinish = (ok, data) => {
+  try { if (process.env.VCCOST_SMOKE_OUT) fs.writeFileSync(process.env.VCCOST_SMOKE_OUT, JSON.stringify({ ok, ...data }, null, 2)); } catch { /* bỏ qua */ }
+  try { if (rt) rt.close(); } catch { /* bỏ qua */ }
+  app.exit(ok ? 0 : 1);
+};
+const smokeFail = (error) => smokeFinish(false, { error: String(error) });
+if (process.env.VCCOST_SMOKE) {   // bất kỳ lỗi không bắt hay treo nào cũng phải làm CI đỏ nhanh, không treo tới hết thời gian job
+  process.on('uncaughtException', smokeFail);
+  process.on('unhandledRejection', smokeFail);
+  setTimeout(() => smokeFail('timeout 120s'), 120000);
+}
+
+function runSmoke() {
+  let done = false;
+  const finish = (ok, data) => { if (done) return; done = true; smokeFinish(ok, data); };
+  win.webContents.once('did-finish-load', async () => {
+    try {
+      const probe = `(async () => {
+        const info = await window.vcApi.invoke('app.info', {});
+        for (let i = 0; i < 50 && !(document.getElementById('view') && document.getElementById('view').childElementCount); i++) await new Promise((r) => setTimeout(r, 200));
+        const v = document.getElementById('view');
+        return { title: document.title, info, viewChildren: v ? v.childElementCount : -1 };
+      })()`;
+      const r = await win.webContents.executeJavaScript(probe);
+      const d = r.info && r.info.data;
+      const problems = [];
+      if (!r.info || !r.info.ok) problems.push('app.info lỗi: ' + (r.info && r.info.error));
+      else {
+        if (d.driver !== 'better-sqlite3') problems.push('driver CSDL = ' + d.driver + ' (cần better-sqlite3)');
+        if (!(d.schema >= 1)) problems.push('schema không hợp lệ');
+      }
+      if (!(r.viewChildren > 0)) problems.push('giao diện chưa vẽ');
+      finish(problems.length === 0, { version: app.getVersion(), platform: process.platform, electron: process.versions.electron, title: r.title, driver: d && d.driver, schema: d && d.schema, counts: d && d.counts, viewChildren: r.viewChildren, problems });
+    } catch (e) { finish(false, { error: String(e && e.stack || e) }); }
+  });
+  win.webContents.once('did-fail-load', (_e, code, desc) => finish(false, { error: `did-fail-load ${code} ${desc}` }));
+}
+
 app.whenReady().then(() => {
   Menu.setApplicationMenu(null);
   const w = where();
@@ -59,7 +102,14 @@ app.whenReady().then(() => {
       return await pw.webContents.printToPDF(require('../src/print/pdfOptions').pdfOptions());
     } finally { pw.destroy(); try { fs.unlinkSync(tmp); } catch { /* bỏ qua */ } }
   };
-  rt = createRuntime({ dataDir: w.dir, version: app.getVersion(), autoInit: true, renderPdf });
+  try {
+    rt = createRuntime({ dataDir: w.dir, version: app.getVersion(), autoInit: true, renderPdf });
+  } catch (e) {
+    // Không mở được CSDL (thiếu module native, file hỏng…): báo rõ thay vì treo không cửa sổ
+    if (process.env.VCCOST_SMOKE) return smokeFail('createRuntime: ' + (e && e.stack || e));
+    dialog.showErrorBox('VC Cost', `Không khởi động được cơ sở dữ liệu:\n${e && e.message}\n\nThư mục dữ liệu: ${w.dir}`);
+    return app.exit(1);
+  }
   ipcMain.handle('storage.info', () => ({ current: w.dir, default: w.defaultDir, source: w.source, size: dirSize(w.dir) }));
   ipcMain.handle('dialog.pickFolder', async () => { const r = await dialog.showOpenDialog(win, { properties: ['openDirectory', 'createDirectory'], title: 'Chọn thư mục lưu trữ dữ liệu' }); return r.canceled ? null : r.filePaths[0]; });
   ipcMain.handle('storage.change', (_e, { target, mode }) => {
@@ -91,6 +141,7 @@ app.whenReady().then(() => {
   });
   ipcMain.handle('shell.showItem', (_e, p) => shell.showItemInFolder(p));
   createWindow();
+  if (process.env.VCCOST_SMOKE) runSmoke();
 });
 
 app.commandLine.appendSwitch('lang', 'vi'); // ô chọn ngày hiển thị dd/mm/yyyy
