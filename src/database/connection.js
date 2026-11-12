@@ -69,9 +69,12 @@ function openRaw(file) {
  * @param {string} file ':memory:' hoặc đường dẫn
  */
 function openDatabase(file, { backupFn = null, driver = null } = {}) {
+  driver = process.env.VCCOST_DRIVER || driver;   // VCCOST_DRIVER=better-sqlite3|node:sqlite: ép driver (CI chạy cả bộ test bằng driver của bản đóng gói)
   if (file !== ':memory:') fs.mkdirSync(path.dirname(file), { recursive: true });
   let o;
   if (driver === 'node:sqlite') { const { DatabaseSync } = require('node:sqlite'); o = { raw: new DatabaseSync(file), driver }; }
+  else if (driver === 'better-sqlite3') { const Better = require('better-sqlite3'); o = { raw: new Better(file), driver }; }   // không lặng lẽ chuyển driver khác
+  else if (driver) throw new Error(`Driver CSDL không hỗ trợ: ${driver}`);
   else o = openRaw(file);
   const db = new Db(o.raw, o.driver);
   if (file !== ':memory:') db.exec('PRAGMA journal_mode = WAL');

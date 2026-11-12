@@ -22,7 +22,7 @@ Lịch sử thay đổi: `CHANGELOG.md`.
 ## Chạy thử (cần Node.js ≥ 22.5)
 ```bash
 npm install
-npm test                                           # unit + integration test (75)
+npm test                                           # unit + integration test (76); VCCOST_DRIVER=better-sqlite3 npm test để chạy bằng driver của bản đóng gói
 npm run test:ui                                    # smoke test giao diện (cần Chromium cho Playwright)
 npm run validate -- tests/fixtures/sample-v47.xlsx # so engine với Excel → docs/EXCEL_VS_APP_VALIDATION.md
 npm run dev                                        # chạy giao diện trong trình duyệt (dev server, không cần Electron)

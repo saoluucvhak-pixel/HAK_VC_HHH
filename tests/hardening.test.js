@@ -102,3 +102,17 @@ test('nâng cấp DB đang ở v4 (có dữ liệu) lên v5: giữ dữ liệu, 
   assert.throws(() => db.exec('DELETE FROM audit_log'), /chỉ được thêm/);
   assert.equal(migrate(db).applied.length, 0);
 });
+
+test('VCCOST_DRIVER: ép driver CSDL; giá trị lạ bị từ chối (không lặng lẽ đổi driver)', () => {
+  const prev = process.env.VCCOST_DRIVER;
+  try {
+    process.env.VCCOST_DRIVER = 'node:sqlite';
+    assert.equal(createApp({ dbFile: ':memory:' }).db.driver, 'node:sqlite');
+    process.env.VCCOST_DRIVER = 'better-sqlite3';
+    assert.equal(createApp({ dbFile: ':memory:' }).db.driver, 'better-sqlite3');
+    process.env.VCCOST_DRIVER = 'khong-co';
+    assert.throws(() => createApp({ dbFile: ':memory:' }), /Driver CSDL không hỗ trợ/);
+  } finally {
+    if (prev === undefined) delete process.env.VCCOST_DRIVER; else process.env.VCCOST_DRIVER = prev;
+  }
+});

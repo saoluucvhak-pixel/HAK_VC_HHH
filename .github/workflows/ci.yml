@@ -20,3 +20,7 @@ jobs:
       # --ignore-scripts: không tải binary Electron / build better-sqlite3 (test chạy bằng node:sqlite)
       - run: npm ci --ignore-scripts
       - run: npm test
+      # cùng bộ test nhưng bằng driver của bản đóng gói (better-sqlite3, N-API prebuilt) để hai driver không lệch nhau
+      - run: npm test
+        env:
+          VCCOST_DRIVER: better-sqlite3

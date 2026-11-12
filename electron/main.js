@@ -77,7 +77,21 @@ function runSmoke() {
         if (!(d.schema >= 1)) problems.push('schema không hợp lệ');
       }
       if (!(r.viewChildren > 0)) problems.push('giao diện chưa vẽ');
-      finish(problems.length === 0, { version: app.getVersion(), platform: process.platform, electron: process.versions.electron, title: r.title, driver: d && d.driver, schema: d && d.schema, counts: d && d.counts, viewChildren: r.viewChildren, problems });
+      // PDF thật qua Chromium của Electron (printToPDF): file phải bắt đầu bằng %PDF và không rỗng
+      let pdf = null;
+      try {
+        const dv = rt.app.db.get('SELECT id FROM don_vi_van_chuyen ORDER BY id LIMIT 1');
+        if (dv) {
+          const res = await rt.dispatch('export.statementPdf', { filter: { don_vi_id: dv.id } });
+          if (!res.ok) problems.push('xuất PDF lỗi: ' + res.error);
+          else {
+            const buf = fs.readFileSync(res.data.path);
+            pdf = { bytes: buf.length, header: buf.subarray(0, 5).toString('latin1') };
+            if (pdf.header !== '%PDF-' || pdf.bytes < 2000) problems.push('PDF không hợp lệ: ' + JSON.stringify(pdf));
+          }
+        }
+      } catch (e) { problems.push('xuất PDF ngoại lệ: ' + (e && e.message)); }
+      finish(problems.length === 0, { version: app.getVersion(), platform: process.platform, electron: process.versions.electron, title: r.title, driver: d && d.driver, schema: d && d.schema, counts: d && d.counts, viewChildren: r.viewChildren, pdf, problems });
     } catch (e) { finish(false, { error: String(e && e.stack || e) }); }
   });
   win.webContents.once('did-fail-load', (_e, code, desc) => finish(false, { error: `did-fail-load ${code} ${desc}` }));
