@@ -1,6 +1,9 @@
 # CHANGELOG
 
 ## Chưa phát hành
+- Nâng Electron 33.4.11 → **45.3.1** (bản 33 hết hỗ trợ, `npm audit` mức cao đã hết) và `better-sqlite3` 11.10 → **13.1.1** (N-API prebuilt dùng chung Node/Electron: không còn build lại module native, bỏ bước `install-app-deps` trong CI). `electron-builder` → 26.18. Loại các prebuilt nền tảng khác và mã nguồn C của better-sqlite3 khỏi bản đóng gói.
+- Kiểm chứng: kiểm tra khởi động Electron 45 (cửa sổ → preload → IPC → CSDL) và **xuất PDF thật** qua Chromium (≈330 KB, `%PDF-`) đạt; cả bộ 76 test đạt bằng cả hai driver `node:sqlite` và `better-sqlite3`.
+- Biến `VCCOST_DRIVER=better-sqlite3|node:sqlite` ép driver CSDL (giá trị lạ bị từ chối, không lặng lẽ đổi driver). CI chạy bộ test bằng cả hai driver.
 - CI Windows (`.github/workflows/windows.yml`): trên `windows-latest` chạy `npm test`, nạp `better-sqlite3` cho Electron, đóng gói `win-unpacked` rồi KHỞI ĐỘNG THẬT bản đóng gói (cửa sổ → preload → IPC → CSDL) và kiểm tra driver = better-sqlite3. Chạy tay (workflow_dispatch) tick "installers" để build thêm Portable + Setup (artifact giữ 14 ngày).
 - Electron: chế độ kiểm tra khởi động cho CI (`VCCOST_SMOKE=1`, kết quả ghi vào `VCCOST_SMOKE_OUT`, thoát 0/1; không ảnh hưởng khi chạy bình thường). Nếu không mở được CSDL (thiếu module native, file hỏng) app hiện hộp thoại lỗi rõ ràng rồi thoát, thay vì treo không có cửa sổ.
 - CSDL (migration 005): `chot_ky_snapshot` (số đã chốt/ký) và `audit_log` bất biến ở mức CSDL — trigger chặn UPDATE/DELETE, kể cả sửa tay bằng SQL. Trước đây chỉ service chặn. Mở khóa kỳ vẫn giữ snapshot làm lịch sử.

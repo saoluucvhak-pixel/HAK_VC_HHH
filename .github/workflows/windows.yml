@@ -1,7 +1,7 @@
 name: Windows build
 
-# Kiểm tra trên Windows: test, nạp module native better-sqlite3 cho Electron, đóng gói và khởi động THẬT bản đóng gói
-# (cửa sổ, preload → IPC → CSDL). Chạy tay (workflow_dispatch) có thể tick "installers" để build thêm Portable + Setup.
+# Kiểm tra trên Windows: test, đóng gói và khởi động THẬT bản đóng gói (cửa sổ, preload → IPC → CSDL, xuất PDF thật).
+# better-sqlite3 ≥ 13 dùng N-API prebuilt (dùng chung Node/Electron) nên không cần build lại native. Chạy tay (workflow_dispatch) có thể tick "installers" để build thêm Portable + Setup.
 on:
   push:
     branches: [main]
@@ -38,8 +38,10 @@ jobs:
       - name: "Test (Windows - đường dẫn, CRLF, node:sqlite)"
         run: npm test
 
-      - name: Nạp better-sqlite3 cho Electron
-        run: npx electron-builder install-app-deps
+      - name: Test bằng driver của bản đóng gói (better-sqlite3)
+        run: npm test
+        env:
+          VCCOST_DRIVER: better-sqlite3
 
       - name: Đóng gói (win-unpacked)
         run: npx electron-builder --win dir --x64
