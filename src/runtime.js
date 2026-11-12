@@ -47,8 +47,8 @@ function createRuntime({ dataDir, version = 'dev', driver = null, autoInit = fal
   try { rt.backup.autoDaily(); } catch (e) { log(`Auto backup lỗi: ${e.message}`); }
 
   rt.dispatch = async (channel, args) => {
-    const h = rt.handlers[channel];
-    if (!h) return { ok: false, error: `Kênh không tồn tại: ${channel}` };
+    const h = Object.hasOwn(rt.handlers, channel) ? rt.handlers[channel] : null;
+    if (typeof h !== 'function') return { ok: false, error: `Kênh không tồn tại: ${channel}` };
     try {
       return { ok: true, data: await h(args || {}) };
     } catch (e) {
