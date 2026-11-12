@@ -99,8 +99,9 @@ function priceSteps(x, sh) {
   const steps = []; const H = (t) => steps.push({ head: t });
   const S = (stt, label, how, note, value, unit, o = {}) => steps.push({ stt, label, how, note, value, unit, ...o });
   const fix = x.phuong_thuc !== 'DIEU_CHINH_DAU';
-  const n0 = (v) => Number(v).toLocaleString('vi-VN', { maximumFractionDigits: 0 });
-  const n2 = (v) => Number(v).toLocaleString('vi-VN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const nz = (v, d) => { const x = Number(v), k = Math.pow(10, d); return Math.round(x * k) / k === 0 ? 0 : x; };   // không ra "-0"
+  const n0 = (v) => nz(v, 0).toLocaleString('vi-VN', { maximumFractionDigits: 0 });
+  const n2 = (v) => nz(v, 2).toLocaleString('vi-VN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   if (fix) {
     H('A. ĐƠN GIÁ THEO BẢNG GIÁ (giá cố định, không điều chỉnh theo dầu)');
     S(1, 'Đơn giá cước vận chuyển (chưa VAT)', 'Bảng giá', '', x.don_gia_goc, 'đ/tấn', { fmt: 'money', bold: true });

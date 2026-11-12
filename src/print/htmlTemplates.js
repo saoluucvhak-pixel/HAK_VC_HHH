@@ -3,7 +3,11 @@
 const { dmy } = require('./documents');
 
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
-const nf = (n, d = 0) => (n === null || n === undefined || n === '' || isNaN(Number(n)) ? '' : Number(n).toLocaleString('vi-VN', { minimumFractionDigits: d, maximumFractionDigits: d }));
+const nf = (n, d = 0) => {
+  if (n === null || n === undefined || n === '' || isNaN(Number(n))) return '';
+  const x = Number(n), k = Math.pow(10, d);
+  return (Math.round(x * k) / k === 0 ? 0 : x).toLocaleString('vi-VN', { minimumFractionDigits: d, maximumFractionDigits: d });   // không ra "-0"
+};
 const money = (n) => nf(n, 0);
 const tan = (n) => nf(n, 3);
 

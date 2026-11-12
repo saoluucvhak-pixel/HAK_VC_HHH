@@ -1,6 +1,13 @@
 # CHANGELOG
 
 ## Chưa phát hành
+- CSDL (migration 005): `chot_ky_snapshot` (số đã chốt/ký) và `audit_log` bất biến ở mức CSDL — trigger chặn UPDATE/DELETE, kể cả sửa tay bằng SQL. Trước đây chỉ service chặn. Mở khóa kỳ vẫn giữ snapshot làm lịch sử.
+- Electron: kênh `dialog.saveExport` chỉ chép file nằm trong thư mục `exports` của app; bỏ kênh `shell.openPath` (giao diện không dùng); CSP thêm `object-src`, `base-uri`, `form-action` = 'none'.
+- Định dạng số (giao diện, PDF/in, biểu mẫu): số âm làm tròn về 0 hiển thị "0", không còn "-0" / "-0,00" (cùng quy tắc HAK_ACCOUNTING_REPORT_STANDARD).
+- Giá: `resolvePrice` trả NO_PRICE khi ngày rỗng/sai thay vì so sánh chuỗi "undefined".
+- Giao diện: chữ phụ (`--text-mute`) và màu đỏ (`--red`) đạt tương phản WCAG AA (≥ 4,5:1); thêm `:focus-visible` và `prefers-reduced-motion`.
+- Dọn: xóa `scripts/dev-server.js` (bản cũ trùng `tools/dev-server.js`).
+- Test: `tests/hardening.test.js` (bất biến CSDL, nâng cấp v4→v5, đường dẫn an toàn, "-0", ngày rỗng, CSP, tương phản).
 - Import: header ngắn "Cân 1" / "Cân 2" (và "TL cân 1/2", "Trọng lượng cân 1/2") nay được nhận là cân lần 1/2, nên kiểm tra KL hàng = |Cân 1 − Cân 2| được áp dụng; trước đây các cột này bị bỏ qua và phiếu lệch KL vẫn vào hệ thống.
 - Backend: kênh API chỉ nhận tên kênh có thật (`constructor`, `__proto__`… bị từ chối "Kênh không tồn tại").
 - Thêm `tests/import-weight.test.js`; cập nhật README (phiên bản, chức năng, lệnh chạy, cấu trúc).

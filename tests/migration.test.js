@@ -13,7 +13,7 @@ function freshDb() {
 test('migration chạy được (v1→v2), idempotent, có đủ bảng & index', () => {
   const db = freshDb();
   const r1 = migrate(db);
-  assert.equal(r1.to, 4);
+  assert.equal(r1.to, 5);
   const cols = db.prepare('PRAGMA table_info(don_vi_van_chuyen)').all().map((c) => c.name);
   for (const c of ['dai_dien', 'ke_toan', 'so_hop_dong', 'ngay_hop_dong', 'so_tai_khoan', 'ten_in_bao_cao', 'noi_ky']) assert.ok(cols.includes(c), `thiếu cột ${c}`);
   const r2 = migrate(db);
