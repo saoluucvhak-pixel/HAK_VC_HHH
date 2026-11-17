@@ -1,6 +1,6 @@
 # CHANGELOG
 
-## Chưa phát hành
+## 0.7.0 — chờ nghiệm thu (schema 6)
 - **Kiểm tra toàn vẹn dữ liệu (chỉ đọc)**: `npm run integrity -- <db>` và nút "Kiểm tra toàn vẹn" ở màn Backup — phát hiện phiếu trùng danh tính (kể cả bản trùng do lỗi cũ: cùng số phiếu + nơi xuất viết khác chữ), chốt kỳ mồ côi/lệch snapshot, lô lệch bộ đếm, tiền lệch…; không tự sửa. Tài liệu mô hình cha–con: `docs/MO_HINH_DU_LIEU.md`.
 - Import: một cột bị gán cho hai trường nay là **lỗi chặn** ở bước ghép cột (trước là cảnh báo); cài đặt `duplicate_key` chỉ nhận quy tắc thật sự được áp dụng.
 - **Phân quyền tùy chọn** (migration 006 `nguoi_dung`, không ảnh hưởng dữ liệu cũ): tắt = 1 người dùng như trước; bật = đăng nhập + 4 vai trò (ADMIN/DUYET/NHAP/XEM). Quyền thực thi ở máy chủ (`runtime.dispatch`, bảng `utils/permissions.js`, kênh chưa khai báo → chỉ admin), mật khẩu băm scrypt, khóa 60 giây sau 5 lần sai, phiên hết hạn 30 phút, bảo vệ quản trị cuối cùng, đổi thư mục lưu trữ chỉ quản trị, `audit_log.user_name` ghi tên đăng nhập, khôi phục khi mất mật khẩu bằng `VCCOST_RESET_AUTH=1`. Giao diện: màn đăng nhập, ô người dùng, màn Người dùng & phân quyền. Test: `tests/auth.test.js` (8) + kịch bản UI.
