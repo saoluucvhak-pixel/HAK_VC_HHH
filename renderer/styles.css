@@ -280,3 +280,7 @@ span.chk{display:inline;margin:0;padding:0;background:none;border:0}
 .user-chip small { color: var(--text-mute); }
 .overlay.login { z-index: 200; background: var(--bg); }
 .overlay.login .modal { max-width: 380px; }
+
+/* Bảng dữ liệu: biển số, số phiếu, ngày giờ không xuống dòng (trước đây "92C-\n07938" làm mỗi dòng cao gấp đôi) */
+table.t td.mono, table.t td.ctr { white-space: nowrap; }
+.kind-note { display: block; color: var(--text-mute); font-size: .78rem; margin-top: 2px; }

@@ -1,6 +1,7 @@
 # CHANGELOG
 
 ## 0.7.0 — chờ nghiệm thu (schema 6)
+- **Logic khối lượng (kg/tấn)**: KL ghi nhầm theo tấn (vd 17,5 hiểu thành 17,5 kg → tiền nhỏ 1000 lần) hoặc quá lớn (> 100.000 kg/chuyến) nay bị chặn ở import và sửa trực tiếp (`src/utils/weight.js`); số cân âm bị chặn. Bước xem trước hiển thị tổng KL đọc được, đối chiếu với dòng "Tổng cộng" của file (lệch thì báo đỏ: có thể mất dòng/sai đơn vị) và tổng tạm tính phiếu mới. Kiểm tra toàn vẹn thêm: KL bất thường, số phiếu chỉ khác số 0 đầu. Bảng dữ liệu không còn xuống dòng biển số/ngày giờ; màn Backup gắn nhãn dễ hiểu cho từng loại bản sao (Trước nâng cấp / Trước khôi phục…). Test: `tests/weight-logic.test.js`.
 - Sửa lỗi quay lui khôi phục có thể xóa DB gốc khi Windows từ chối bước đổi tên đầu tiên. Quay lui chỉ dọn các đường dẫn đã dời thành công hoặc bộ DB thay thế; hai ca hồi quy trên cả hai driver đã tái hiện mất dữ liệu trước bản sửa.
 - CI tự xây và nghiệm thu Setup/Portable trên PR `codex/release-*` và khi cập nhật `main`, đính kèm bộ cài, SHA-256 và JSON kết quả. Script nghiệm thu dừng trước khi cài nếu thư mục dữ liệu mặc định đã tồn tại, bảo toàn dữ liệu trên máy chạy kiểm thử.
 - Nghiệm thu cục bộ: 146/146 test đạt với cả `node:sqlite` và `better-sqlite3`; UI smoke Windows qua `CHROMIUM_PATH` hoàn tất không có lỗi; đối chiếu V.47 khớp các chỉ tiêu; `npm audit --omit=dev` có 0 cảnh báo.

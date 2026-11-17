@@ -49,6 +49,7 @@ await fc2.setFiles(fx); await page.waitForSelector('[data-act=preview]');
   ck(await page.isEnabled('[data-act=preview]'), 'nút Xem trước bật lại');
 }
 await page.click('[data-act=preview]'); await page.waitForSelector('[data-act=commit]'); await shot('03-import-preview');
+{ const t = await page.textContent('[data-kl-check]'); if (!/Khớp dòng "Tổng cộng"/.test(t) || !/38\.563\.700 kg/.test(t)) errors.push('đối chiếu KL preview: ' + t); }
 await page.click('[data-act=commit]'); await page.click('.modal .btn:has-text("Import")'); await page.waitForSelector('text=Import hoàn tất', { timeout: 60000 }); await shot('04-import-done');
 {
   const ck = (ok, msg) => { if (!ok) errors.push('nhập liệu: ' + msg); };
