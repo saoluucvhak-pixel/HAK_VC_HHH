@@ -48,12 +48,32 @@
         h('optgroup', { label: 'Theo lịch' }, P.map((x) => h('option', { value: x[0] }, x[1]))),
         locks.length ? h('optgroup', { label: 'Kỳ đã chốt' }, locks.filter((k) => k.trang_thai === 'DA_CHOT').map((k) => h('option', { value: `ck:${k.id}` },
           `${k.ma} · ${k.loai === 'DOT' ? `Đợt ${k.ma_dot}` : `${fmt.date(k.tu_ngay)} – ${fmt.date(k.den_ngay)}`}${k.don_vi ? ` · ${k.don_vi}` : ''}`))) : null);
+      // ---- Việc cần làm: các bước của quy trình, mỗi bước cho biết còn bao nhiêu phiếu và bấm là tới đúng chỗ xử lý
+      const todoCard = async () => {
+        const t = await api('workflow.todo');
+        const step = (n, title, desc, count, unit, go, label, doneText = 'Xong', info = false) => h('div', { class: 'todo-row' + (count ? ' open' : info ? ' info' : ' done') },
+          h('span', { class: 'todo-n' }, count || info ? n : '✓'),
+          h('div', { class: 'todo-t' }, h('b', {}, title), h('small', {}, desc)),
+          h('span', { class: 'todo-c' }, count ? `${fmt.int(count)} ${unit}` : doneText),
+          go && (count || info) ? h('button', { class: 'btn sm ' + (count ? '' : 'ghost'), onclick: go }, label) : h('span', {}));
+        const last = t.import_gan_nhat;
+        return h('div', { class: 'card todo', 'data-todo': '1' },
+          h('h3', {}, 'Việc cần làm theo quy trình'),
+          step('1', 'Nhập phiếu cân', last ? `Lần nhập gần nhất: ${fmt.dt(last.import_time)} · ${fmt.int(last.inserted_rows)} phiếu mới` : 'Chưa nhập phiếu cân nào', t.tong_phieu ? 0 : 1, 'việc', () => App.go('import'), t.tong_phieu ? 'Nhập thêm' : 'Nhập ngay', `${fmt.int(t.tong_phieu)} phiếu trong hệ thống`, true),
+          step('2', 'Xử lý phiếu trùng khóa', 'Cùng số phiếu nhưng nội dung khác file cũ — chọn giữ cũ / cập nhật / bỏ qua', t.cho_xu_ly, 'phiếu chờ', () => App.go('review'), 'Xử lý'),
+          step('3', 'Hoàn thiện dữ liệu để tính giá', 'Thiếu xe, đơn vị, nơi xuất hoặc bảng giá — chưa vào bảng kê và chặn chốt kỳ', t.chua_tinh_gia, 'phiếu', () => App.go('tickets', { chua_tinh_gia: true }), 'Xem phiếu'),
+          step('4', 'Đối chiếu với đối tác', 'Phiếu đã tính giá nhưng chưa khớp / chưa đối chiếu', t.can_doi_chieu, 'phiếu', () => App.go('reconcile'), 'Đối chiếu'),
+          step('5', 'Chốt kỳ', 'Khóa số liệu để ký bảng kê và xuất hóa đơn', t.chua_chot, 'phiếu chưa chốt', () => App.go('lock'), 'Chốt kỳ'),
+          step('6', 'Bảng kê thanh toán', `Đã chốt ${fmt.int(t.da_chot)} phiếu — in/ký bảng kê từng đơn vị`, 0, '', () => App.go('statements'), 'Mở bảng kê', `${fmt.int(t.da_chot)} phiếu đã chốt`, true),
+          t.canh_bao_mo ? h('p', { class: 'muted small', style: { margin: '10px 0 0' } }, `🔔 ${fmt.int(t.canh_bao_mo)} cảnh báo đang mở — `, h('a', { class: 'lnk', onclick: () => App.go('alerts') }, 'xem Trung tâm cảnh báo')) : null);
+      };
       const load = async () => {
         const d = await api('reports.dashboard', App.cleanFilter(App.state.filter));
         App.clear(body);
         const k = d.kpi, cu = k.chua_tinh;
         const F = App.state.filter;
         body.append(
+          await todoCard(),
           h('p', { class: 'muted', style: { marginTop: 0 } }, `Số liệu chính chỉ gồm phiếu ĐÃ TÍNH GIÁ (khớp Bảng kê) — ${fmt.int(k.so_chuyen)} phiếu${k.da_chot ? `, trong đó ${fmt.int(k.da_chot)} đã chốt kỳ` : ''}.`),
           h('div', { class: 'grid g6', style: { marginBottom: '14px' } },
             kpi('Số chuyến', fmt.int(k.so_chuyen)), kpi('Khối lượng', fmt.tan(k.tong_kg / 1000), 'tấn'), kpi('Số xe', fmt.int(k.so_xe)),

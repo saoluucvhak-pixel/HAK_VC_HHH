@@ -1,6 +1,10 @@
 # CHANGELOG
 
 ## Chưa phát hành
+- **Giao diện theo HAK Enterprise Design System (skin luxe: navy · champagne · ivory)**: token chuẩn nhúng nguyên văn (`renderer/vendor/hak-design/luxe.css`, băm trong MANIFEST); `styles.css` không tự định nghĩa màu thương hiệu mà chỉ đặt tên gọi trỏ sang token (`--green → --brand`, `--text-mute → --mut-aa`…); màu cứng còn lại (nền ô nhập, viền, đầu bảng, thanh bên, toast, dòng cảnh báo) đổi sang token. Cặp chữ/nền chính đạt WCAG AA, có test.
+- **Menu theo luồng công việc ①–④** (Nhập & kiểm tra → Giá & tính cước → Đối chiếu & chốt kỳ → Bảng kê & báo cáo).
+- **Dashboard mở đầu bằng "Việc cần làm theo quy trình"**: 6 bước, mỗi bước nêu số phiếu còn lại (hoặc ✓ Xong) và nút đi thẳng tới màn xử lý (vd Phiếu cân đã lọc sẵn phiếu chưa tính giá). Backend `workflow.todo`.
+- Test: `tests/design.test.js` (5 test: skin/alias/AA/menu/`workflow.todo` theo dữ liệu) + kịch bản giao diện thật (6 bước, nhóm menu, nền ivory, đếm bước, nút Chốt kỳ mở đúng màn). Test tương phản cũ (đọc màu cứng trong styles.css) được thay bằng test trên token chuẩn.
 - **Bộ lọc thông minh (HAK Smart Filter) dùng chung mọi màn hình** thay thanh lọc cũ (Phiếu cân, Dashboard, Báo cáo, Biểu mẫu, Bảng kê): chọn nhiều đơn vị / đợt / nơi xuất / tuyến, tìm không dấu (số phiếu, biển số gõ kiểu nào cũng được, tên nơi xuất kể cả tên gọi khác), kỳ + Từ/Đến ngày `dd/mm/yyyy` (tự chèn `/`, chặn ngày không tồn tại), trạng thái tính giá, chip điều kiện, dòng "Hiển thị x / y dòng · Phạm vi", bộ lọc đã lưu theo màn hình. Điều kiện đi từ Dashboard sang Phiếu cân nay hiện thành chip (không còn lọc ngầm). Chứng từ Excel/PDF in tên các giá trị đã chọn và cụm tìm kiếm.
   - Lõi nhúng nguyên văn từ `HAK_SMART_FILTER` (commit e99bb7e) ở `renderer/vendor/hak-smart-filter` + `MANIFEST.json` (test chặn sửa tay); bộ chuyển đổi `renderer/filters.js`.
   - Backend: `ReportService.where` nhận mảng id (IN), tìm kiếm không dấu; thêm `tickets.count`, `tickets.periods`; `asIds`/`oneId`; bảng kê đòi đúng một đơn vị.

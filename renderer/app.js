@@ -200,13 +200,14 @@ const App = (() => {
   // ---------------------------------------------------------------- filter dùng chung
 
   // ---------------------------------------------------------------- điều hướng
+  // Menu theo LUỒNG CÔNG VIỆC: nhập & kiểm tra → giá & tính cước → đối chiếu & chốt kỳ → bảng kê & báo cáo
   const NAV = [
-    ['TỔNG QUAN', [['dashboard', '📊', 'Dashboard']]],
-    ['VẬN CHUYỂN', [['tickets', '🧾', 'Phiếu cân'], ['import', '📥', 'Import phiếu cân'], ['review', '🔍', 'Cần kiểm tra', 'pending'], ['vehicle', '🚛', 'Chi tiết theo xe']]],
-    ['CHI PHÍ', [['statements', '📄', 'Bảng kê thanh toán'], ['lock', '🔒', 'Chốt kỳ'], ['prices', '💲', 'Bảng giá'], ['pricecalc', '🧮', 'Bảng tính đơn giá'], ['fuel', '⛽', 'Giá dầu']]],
-    ['ĐỐI CHIẾU', [['reconcile', '⚖️', 'Đối chiếu']]],
+    ['TỔNG QUAN', [['dashboard', '📊', 'Dashboard · việc cần làm']]],
+    ['① NHẬP & KIỂM TRA', [['import', '📥', 'Import phiếu cân'], ['review', '🔍', 'Cần kiểm tra', 'pending'], ['tickets', '🧾', 'Phiếu cân'], ['vehicle', '🚛', 'Chi tiết theo xe']]],
+    ['② GIÁ & TÍNH CƯỚC', [['prices', '💲', 'Bảng giá'], ['fuel', '⛽', 'Giá dầu'], ['pricecalc', '🧮', 'Bảng tính đơn giá']]],
+    ['③ ĐỐI CHIẾU & CHỐT KỲ', [['reconcile', '⚖️', 'Đối chiếu'], ['lock', '🔒', 'Chốt kỳ']]],
+    ['④ BẢNG KÊ & BÁO CÁO', [['statements', '📄', 'Bảng kê thanh toán'], ['forms', '🖨', 'Biểu mẫu in ký 2 bên'], ['rp:vehicle', '📋', 'Theo xe'], ['rp:carrier', '📋', 'Theo đơn vị'], ['rp:origin', '📋', 'Theo nơi xuất'], ['rp:date', '📋', 'Theo thời gian'], ['rp:dot', '📋', 'Theo tàu']]],
     ['DANH MỤC', [['cat:xe', '🚛', 'Xe'], ['cat:don_vi_van_chuyen', '🏢', 'Đơn vị vận chuyển'], ['cat:hop_dong', '📑', 'Hợp đồng vận chuyển'], ['cat:dia_diem', '📍', 'Địa điểm'], ['cat:tuyen_van_chuyen', '🛣', 'Tuyến'], ['cat:dot_van_chuyen', '🚢', 'Đợt / Tàu']]],
-    ['BÁO CÁO', [['forms', '🖨', 'Biểu mẫu in ký 2 bên'], ['rp:vehicle', '📋', 'Theo xe'], ['rp:carrier', '📋', 'Theo đơn vị'], ['rp:origin', '📋', 'Theo nơi xuất'], ['rp:date', '📋', 'Theo thời gian'], ['rp:dot', '📋', 'Theo tàu']]],
     ['HỆ THỐNG', [['alerts', '🔔', 'Trung tâm cảnh báo', 'alerts'], ['batches', '🕘', 'Lịch sử import'], ['audit', '📜', 'Audit log'], ['backup', '💾', 'Backup'], ['settings', '⚙️', 'Cài đặt']]],
   ];
   function renderNav() {

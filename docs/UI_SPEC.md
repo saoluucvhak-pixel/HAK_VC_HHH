@@ -5,11 +5,7 @@
 - `<thead>` nền tối (trùng sidebar) chữ trắng in hoa nhỏ; số liệu canh phải, font monospace (IBM Plex Mono) cho số phiếu, biển số, tiền; nội dung font Manrope/Inter (đóng gói kèm app — offline).
 - Tag trạng thái bo tròn nền nhạt chữ đậm: xanh = OK/Khớp, xám = Trùng hoàn toàn, cam = Cần kiểm tra/Cảnh báo, đỏ = Lỗi/Thiếu giá/Xung đột, tím = Đã chốt.
 - Nút chính xanh lá đậm; nút phụ viền mảnh. Modal chỉ đóng khi bấm đúng lớp nền (`e.target === overlay`), không dùng `stopPropagation`.
-- Token màu:
-```css
---sidebar-bg:#141F19; --sidebar-active:#24352A; --accent:#D99A4E; --green:#3E7057;
---bg:#F1EFE9; --card:#FFFFFF; --text:#1C1C1A; --text-mute:#77756A; --red:#B4453B; --radius:12px;
-```
+- **Token màu: HAK Enterprise Design System, skin `luxe` (navy · champagne · ivory)** — `renderer/vendor/hak-design/luxe.css` nhúng nguyên văn từ repo `HAK-Enterprise-Design-System` (băm trong `MANIFEST.json`, test chặn sửa tay). `renderer/styles.css` KHÔNG tự định nghĩa màu thương hiệu, chỉ đặt tên gọi riêng trỏ sang token chuẩn (`--green → --brand`, `--text → --ink`, `--text-mute → --mut-aa`, `--sidebar-bg → --deep`…). Cặp chữ/nền chính đều đạt WCAG AA (≥ 4,5:1) và được kiểm bằng `tests/design.test.js`.
 - Định dạng: tiền `1.234.567` (vi-VN), KG `20.090`, tấn `20,090`, ngày `dd/mm/yyyy HH:mm`.
 
 ## 1b. Bộ lọc thông minh (HAK Smart Filter) — dùng chung mọi màn hình
@@ -24,13 +20,16 @@ Mọi danh mục (Xe, Đơn vị VC, Địa điểm, Tuyến, Đợt/Tàu, Bản
 
 ## 3. Sidebar
 ```
-TỔNG QUAN   Dashboard
-VẬN CHUYỂN  Phiếu cân · Import phiếu cân · Cần kiểm tra (badge) · Chi tiết vận chuyển · Theo xe
-CHI PHÍ     Bảng giá · Giá dầu · Tính chi phí
-ĐỐI CHIẾU   Import đối chiếu · Kết quả đối chiếu · Sai lệch
-DANH MỤC    Xe · Đơn vị vận chuyển · Địa điểm · Tuyến · Đợt/Tàu
-BÁO CÁO     Theo xe · Theo công ty · Theo nơi xuất · Theo thời gian · Theo tàu
-HỆ THỐNG    Trung tâm cảnh báo (badge) · Lịch sử import · Audit log · Backup · Cài đặt
+Menu theo LUỒNG CÔNG VIỆC (số thứ tự = thứ tự làm việc):
+TỔNG QUAN               Dashboard · việc cần làm
+① NHẬP & KIỂM TRA       Import phiếu cân · Cần kiểm tra (badge) · Phiếu cân · Chi tiết theo xe
+② GIÁ & TÍNH CƯỚC       Bảng giá · Giá dầu · Bảng tính đơn giá
+③ ĐỐI CHIẾU & CHỐT KỲ   Đối chiếu · Chốt kỳ
+④ BẢNG KÊ & BÁO CÁO     Bảng kê thanh toán · Biểu mẫu in ký 2 bên · Theo xe / đơn vị / nơi xuất / thời gian / tàu
+DANH MỤC                Xe · Đơn vị vận chuyển · Hợp đồng · Địa điểm · Tuyến · Đợt/Tàu
+HỆ THỐNG                Trung tâm cảnh báo (badge) · Lịch sử import · Audit log · Backup · Cài đặt
+
+Dashboard mở đầu bằng khối **"Việc cần làm theo quy trình"** (6 bước: nhập → xử lý trùng khóa → hoàn thiện dữ liệu để tính giá → đối chiếu → chốt kỳ → bảng kê): mỗi bước nêu còn bao nhiêu phiếu (hoặc ✓ Xong) và có nút đi thẳng tới màn xử lý (Phiếu cân đã lọc sẵn, Cần kiểm tra, Đối chiếu, Chốt kỳ…). Dữ liệu từ `workflow.todo`.
 ```
 
 ## 4. Màn hình chính

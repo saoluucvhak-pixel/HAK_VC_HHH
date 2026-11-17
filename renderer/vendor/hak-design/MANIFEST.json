@@ -1,0 +1,11 @@
+{
+  "source": "https://github.com/saoluucvhak-pixel/HAK-Enterprise-Design-System",
+  "commit": "0eab12ef5da55fd6d04a0bfd8c804164781f5fea",
+  "note": "Bản sao NGUYÊN VĂN token chủ đề luxe (navy · champagne · ivory, sáng/tối). Cập nhật: chép lại từ repo nguồn rồi chạy `node scripts/vendor-manifest.js`; tests/vendor.test.js chặn sửa tay. VC Cost dùng skin sáng (data-skin=\"luxe\"); styles.css chỉ đặt tên gọi (alias) sang các token này.",
+  "files": {
+    "luxe.css": {
+      "upstream": "tokens/luxe.css",
+      "sha256": "0e62836beaee5fbd10eef5b713427c2c4325ed20f86eb238ab0714f0837103a9"
+    }
+  }
+}

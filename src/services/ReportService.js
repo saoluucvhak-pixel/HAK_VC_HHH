@@ -62,6 +62,20 @@ class ReportService {
     return { kept: this.db.get(`SELECT COUNT(*) n FROM phieu_can p WHERE ${sql}`, params).n, total: this.db.get(`SELECT COUNT(*) n FROM phieu_can WHERE trang_thai='ACTIVE'`).n };
   }
 
+  /** "Việc cần làm" theo luồng: nhập → kiểm tra → đối chiếu → chốt kỳ → in bảng kê (đếm phiếu ở từng bước). */
+  todo() {
+    const c = (sql) => this.db.get(sql).n;
+    const priced = pricedSql('p');
+    return {
+      tong_phieu: c(`SELECT COUNT(*) n FROM phieu_can WHERE trang_thai='ACTIVE'`),
+      chua_tinh_gia: c(`SELECT COUNT(*) n FROM phieu_can p WHERE p.trang_thai='ACTIVE' AND NOT ${priced}`),
+      can_doi_chieu: c(`SELECT COUNT(*) n FROM phieu_can p WHERE p.trang_thai='ACTIVE' AND ${priced} AND p.trang_thai_doi_chieu IN ('CHUA_DOI_CHIEU','LECH')`),
+      chua_chot: c(`SELECT COUNT(*) n FROM phieu_can p WHERE p.trang_thai='ACTIVE' AND ${priced} AND p.chot_ky_id IS NULL`),
+      da_chot: c(`SELECT COUNT(*) n FROM phieu_can WHERE trang_thai='ACTIVE' AND chot_ky_id IS NOT NULL`),
+      import_gan_nhat: this.db.get(`SELECT import_time, file_name, inserted_rows FROM import_batch WHERE trang_thai='COMMITTED' ORDER BY id DESC LIMIT 1`) || null,
+    };
+  }
+
   /** Các kỳ (yyyy-MM) có phiếu, mới nhất trước — cho ô chọn kỳ. */
   periods(limit = 36) {
     return this.db.all(`SELECT substr(ngay_can,1,7) ky, COUNT(*) n FROM phieu_can WHERE trang_thai='ACTIVE' AND ngay_can IS NOT NULL GROUP BY 1 ORDER BY 1 DESC LIMIT ${Number(limit)}`);

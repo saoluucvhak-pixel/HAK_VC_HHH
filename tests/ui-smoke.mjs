@@ -47,6 +47,23 @@ for (const [id, n] of [['dashboard', '05-dashboard'], ['tickets', '06-tickets'],
 // bảng kê 1 đơn vị
 await nav('statements'); await page.click('[data-fkey="sf:statements:don_vi_id"]'); await page.locator('[data-fpop] .fpop-row input').nth(0).check(); await page.click('[data-fpop] .btn.pri'); await page.waitForSelector('.stmt'); await shot('21-statement-one');
 
+// ---- Việc cần làm theo quy trình + menu theo luồng công việc + skin luxe
+await nav('dashboard'); await page.waitForSelector('[data-todo]');
+{
+  const ck = (ok, msg) => { if (!ok) errors.push('quy trình: ' + msg); };
+  ck((await page.locator('[data-todo] .todo-row').count()) === 6, 'phải có 6 bước');
+  const groups = await page.locator('#sidebar .nav-group').allTextContents();
+  ck(groups.join('|').includes('① NHẬP & KIỂM TRA') && groups.join('|').includes('④ BẢNG KÊ & BÁO CÁO'), 'nhóm menu: ' + groups.join('|'));
+  ck((await page.getAttribute('html', 'data-skin')) === 'luxe', 'skin luxe');
+  const bg = await page.evaluate(() => getComputedStyle(document.body).backgroundColor); ck(bg === 'rgb(245, 242, 236)', 'nền ivory của luxe: ' + bg);
+  const nums = await page.locator('[data-todo] .todo-c').allTextContents();
+  ck(/2\.035 phiếu chưa chốt/.test(nums.join('|')) && /Xong/.test(nums.join('|')), 'đếm các bước: ' + nums.join('|'));
+  await shot('33-dashboard-todo');
+  await page.click('[data-todo] .btn:has-text("Chốt kỳ")'); await page.waitForTimeout(400);
+  ck((await page.locator('#sidebar .nav-item.active[data-nav="lock"]').count()) === 1, 'nút "Chốt kỳ" phải mở màn Chốt kỳ');
+  await nav('dashboard');
+}
+
 // ---- Bộ lọc thông minh (HAK Smart Filter): chọn nhiều, tìm không dấu, ngăn nâng cao, bộ lọc đã lưu, chip, dòng phạm vi
 const check = (ok, msg) => { if (!ok) errors.push('filter: ' + msg); };
 const sumNums = async () => { await page.waitForTimeout(500); const t = await page.textContent('[data-sf-summary]'); const m = t.match(/Hiển thị ([\d.]+) \/ ([\d.]+) dòng/); return m ? [Number(m[1].replace(/\./g, '')), Number(m[2].replace(/\./g, ''))] : null; };
