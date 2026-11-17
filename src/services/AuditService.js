@@ -7,7 +7,7 @@ class AuditService {
   log(action, entity, entityId, oldValue, newValue, note) {
     this.db.run(
       'INSERT INTO audit_log(action, entity, entity_id, old_value, new_value, note, user_name) VALUES (?,?,?,?,?,?,?)',
-      [action, entity, entityId ?? null, j(oldValue), j(newValue), note ?? null, this.user]
+      [action, entity, entityId ?? null, j(oldValue), j(newValue), note ?? null, typeof this.user === 'function' ? this.user() : this.user]
     );
   }
   list({ entity, entityId, action, limit = 200, offset = 0 } = {}) {

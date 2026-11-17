@@ -84,7 +84,7 @@ test('nâng cấp DB đang ở v4 (có dữ liệu) lên v5: giữ dữ liệu, 
   db.prepare(`INSERT INTO audit_log(action, entity) VALUES ('TEST','x')`).run();
   let backup = null;
   const r = migrate(db, { backupFn: (b) => { backup = b; } });
-  assert.deepEqual(r.applied, ['005_bat_bien.sql']);
+  assert.deepEqual(r.applied, ['005_bat_bien.sql', '006_phan_quyen.sql']);
   assert.equal(backup.kind, 'PRE_MIGRATION');
   assert.equal(db.prepare('SELECT COUNT(*) n FROM audit_log').get().n, 1);
   assert.throws(() => db.exec('DELETE FROM audit_log'), /chỉ được thêm/);

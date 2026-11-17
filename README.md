@@ -17,12 +17,13 @@ Lịch sử thay đổi: `CHANGELOG.md`.
 - **Chốt kỳ**: khóa số liệu theo khoảng ngày hoặc đợt/tàu; mở khóa bắt buộc có lý do, có nhật ký.
 - **Đối chiếu** với file đối tác (khớp / lệch KL / lệch đơn giá / thiếu bên).
 - **Cảnh báo & nhật ký**: bất thường thời gian cân, thiếu xe/giá/địa điểm; audit log.
+- **Phân quyền (tùy chọn)**: mặc định 1 người dùng, không đăng nhập. Menu *Người dùng & phân quyền* để bật: Quản trị (toàn quyền, người dùng, cài đặt, khôi phục) · Người duyệt (duyệt xung đột/hoàn tác import, chốt/mở khóa kỳ, bảng giá, đối chiếu) · Người nhập liệu (import, sửa/xóa phiếu, danh mục, sao lưu) · Chỉ xem (xem + xuất báo cáo). Nhật ký ghi tên đăng nhập; phiên hết hạn sau 30 phút không hoạt động; sai mật khẩu 5 lần khóa 60 giây. Quên mật khẩu quản trị: chạy ứng dụng với biến môi trường `VCCOST_RESET_AUTH=1` một lần (cần quyền truy cập máy) để tắt phân quyền rồi bật lại.
 - **Sao lưu / khôi phục**, đổi thư mục lưu dữ liệu (Portable cạnh `.exe`, Setup ở `%APPDATA%/VCCost`).
 
 ## Chạy thử (cần Node.js ≥ 22.5)
 ```bash
 npm install
-npm test                                           # unit + integration test (131); VCCOST_DRIVER=better-sqlite3 npm test để chạy bằng driver của bản đóng gói
+npm test                                           # unit + integration test (139); VCCOST_DRIVER=better-sqlite3 npm test để chạy bằng driver của bản đóng gói
 npm run test:ui                                    # smoke test giao diện (cần Chromium cho Playwright)
 npm run validate -- tests/fixtures/sample-v47.xlsx # so engine với Excel → docs/EXCEL_VS_APP_VALIDATION.md
 npm run dev                                        # chạy giao diện trong trình duyệt (dev server, không cần Electron)
