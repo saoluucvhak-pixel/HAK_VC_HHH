@@ -25,13 +25,8 @@ function createRuntime({ dataDir, version = 'dev', driver = null, autoInit = fal
   const log = (msg) => fs.appendFileSync(logFile, `[${new Date().toISOString()}] ${msg}\n`);
 
   const rt = { dirs, log };
-  const preMigrationBackup = () => {
-    if (fs.existsSync(dirs.db)) {
-      const f = path.join(dirs.backups, `app_${new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19)}_PRE_MIGRATION.db`);
-      fs.copyFileSync(dirs.db, f);
-      log(`Backup trước migration: ${f}`);
-    }
-  };
+  // PRE_MIGRATION lấy từ kết nối đang mở của migrator (gồm cả dữ liệu còn trong WAL); lỗi → migration không chạy
+  const preMigrationBackup = (info) => { const r = rt.backup.preMigration(info); log(`Backup trước migration: ${r.file}`); };
   const open = () => {
     rt.app = createApp({ dbFile: dirs.db, driver, backupFn: preMigrationBackup });
     rt.handlers = createHandlers(rt.app, { exportsDir: dirs.exports, importsDir: dirs.imports, seedDir: SEED_DIR, backup: rt.backup, version, dataDir, renderPdf: (...a) => { const f = rt.renderPdf || renderPdf; if (!f) throw new Error('Xuất PDF chưa khả dụng trong môi trường này'); return f(...a); } });

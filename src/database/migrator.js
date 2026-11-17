@@ -1,7 +1,7 @@
 'use strict';
 /**
  * Migration runner: chạy lần lượt các file NNN_*.sql chưa áp dụng, mỗi file trong 1 transaction.
- * KHÔNG BAO GIỜ xóa DB tạo lại. Trước khi migrate DB đã có dữ liệu → gọi backupFn (PRE_MIGRATION).
+ * KHÔNG BAO GIỜ xóa DB tạo lại. Trước khi migrate DB đã có dữ liệu → gọi backupFn (PRE_MIGRATION) với kết nối đang mở; backupFn ném lỗi thì KHÔNG migrate.
  * Tương thích API better-sqlite3 (Electron) và node:sqlite (test): db.exec(), db.prepare().get()/all()
  */
 const fs = require('fs');
@@ -30,7 +30,7 @@ function migrate(db, { dir = MIGRATIONS_DIR, backupFn = null, log = () => {} } =
   if (from > latest) throw new Error(`Cơ sở dữ liệu có phiên bản ${from} mới hơn phần mềm (${latest}). Hãy cài bản VC Cost mới hơn — không mở bằng bản cũ để tránh hỏng dữ liệu.`);
   const pending = all.filter((m) => m.version > from);
   if (!pending.length) return { from, to: from, applied: [] };
-  if (from > 0 && backupFn) backupFn({ kind: 'PRE_MIGRATION', from });
+  if (from > 0 && backupFn) backupFn({ kind: 'PRE_MIGRATION', from, raw: db });   // ném lỗi → dừng, chưa áp dụng migration nào
   const applied = [];
   for (const m of pending) {
     const sql = fs.readFileSync(m.file, 'utf8');
