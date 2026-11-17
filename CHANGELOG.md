@@ -1,6 +1,7 @@
 # CHANGELOG
 
 ## 0.7.0 — chờ nghiệm thu (schema 6)
+- Sửa lỗi quay lui khôi phục có thể xóa DB gốc khi Windows từ chối bước đổi tên đầu tiên. Quay lui chỉ dọn các đường dẫn đã dời thành công hoặc bộ DB thay thế; hai ca hồi quy trên cả hai driver đã tái hiện mất dữ liệu trước bản sửa.
 - CI tự xây và nghiệm thu Setup/Portable trên PR `codex/release-*` và khi cập nhật `main`, đính kèm bộ cài, SHA-256 và JSON kết quả. Script nghiệm thu dừng trước khi cài nếu thư mục dữ liệu mặc định đã tồn tại, bảo toàn dữ liệu trên máy chạy kiểm thử.
 - Nghiệm thu cục bộ: 146/146 test đạt với cả `node:sqlite` và `better-sqlite3`; UI smoke Windows qua `CHROMIUM_PATH` hoàn tất không có lỗi; đối chiếu V.47 khớp các chỉ tiêu; `npm audit --omit=dev` có 0 cảnh báo.
 - Khôi phục DB xóa phiên đăng nhập cũ, yêu cầu xác thực lại trong bộ dữ liệu vừa khôi phục để tránh nhận nhầm người dùng khi ID trùng nhau giữa hai DB. Có test hồi quy tái hiện trước bản sửa.

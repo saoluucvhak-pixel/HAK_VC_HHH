@@ -137,8 +137,11 @@ class BackupService {
     // 3) thay thế
     const exts = ['', '-wal', '-shm'];
     const moved = [];
+    let replacementInstalled = false;
     const putBack = () => {
-      for (const e of exts) rm(this.dbFile + e);
+      // Trước khi thay thế, chỉ dọn đường dẫn đã dời đi thành công.
+      // Nếu rename bị từ chối, DB/WAL còn tại chỗ vẫn là dữ liệu gốc.
+      for (const e of replacementInstalled ? exts : moved) rm(this.dbFile + e);
       for (const e of moved) fs.renameSync(old + e, this.dbFile + e);
     };
     this.getDb().close();
@@ -146,6 +149,7 @@ class BackupService {
       for (const e of exts) rm(old + e);
       for (const e of exts) if (fs.existsSync(this.dbFile + e)) { fs.renameSync(this.dbFile + e, old + e); moved.push(e); }
       fs.renameSync(tmp, this.dbFile);
+      replacementInstalled = true;
       this.reopen();
       const r = this.getDb().get('SELECT MAX(version) v FROM schema_version');
       this.getDb().get('SELECT COUNT(*) n FROM phieu_can');

@@ -34,6 +34,28 @@ const figures = (app) => ({
 });
 
 for (const driver of drivers) {
+  test(`[${driver}] lỗi đổi tên DB trước thay thế giữ nguyên dữ liệu gốc`, (t) => {
+    const rt = createRuntime({ dataDir: tmp(), driver });
+    try {
+      const backup = rt.backup.backupNow();
+      rt.app.db.run(`INSERT INTO audit_log(action, entity) VALUES ('GIU_KHI_RENAME_LOI', 'test')`);
+      const rename = fs.renameSync;
+      t.mock.method(fs, 'renameSync', (from, to) => {
+        if (from === rt.dirs.db && to === rt.dirs.db + '.restore-old') {
+          throw new Error('EPERM: không đổi tên được DB đang dùng');
+        }
+        return rename(from, to);
+      });
+      assert.throws(() => rt.backup.restore(backup.file), /Khôi phục thất bại/);
+      assert.equal(rt.app.db.get(`SELECT COUNT(*) n FROM audit_log WHERE action='GIU_KHI_RENAME_LOI'`).n, 1);
+      rt.app.db.run(`INSERT INTO audit_log(action, entity) VALUES ('GHI_SAU_RENAME_LOI', 'test')`);
+      assert.equal(rt.app.db.get(`SELECT COUNT(*) n FROM audit_log WHERE action='GHI_SAU_RENAME_LOI'`).n, 1);
+    } finally {
+      t.mock.restoreAll();
+      rt.close();
+    }
+  });
+
   test(`[${driver}] PRE_MIGRATION chứa giao dịch đã commit còn trong WAL và vẫn ở schema trước nâng cấp`, () => {
     const dir = tmp(); const file = path.join(dir, 'app.db'); const backups = path.join(dir, 'backups');
     const raw = v4Db(file, driver);
