@@ -34,7 +34,7 @@
   "build": {
     "appId": "vn.hak.vccost",
     "productName": "VC Cost",
-    "copyright": "HAK Group",
+    "copyright": "© HAK Group",
     "directories": {
       "output": "dist"
     },
@@ -80,8 +80,9 @@
           ]
         }
       ],
-      "signAndEditExecutable": false,
-      "artifactName": "VC-Cost-${version}-${arch}.${ext}"
+      "signAndEditExecutable": true,
+      "artifactName": "VC-Cost-${version}-${arch}.${ext}",
+      "signExecutable": false
     },
     "portable": {
       "artifactName": "VC-Cost-${version}-Portable.${ext}"
@@ -111,5 +112,6 @@
     "filelist": {
       "minimatch": "^5.1.9"
     }
-  }
+  },
+  "author": "HAK Group"
 }

@@ -50,3 +50,17 @@ test('script npm run integrity: đọc file DB chỉ-đọc, mã thoát 0 khi s�
   const junk = path.join(dir, 'x.db'); fs.writeFileSync(junk, 'khong phai sqlite');
   assert.equal(spawnSync(process.execPath, ['--no-warnings', s, junk], { encoding: 'utf8' }).status, 2);
 });
+
+test('script integrity --csv: xuất danh sách ID + lý do bản ghi nghi vấn để chủ dữ liệu quyết định; không sửa DB', async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'vcint-')); const file = path.join(dir, 'a.db');
+  const app = createApp({ dbFile: file, driver: 'node:sqlite' }); await loadInitialData(app, SEED_DIR);
+  const t = app.db.get(`SELECT * FROM phieu_can WHERE trang_thai='ACTIVE' ORDER BY id LIMIT 1`);
+  const cols = Object.keys(t).filter((k) => !['id', 'kl_hang_tan', 'ngay_can'].includes(k));
+  app.db.run(`INSERT INTO phieu_can(${cols.join(',')}) VALUES (${cols.map(() => '?').join(',')})`, cols.map((k) => (k === 'business_key' ? t.business_key + '#X' : k === 'strong_key' ? 'sx' : k === 'fingerprint' ? 'fx' : t[k])));
+  app.db.exec('PRAGMA wal_checkpoint(TRUNCATE)'); app.close();
+  const csv = path.join(dir, 'nghi-van.csv'); const before = fs.statSync(file).size;
+  const r = spawnSync(process.execPath, ['--no-warnings', path.join(__dirname, '..', 'scripts', 'integrity.js'), file, '--csv', csv], { encoding: 'utf8' });
+  assert.equal(r.status, 1, r.stdout + r.stderr);
+  const text = fs.readFileSync(csv, 'utf8'); assert.match(text, /PHIEU_TRUNG_NOI_XUAT/); assert.match(text, /muc_do/); assert.ok(text.split('\r\n').length >= 3);
+  assert.equal(fs.statSync(file).size, before, 'chỉ đọc');
+});

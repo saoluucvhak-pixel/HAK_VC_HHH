@@ -172,3 +172,21 @@ test('phiên hết hạn khi không hoạt động quá thời gian cho phép', 
     const r = await call(rt, 'app.info'); assert.equal(r.ok, false); assert.equal(r.type, 'AuthRequired'); assert.match(r.error, /hết hạn/);
   } finally { rt.close(); }
 });
+
+test('khôi phục sang DB khác: phiên của người dùng không có trong DB khôi phục bị hủy; quản trị của DB khôi phục đăng nhập lại được', async () => {
+  const rt = mk();
+  try {
+    await withAdmin(rt);
+    const bk = (await call(rt, 'backup.now')).data;                  // bản sao có 1 quản trị
+    await addUser(rt, 'nhap1', 'NHAP'); await login(rt, 'nhap1');
+    assert.equal((await call(rt, 'app.info')).ok, true);
+    await login(rt, 'admin');
+    assert.equal((await call(rt, 'backup.restore', { file: bk.file })).ok, true);   // DB khôi phục không có 'nhap1'
+    assert.equal((await login(rt, 'nhap1')).ok, false, 'tài khoản không tồn tại trong DB khôi phục không đăng nhập được');
+    const r = await call(rt, 'app.info');
+    assert.ok(r.ok || r.type === 'AuthRequired');
+    await call(rt, 'auth.logout');
+    assert.equal((await call(rt, 'app.info')).type, 'AuthRequired');
+    assert.equal((await login(rt, 'admin')).ok, true); assert.equal((await call(rt, 'app.info')).ok, true);
+  } finally { rt.close(); }
+});
