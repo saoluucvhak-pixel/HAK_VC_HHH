@@ -63,16 +63,17 @@ const App = (() => {
   const clear = (e) => { while (e.firstChild) e.removeChild(e.firstChild); return e; };
 
   // ---------------------------------------------------------------- định dạng
-  // Số âm làm tròn về 0 hiển thị "0", không phải "-0" (cùng quy tắc HAK_ACCOUNTING_REPORT_STANDARD).
-  const nz = (v, d) => { const x = Number(v), k = Math.pow(10, d), r = Math.round(x * k) / k; return r === 0 ? 0 : x; };
-  const nf = new Intl.NumberFormat('vi-VN', { maximumFractionDigits: 0 });
+  // Định dạng số: một bản chuẩn dùng chung HAK_ACCOUNTING_REPORT_STANDARD (vendor/hak-report-standard) — số âm làm tròn về 0 hiển thị "0", không "-0".
+  const R = window.HAKReport;
+  const blank = (v) => v === null || v === undefined || v === '' || !Number.isFinite(Number(v));
+  const num = (v, d, max) => (blank(v) ? '' : R.formatNumber(Number(v), { minDecimals: d, maxDecimals: max === undefined ? d : max }));
   const fmt = {
-    int: (v) => (v === null || v === undefined || v === '' ? '' : nf.format(nz(Math.round(Number(v)), 0))),
-    money: (v) => (v === null || v === undefined || v === '' ? '' : nf.format(nz(Math.round(Number(v)), 0))),
-    money2: (v) => (v === null || v === undefined ? '' : nz(v, 2).toLocaleString('vi-VN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })),
-    kg: (v) => (v === null || v === undefined ? '' : nf.format(nz(v, 0))),
-    tan: (v) => (v === null || v === undefined ? '' : nz(v, 3).toLocaleString('vi-VN', { minimumFractionDigits: 3, maximumFractionDigits: 3 })),
-    pct: (v) => (v === null || v === undefined || v === '' ? '' : nz(v, 2).toLocaleString('vi-VN', { maximumFractionDigits: 2 }) + '%'),
+    int: (v) => num(v, 0),
+    money: (v) => num(v, 0),
+    money2: (v) => num(v, 2),
+    kg: (v) => num(v, 0),
+    tan: (v) => num(v, 3),
+    pct: (v) => (blank(v) ? '' : num(v, 0, 2) + '%'),
     date: (v) => (v ? `${String(v).slice(8, 10)}/${String(v).slice(5, 7)}/${String(v).slice(0, 4)}` : ''),
     dt: (v) => (v ? `${String(v).slice(8, 10)}/${String(v).slice(5, 7)}/${String(v).slice(0, 4)} ${String(v).slice(11, 16)}` : ''),
     dts: (v) => (v ? `${String(v).slice(8, 10)}/${String(v).slice(5, 7)}/${String(v).slice(0, 4)} ${String(v).slice(11, 19)}` : ''),

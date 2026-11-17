@@ -27,7 +27,6 @@ Q1–Q10 ✅ đã chốt đủ (07/10/2026) — chi tiết: `PHAN_TICH_THIET_KE_
 - Nâng Electron 45 + better-sqlite3 13 (N-API), đọc Excel bằng exceljs (bỏ SheetJS), CI Linux + Windows (cả hai driver CSDL).
 
 ## Việc còn lại (đề xuất)
-1. Dùng chung bộ định dạng số/ngày của `HAK_ACCOUNTING_REPORT_STANDARD` (bản `dist` cho trình duyệt) thay các bộ định dạng chép riêng.
 2. Ký số bộ cài (SmartScreen); `minimatch` trong `electron-builder` (chờ bản sửa upstream).
 3. Phân quyền người nhập / người duyệt (luồng Nháp → Duyệt); ghi tên người dùng vào nhật ký.
 
