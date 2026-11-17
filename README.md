@@ -55,4 +55,4 @@ Không hard-code biển số, đơn vị, nơi xuất, đơn giá, VAT, giá d�
 ## Lưu ý
 - Import đọc được `.xlsx` và `.csv`. File `.xls` cũ (Excel 97-2003) không còn được hỗ trợ — mở bằng Excel rồi "Lưu thành" `.xlsx`.
 - Bộ cài `.exe` chưa ký số nên Windows SmartScreen có thể cảnh báo.
-- `npm audit` còn cảnh báo mức vừa của `minimatch` trong `electron-builder` (chỉ công cụ build, không đóng gói vào app); chờ bản sửa từ upstream.
+- `npm audit`: 0 cảnh báo (đã nâng `electron-builder` 26.18.1 và ép `minimatch` bản vá cho cây công cụ build bằng `overrides`; cây chạy thật của `exceljs` giữ nguyên). Ký số bộ cài: xem `docs/KY_SO_BO_CAI.md`.
