@@ -27,9 +27,35 @@ await fc.setFiles(fx); await page.waitForSelector('.modal'); await shot('01-impo
 await page.click('.modal .btn:has-text("Ghi danh mục xe")'); await page.waitForTimeout(800);
 await nav('import');
 const [fc2] = await Promise.all([page.waitForEvent('filechooser'), page.click('[data-act=pick]')]);
-await fc2.setFiles(fx); await page.waitForSelector('[data-act=preview]'); await shot('02-import-mapping');
+await fc2.setFiles(fx); await page.waitForSelector('[data-act=preview]');
+{
+  // kiểm tra NGAY khi ghép cột
+  const ck = (ok, msg) => { if (!ok) errors.push('nhập liệu: ' + msg); };
+  await page.waitForSelector('[data-check] table.t', { timeout: 15000 });
+  const txt = async () => await page.textContent('[data-check]');
+  let t = await txt();
+  ck(/Đọc được 2\.035 dòng — không có dòng lỗi/.test(t), 'tóm tắt đọc file: ' + t.slice(0, 160));
+  ck(/Đọc thử 8 dòng đầu/.test(t) && /✓ Quế Sơn/.test(t), 'đọc thử các dòng đầu + nhận ra nơi xuất');
+  ck(await page.isEnabled('[data-act=preview]'), 'nút Xem trước phải bật khi đủ cột');
+  await shot('02-import-mapping');
+  // bỏ ghép cột Biển số → chặn ngay, nêu lý do
+  await page.selectOption('[data-map=bien_so]', ''); await page.waitForFunction(() => /Chưa ghép cột "Biển số"/.test(document.querySelector('[data-check]').textContent), null, { timeout: 5000 }).catch(() => ck(false, 'không báo thiếu cột Biển số'));
+  ck(!(await page.isEnabled('[data-act=preview]')), 'nút Xem trước phải tắt khi thiếu cột bắt buộc');
+  ck(/^✗ Chưa ghép cột "Biển số"/.test(await page.textContent('[data-verdict]')), 'kết luận 1 dòng cạnh ô ghép cột: ' + await page.textContent('[data-verdict]'));
+  await shot('02b-import-mapping-loi');
+  // ghép lại cột như cũ
+  const idx = await page.evaluate(() => [...document.querySelector('[data-map=bien_so]').options].find((o) => /biển số|bien so/i.test(o.textContent) )?.value);
+  await page.selectOption('[data-map=bien_so]', idx); await page.waitForFunction(() => /không có dòng lỗi/.test(document.querySelector('[data-check]').textContent), null, { timeout: 5000 }).catch(() => ck(false, 'ghép lại cột không bỏ cảnh báo'));
+  ck(await page.isEnabled('[data-act=preview]'), 'nút Xem trước bật lại');
+}
 await page.click('[data-act=preview]'); await page.waitForSelector('[data-act=commit]'); await shot('03-import-preview');
 await page.click('[data-act=commit]'); await page.click('.modal .btn:has-text("Import")'); await page.waitForSelector('text=Import hoàn tất', { timeout: 60000 }); await shot('04-import-done');
+{
+  const ck = (ok, msg) => { if (!ok) errors.push('nhập liệu: ' + msg); };
+  const t = await page.textContent('[data-result]');
+  ck(/Việc tiếp theo/.test(t) && /Đối chiếu/.test(t) && /Chốt kỳ/.test(t), 'khối "Việc tiếp theo": ' + t.slice(0, 200));
+  ck((await page.locator('[data-result] [data-act=undo]').count()) === 1, 'nút hoàn tác lần import');
+}
 for (const [id, n] of [['dashboard', '05-dashboard'], ['tickets', '06-tickets'], ['statements', '07-statements'], ['rp:vehicle', '08-report-vehicle'], ['rp:carrier', '09-report-carrier'], ['prices', '10-prices'], ['fuel', '11-fuel'], ['cat:xe', '12-cat-xe'], ['cat:dia_diem', '13-cat-diadiem'], ['alerts', '14-alerts'], ['batches', '15-batches'], ['audit', '16-audit'], ['backup', '17-backup'], ['settings', '18-settings'], ['review', '19-review'], ['vehicle', '20-vehicle'], ['lock', '21-lock'], ['cat:hop_dong', '24-hop-dong']]) {
   await nav(id); await shot(n);
   const bad = await page.evaluate(() => {
@@ -47,6 +73,17 @@ for (const [id, n] of [['dashboard', '05-dashboard'], ['tickets', '06-tickets'],
 // bảng kê 1 đơn vị
 await nav('statements'); await page.click('[data-fkey="sf:statements:don_vi_id"]'); await page.locator('[data-fpop] .fpop-row input').nth(0).check(); await page.click('[data-fpop] .btn.pri'); await page.waitForSelector('.stmt'); await shot('21-statement-one');
 
+// ---- Định dạng số/ngày theo chuẩn kế toán HAK (vi-VN): dấu chấm nghìn, phẩy thập phân, không "-0", dd/mm/yyyy
+{
+  const got = await page.evaluate(() => { const f = App.fmt; return {
+    money: [f.money(1234567.5), f.money(-0.3), f.money(0), f.money(-1234.4), f.money(null), f.money('')],
+    money2: [f.money2(1234567.891), f.money2(-0.004), f.money2(0.285)],
+    kg: [f.kg(20090), f.kg(-0.2)], tan: [f.tan(20.09), f.tan(-0.0004)], pct: [f.pct(8), f.pct(12.345)],
+    date: [f.date('2026-10-05'), f.date('')], dt: [f.dt('2026-10-05T07:08:09'), f.dts('2026-10-05T07:08:09')], min: [f.min(125), f.min(-5)] }; });
+  const want = { money: ['1.234.568', '0', '0', '-1.234', '', ''], money2: ['1.234.567,89', '0,00', '0,29'], kg: ['20.090', '0'], tan: ['20,090', '0,000'], pct: ['8%', '12,35%'],
+    date: ['05/10/2026', ''], dt: ['05/10/2026 07:08', '05/10/2026 07:08:09'], min: ['2g 5p', '−5p'] };
+  if (JSON.stringify(got) !== JSON.stringify(want)) errors.push('định dạng chuẩn: ' + JSON.stringify(got) + ' ≠ ' + JSON.stringify(want));
+}
 // ---- Việc cần làm theo quy trình + menu theo luồng công việc + skin luxe
 await nav('dashboard'); await page.waitForSelector('[data-todo]');
 {

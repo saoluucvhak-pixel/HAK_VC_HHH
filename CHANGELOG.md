@@ -1,6 +1,13 @@
 # CHANGELOG
 
 ## Chưa phát hành
+- **Nhập liệu phiếu cân — kiểm tra ngay tại chỗ (bước ghép cột)**: kết luận 1 dòng cạnh các ô ghép cột (✓ đủ cột / ✗ thiếu cột bắt buộc / ⚠ cảnh báo), tóm tắt lỗi cả sheet theo lý do (kèm dòng ví dụ), và **đọc thử 8 dòng đầu** (ngày giờ đọc được, biển số chuẩn hóa ← bản gốc, KL, nơi xuất nhận ra hay chưa). Nút "Xem trước" tự tắt khi thiếu cột bắt buộc (nhận cả trường hợp KL = Cân lần 1 + Cân lần 2); cảnh báo cột bị gán cho 2 trường, thiếu nơi xuất/giờ cân 2. Backend `import.check` (chỉ đọc, không ghi).
+- **Xem trước:** nút "⬇ Tải các dòng cần xử lý (Excel)" — liệt kê dòng lỗi, trùng khóa khác nội dung, thiếu xe/nơi xuất/giá kèm lý do và **cách xử lý**; sửa rồi import lại (dòng đã đúng không bị trùng). Backend `import.issuesXlsx`.
+- **Kết quả import:** khối "Việc tiếp theo" theo dữ liệu thật (xử lý trùng khóa → hoàn thiện phiếu chưa tính giá → đối chiếu → chốt kỳ) và nút **"↩ Hoàn tác lần import này"** (bắt buộc lý do, có nhật ký).
+- Sửa chữ cũ "Chọn file (.xlsx / .xls / .csv)" → ".xlsx / .csv" (.xls không còn hỗ trợ; có hướng dẫn "Lưu thành").
+- Excel xuất: đầu bảng dùng navy của skin luxe.
+- Định dạng số/ngày trên giao diện được kiểm bằng kịch bản thật theo chuẩn kế toán HAK: `1.234.568`, `-1.234`, `0` (không "-0"), `1.234.567,89`, `20,090 tấn`, `05/10/2026 07:08`.
+- Test: 2 test backend (`import.check`, `import.issuesXlsx`) + kịch bản giao diện thật (đọc thử file, chặn khi thiếu cột, kết luận cạnh ô ghép cột, bật lại khi ghép đủ, khối "Việc tiếp theo", nút hoàn tác, định dạng chuẩn).
 - **Giao diện theo HAK Enterprise Design System (skin luxe: navy · champagne · ivory)**: token chuẩn nhúng nguyên văn (`renderer/vendor/hak-design/luxe.css`, băm trong MANIFEST); `styles.css` không tự định nghĩa màu thương hiệu mà chỉ đặt tên gọi trỏ sang token (`--green → --brand`, `--text-mute → --mut-aa`…); màu cứng còn lại (nền ô nhập, viền, đầu bảng, thanh bên, toast, dòng cảnh báo) đổi sang token. Cặp chữ/nền chính đạt WCAG AA, có test.
 - **Menu theo luồng công việc ①–④** (Nhập & kiểm tra → Giá & tính cước → Đối chiếu & chốt kỳ → Bảng kê & báo cáo).
 - **Dashboard mở đầu bằng "Việc cần làm theo quy trình"**: 6 bước, mỗi bước nêu số phiếu còn lại (hoặc ✓ Xong) và nút đi thẳng tới màn xử lý (vd Phiếu cân đã lọc sẵn phiếu chưa tính giá). Backend `workflow.todo`.

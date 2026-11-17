@@ -7,7 +7,7 @@ const ExcelJS = require('exceljs');
 
 const FONT = { name: 'Times New Roman', size: 11 };
 const FMT = { money: '#,##0;[Red]-#,##0;-', money2: '#,##0.00;[Red]-#,##0.00;-', kg: '#,##0', tan: '#,##0.000', date: 'dd/mm/yyyy hh:mm', day: 'dd/mm/yyyy', int: '#,##0', pct: '0.##' };
-const HEAD_FILL = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF141F19' } };
+const HEAD_FILL = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF0F1B33' } };   // navy của skin luxe
 
 /** Thiết lập in A4: vừa khít chiều ngang, lặp dòng tiêu đề, chân trang có số trang. */
 function printSetup(ws, { landscape = false, titleRow = null, footer = '' } = {}) {
@@ -422,4 +422,25 @@ async function reportWorkbook(doc) {
   return done(wb);
 }
 
-module.exports = { FONT, FMT, BOX, PRINT_HEAD, newWb, done, signParties, partyLines, reportWorkbook, printTable, signatureBlock, printSetup, priceSheetWorkbook, reconWorkbook, ticketsWorkbook, statementWorkbook, timelineWorkbook, addTable };
+/** Dòng cần xử lý của lần import: sửa theo "Cách xử lý" ở Danh mục/Bảng giá hoặc sửa file nguồn rồi import lại (không trùng vì phiếu giống hệt được bỏ qua). */
+async function importIssuesWorkbook(rows, meta = {}, issueWarn = {}) {
+  const wb = newWb();
+  const PL = { ERROR: 'Lỗi dữ liệu — không được ghi', KEY_CONFLICT: 'Trùng khóa nhưng khác nội dung', NEW: 'Phiếu mới — thiếu dữ liệu để tính giá' };
+  const diffText = (r) => (r.diffs || []).map((d) => `${d.field}: ${d.old ?? d.cu ?? ''} → ${d.new ?? d.moi ?? ''}`).join('; ');
+  const lines = rows.map((r) => {
+    const warns = (r.warnings || []).filter((w) => issueWarn[w]);
+    const problem = r.phan_loai === 'ERROR' ? (r.errors || []).join('; ') : r.phan_loai === 'KEY_CONFLICT' ? `Khác file cũ ở: ${diffText(r) || '(xem Cần kiểm tra)'}` : warns.map((w) => issueWarn[w][0]).join('; ');
+    const fix = r.phan_loai === 'ERROR' ? 'Sửa dòng này trong file nguồn rồi import lại' : r.phan_loai === 'KEY_CONFLICT' ? 'Xử lý ở màn "Cần kiểm tra": giữ cũ / cập nhật / bỏ qua' : [...new Set(warns.map((w) => issueWarn[w][1]))].join('; ');
+    return { ...r, loai: PL[r.phan_loai] || r.phan_loai, problem, fix };
+  });
+  const cols = [
+    { header: 'Dòng trong file', key: 'source_row', fmt: 'int', width: 11 }, { header: 'Phân loại', key: 'loai', width: 30, count: true },
+    { header: 'Vấn đề', key: 'problem', width: 46 }, { header: 'Cách xử lý', key: 'fix', width: 52 },
+    { header: 'Số phiếu', key: 'so_phieu', text: true, width: 12 }, { header: 'Biển số', key: 'bien_so', width: 12 },
+    { header: 'Cân 1', value: (x) => toDate(x.ngay_gio_can_1), fmt: 'date', width: 17 }, { header: 'KL (kg)', key: 'kl_hang_kg', fmt: 'kg', width: 12 }, { header: 'Nơi xuất', key: 'noi_xuat', width: 18 },
+  ];
+  addTable(wb.addWorksheet('Dòng cần xử lý'), { title: 'CÁC DÒNG CẦN XỬ LÝ SAU KHI IMPORT', subtitle: `File: ${meta.fileName || ''} · ${lines.length} dòng cần xử lý`, cols, rows: lines, totalLabel: 'Số dòng' });
+  return done(wb);
+}
+
+module.exports = { importIssuesWorkbook, FONT, FMT, BOX, PRINT_HEAD, newWb, done, signParties, partyLines, reportWorkbook, printTable, signatureBlock, printSetup, priceSheetWorkbook, reconWorkbook, ticketsWorkbook, statementWorkbook, timelineWorkbook, addTable };

@@ -123,3 +123,74 @@ test('timeline: các chuyến cùng giờ cân có thứ tự cố định (theo
   assert.deepEqual(o1, [1, 2, 3]); assert.deepEqual(o2, [1, 2, 3]); assert.deepEqual(o3, [1, 2, 3]);
   assert.doesNotThrow(() => buildTimeline([mk(5, null, null), a]));
 });
+
+// ---------------------------------------------------------------- nhập liệu: kiểm tra tại chỗ + file dòng cần xử lý
+const { xlsxBuffer } = require('./helpers/xlsx');
+const ExcelJS = require('exceljs');
+const HEAD = ['Số phiếu', 'Biển số', 'Nơi xuất', 'Giờ cân 1', 'Giờ cân 2', 'Cân 1', 'Cân 2', 'KL hàng'];
+async function openRows(app, rows) {
+  const o = await app.imports.open({ buffer: await xlsxBuffer([HEAD, ...rows]), fileName: 'x.xlsx' });
+  const si = app.imports.sheetInfo(o.token, o.suggestedSheet);
+  return { o, si, args: { sheetName: si.sheetName, headerRow: si.headerRow, mapping: si.mapping } };
+}
+
+test('import.check: thiếu cột bắt buộc → chặn, cột gán trùng → cảnh báo, tóm tắt lỗi theo lý do, đọc thử các dòng đầu', async () => {
+  const app = await setup(true);
+  const plate = app.db.get('SELECT bien_so_hien_thi b FROM xe LIMIT 1').b;
+  const { o, args } = await openRows(app, [
+    ['9101', plate, 'Quế Sơn', '05/10/2026 08:00', '05/10/2026 08:30', 40000, 23000, 17000],
+    ['9102', plate.toLowerCase().replace('-', ' '), 'que son', '31/02/2026 08:00', '', 40000, 23000, 17000],     // ngày không có thật
+    ['9103', 'XYZ', 'Mars', '05/10/2026 09:00', '', 40000, 23000, 17000],                                      // biển số sai
+    ['9104', plate, 'Quế Sơn', '05/10/2026 10:00', '', 40000, 23000, 99999],                                    // KL lệch cân
+  ]);
+  const ok = app.imports.check(o.token, args);
+  assert.equal(ok.blocking, false);
+  assert.equal(ok.summary.tong_dong, 4); assert.equal(ok.summary.dong_loi, 3);
+  assert.ok(ok.summary.ly_do.length >= 2 && ok.summary.ly_do.every((x) => x.so_dong >= 1 && x.dong_dau >= 1));
+  assert.equal(ok.sample.length, 4);
+  assert.equal(ok.sample[0].ngay_gio_can_1, '2026-10-05T08:00:00'); assert.equal(ok.sample[0].noi_xuat_nhan_dang, 'Quế Sơn');
+  assert.equal(ok.sample[1].noi_xuat_nhan_dang, 'Quế Sơn');                      // "que son" (không dấu) nhận ra đúng nơi xuất
+  assert.equal(ok.sample[1].ngay_gio_can_1, null);                                // 31/02 → không đọc được
+  assert.equal(ok.sample[2].noi_xuat_nhan_dang, null);
+  assert.ok(ok.sample[2].errors.some((e) => /Biển số/.test(e)));
+  // thiếu cột bắt buộc
+  const m = { ...args.mapping }; delete m.bien_so; delete m.kl_hang_kg; delete m.can_lan_1;
+  const bad = app.imports.check(o.token, { ...args, mapping: m });
+  assert.equal(bad.blocking, true);
+  assert.ok(bad.problems.filter((p) => p.level === 'error').map((p) => p.text).join('|').match(/Biển số.*KL hàng/s));
+  assert.equal(bad.sample.length, 0);
+  // cột bị gán cho 2 trường
+  const dup = app.imports.check(o.token, { ...args, mapping: { ...args.mapping, ngay_gio_can_2: args.mapping.ngay_gio_can_1 } });
+  assert.ok(dup.problems.some((p) => p.level === 'warning' && /nhiều trường/.test(p.text)));
+  // chỉ đọc: chưa ghi gì, phiên vẫn dùng được để xem trước
+  assert.equal(app.db.get(`SELECT COUNT(*) n FROM phieu_can WHERE so_phieu LIKE '91%'`).n, 0);
+  assert.doesNotThrow(() => app.imports.preview(o.token, { ...args, dotId: null }));
+});
+
+test('import.issuesXlsx: xuất đúng các dòng lỗi / trùng khóa khác / thiếu dữ liệu giá, kèm cách xử lý; phiếu sạch không có mặt', async () => {
+  const app = await setup(true);
+  const plate = app.db.get('SELECT bien_so_hien_thi b FROM xe LIMIT 1').b;
+  const ex = app.db.get('SELECT so_phieu, bien_so_goc, noi_xuat_goc, ngay_gio_can_1 FROM phieu_can LIMIT 1');
+  const dmyhm = (iso) => `${iso.slice(8, 10)}/${iso.slice(5, 7)}/${iso.slice(0, 4)} ${iso.slice(11, 16)}`;
+  const { o, args } = await openRows(app, [
+    ['9201', plate, 'Quế Sơn', '06/10/2026 08:00', '06/10/2026 08:30', 40000, 23000, 17000],              // sạch
+    ['9202', plate, 'Quế Sơn', '31/02/2026 08:00', '', 40000, 23000, 17000],                                // lỗi ngày
+    ['9203', '99Z-99999', 'Quế Sơn', '06/10/2026 09:00', '06/10/2026 09:30', 40000, 23000, 17000],         // xe chưa có
+    ['9204', plate, 'Nơi lạ', '06/10/2026 10:00', '06/10/2026 10:30', 40000, 23000, 17000],                // nơi xuất lạ
+    [ex.so_phieu, ex.bien_so_goc, ex.noi_xuat_goc, dmyhm(ex.ngay_gio_can_1), '', 40000, 22000, 18000],     // trùng khóa, khác KL
+  ]);
+  app.imports.preview(o.token, { ...args, dotId: null });
+  const rows = app.imports.issueRows(o.token);
+  assert.deepEqual(rows.map((r) => r.phan_loai).sort(), ['ERROR', 'KEY_CONFLICT', 'NEW', 'NEW']);
+  assert.ok(!rows.some((r) => r.so_phieu === '9201'));
+  const { ISSUE_WARN } = require('../src/services/TicketImportService');
+  const buf = await require('../src/excel/exporters').importIssuesWorkbook(rows, { fileName: 'x.xlsx' }, ISSUE_WARN);
+  const wb = new ExcelJS.Workbook(); await wb.xlsx.load(buf);
+  const ws = wb.getWorksheet('Dòng cần xử lý');
+  const text = []; ws.eachRow((r) => text.push(r.values.slice(1).join(' | ')));
+  const all = text.join('\n');
+  assert.match(all, /Lỗi dữ liệu/); assert.match(all, /Trùng khóa nhưng khác/); assert.match(all, /Xe chưa có trong danh mục/);
+  assert.match(all, /Danh mục → Xe/); assert.match(all, /Cần kiểm tra/); assert.match(all, /Địa điểm/);
+  assert.ok(!all.includes('9201'));
+  assert.throws(() => app.imports.issueRows('khong-co-token'), /hết hạn/);
+});

@@ -248,3 +248,13 @@ body.sfd-open{overflow:hidden}
 .lnk{color:var(--green);cursor:pointer;text-decoration:underline}
 .nav-group{letter-spacing:.06em}
 @media (max-width:900px){.todo-row{grid-template-columns:34px 1fr}.todo-c,.todo-row .btn{grid-column:2}}
+
+/* ===== Nhập liệu: kiểm tra ngay khi ghép cột, việc tiếp theo ===== */
+.chk{margin:6px 0;padding:6px 10px;border-radius:8px;font-size:13px;border:1px solid transparent}
+.chk.ok{background:var(--okBg);color:var(--okFg)}.chk.warn{background:var(--warnBg);color:var(--warnFg);border-color:var(--warnBd)}.chk.bad{background:var(--redBg);color:var(--red);border-color:transparent}
+span.chk{display:inline;margin:0;padding:0;background:none;border:0}
+.chk-list{margin:4px 0 8px 18px;padding:0;font-size:12.5px;color:var(--text-mute)}.chk-list li{margin:2px 0}
+.btn.danger-t{color:var(--red);border-color:var(--red)}.btn.danger-t:hover{background:var(--redBg)}
+.todo .todo-row .btn{white-space:nowrap}
+.chk-verdict{margin:0 0 12px;padding:8px 12px;border-radius:8px;font:600 13px var(--sans);position:sticky;top:0;z-index:2}
+.chk-verdict.ok{background:var(--okBg);color:var(--okFg)}.chk-verdict.warn{background:var(--warnBg);color:var(--warnFg);border:1px solid var(--warnBd)}.chk-verdict.bad{background:var(--redBg);color:var(--red);border:1px solid var(--red)}

@@ -36,7 +36,7 @@ Dashboard mở đầu bằng khối **"Việc cần làm theo quy trình"** (6 b
 | Màn hình | Nội dung | Tương tác |
 |---|---|---|
 | Dashboard | 11 KPI (tổng chuyến, KL, chi phí, VAT, thanh toán, số xe, số đơn vị, phiếu chưa có giá, chưa xác định xe, lỗi, cần đối chiếu); 7 biểu đồ (KL/chi phí/số chuyến theo ngày, KL theo nơi xuất, chi phí theo đơn vị, top xe theo chuyến/KL) | Filter chung: từ–đến ngày, đợt/tàu, nơi xuất, tuyến, đơn vị → mọi KPI & biểu đồ lấy từ cùng truy vấn SQL đã lọc; bấm KPI cảnh báo → mở danh sách phiếu tương ứng |
-| Import phiếu cân | Wizard 4 bước: Chọn file → Sheet & mapping → Preview (thẻ đếm màu) → Xác nhận | xem IMPORT_SPEC |
+| Import phiếu cân | Wizard 4 bước: Chọn file → Sheet & ghép cột (**kiểm tra ngay**: kết luận 1 dòng, tóm tắt lỗi theo lý do, đọc thử 8 dòng đầu; chặn khi thiếu cột bắt buộc) → Xem trước (thẻ đếm màu; tải Excel các dòng cần xử lý kèm cách xử lý) → Kết quả (việc tiếp theo, hoàn tác lần import) | xem IMPORT_SPEC |
 | Cần kiểm tra | Cặp dữ liệu cũ/mới, ô khác tô cam | Giữ cũ / Cập nhật / Bỏ qua (từng dòng hoặc hàng loạt) |
 | Chi tiết vận chuyển | 21 cột (STT … Trạng thái đối chiếu, Ghi chú) | search, filter, sort, group (theo xe/đơn vị/nơi xuất/ngày), export Excel; virtual scroll, phân trang phía server |
 | Theo xe (timeline) | Chọn biển số + từ–đến ngày → timeline chuyến: giờ cân 1/2, số phiếu, nơi xuất/đến, KL, đơn giá, tiền, **thời gian cân**, **khoảng cách chuyến trước** | dòng có cờ tô cam + tooltip lý do; ngưỡng chỉnh ở Cài đặt |
