@@ -1,6 +1,7 @@
 # CHANGELOG
 
 ## Chưa phát hành
+- Bản vá: `electron` 45.3.1 → 45.3.3, `better-sqlite3` 13.1.1 → 13.2.0, `playwright-core` 1.65.0 → 1.65.1. Kiểm chứng: 76/76 test bằng cả hai driver, kiểm tra khởi động + PDF thật (Electron 45.3.3) và `test:ui` đạt.
 - Phụ thuộc: ép `uuid` ≥ 11.1.1 (qua `overrides`; `exceljs` chỉ dùng `uuid.v4`) để hết cảnh báo; nâng `chart.js` 4.5 → 4.6.1, `tabulator-tables` 6.6 → 6.7.1, `playwright-core` 1.63 → 1.65. `npm audit`: 9 → 7 cảnh báo, còn `xlsx` (high, chưa có bản vá trên npm) và chuỗi `minimatch` trong `electron-builder` (moderate, chỉ công cụ build, không đóng gói vào app).
 - Nâng Electron 33.4.11 → **45.3.1** (bản 33 hết hỗ trợ, `npm audit` mức cao đã hết) và `better-sqlite3` 11.10 → **13.1.1** (N-API prebuilt dùng chung Node/Electron: không còn build lại module native, bỏ bước `install-app-deps` trong CI). `electron-builder` → 26.18. Loại các prebuilt nền tảng khác và mã nguồn C của better-sqlite3 khỏi bản đóng gói.
 - Kiểm chứng: kiểm tra khởi động Electron 45 (cửa sổ → preload → IPC → CSDL) và **xuất PDF thật** qua Chromium (≈330 KB, `%PDF-`) đạt; cả bộ 76 test đạt bằng cả hai driver `node:sqlite` và `better-sqlite3`.
