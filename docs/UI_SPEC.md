@@ -12,6 +12,13 @@
 ```
 - Định dạng: tiền `1.234.567` (vi-VN), KG `20.090`, tấn `20,090`, ngày `dd/mm/yyyy HH:mm`.
 
+## 1b. Bộ lọc thông minh (HAK Smart Filter) — dùng chung mọi màn hình
+Thay thanh lọc cũ trên Phiếu cân, Dashboard, Báo cáo, Biểu mẫu, Bảng kê. Lõi nhúng nguyên văn từ repo `HAK_SMART_FILTER` (`renderer/vendor/hak-smart-filter`, băm trong `MANIFEST.json`); bộ chuyển đổi cho VC Cost ở `renderer/filters.js`.
+- **Thanh lọc nhanh:** ô tìm không dấu (số phiếu, biển số gõ kiểu nào cũng được, nơi xuất kể cả tên gọi khác) · kỳ (tháng có dữ liệu) + Từ/Đến ngày `dd/mm/yyyy` (tự chèn `/`, ngày không tồn tại bị chặn) · chọn **nhiều** Đơn vị vận chuyển / Đợt-Tàu.
+- **Bộ lọc nâng cao (ngăn kéo):** thêm Nơi xuất, Tuyến, Trạng thái tính giá; **bộ lọc đã lưu** riêng từng màn hình (lưu trên máy; kho hỏng không bị ghi đè).
+- **Chip** điều kiện đang áp dụng (bấm × bỏ từng cái) và dòng **"Hiển thị x / y dòng · Phạm vi: …"**; Excel/PDF in cùng điều kiện (tên các giá trị đã chọn) nên màn hình = tổng = Excel = PDF.
+- Bảng kê/biểu mẫu chỉ nói về MỘT đơn vị: chọn nhiều thì hiện danh sách theo từng đơn vị, chọn đúng một mới ra bảng kê chi tiết.
+
 ## 2. Danh mục = cấu hình khai báo
 Mọi danh mục (Xe, Đơn vị VC, Địa điểm, Tuyến, Đợt/Tàu, Bảng giá, Giá dầu) định nghĩa trong 1 object `TABLES` (fields, columns, refTable, required, money/percent, tag, hasVersioning) → 1 bộ hàm chung `renderTableView / renderModal / save`. Xe có **tab con** "Lịch sử đơn vị" (versioning từ–đến ngày, tự đề xuất đóng phiên bản cũ). Drill-down tối đa 3 cấp, breadcrumb + tabbar; khi đào sâu luôn lấy id cha từ chính dòng được bấm.
 

@@ -155,7 +155,7 @@ tr.flag td{background:#FFF6E8}tr.err td{background:#FDEDEA}tr.dup td{color:#8d8a
 .tag.green{background:rgba(27,175,122,.14);color:#0f7a54}.tag.amber{background:rgba(237,161,0,.16);color:#8a5a00}.tag.red{background:rgba(229,72,77,.13);color:#b4262b}
 .tag.gray{background:#e9eef4;color:var(--text-mute)}.tag.purple{background:#E9E2F5;color:#4D3580}.tag.blue{background:var(--brand-soft);color:var(--brand)}
 
-.overlay{position:fixed;inset:0;background:rgba(8,18,30,.6);display:grid;place-items:center;z-index:50}
+.overlay{position:fixed;inset:0;background:rgba(8,18,30,.6);display:grid;place-items:center;z-index:80}
 .modal{background:#fff;border:1px solid var(--line);border-radius:16px;width:min(640px,94vw);max-height:90vh;overflow:auto;padding:20px 22px;box-shadow:0 20px 60px rgba(0,0,0,.3)}
 .modal.wide{width:min(980px,95vw)}.modal h2{margin:0 0 12px;font-size:18px}.modal .actions{display:flex;gap:8px;justify-content:flex-end;margin-top:16px}
 .form-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}.form-grid .full{grid-column:1/-1}
@@ -182,3 +182,55 @@ input[inputmode="decimal"]{text-align:right}
 /* Truy cập: viền focus rõ khi dùng bàn phím; tôn trọng "giảm chuyển động" của hệ điều hành (HAK Design System). */
 :focus-visible{outline:2px solid var(--brand);outline-offset:2px}
 @media (prefers-reduced-motion:reduce){*,*::before,*::after{animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important;scroll-behavior:auto!important}}
+
+/* ===== Thanh lọc thông minh (HAK Smart Filter) ===== */
+.sf{margin-bottom:16px}
+.sf .fbar-wrap{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow);padding:10px 12px}
+.sf .bar.sf-bar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;grid-template-columns:none;font-size:13px}
+.sf .i,.fpop .i,.sfd .i{border:1px solid #ced8e3;border-radius:8px;padding:7px 10px;font:13px var(--sans);background:#fff;min-width:0}
+.sf .i.search{flex:1 1 240px;min-width:200px;max-width:380px}
+.sf .sf-q{display:inline-flex}
+.sf .sfdr{display:inline-flex;gap:6px;align-items:center;flex-wrap:wrap}
+.sf .sfdr select{min-height:36px}
+.sf .sfdr .chip{display:inline-flex;gap:5px;align-items:center;font-size:12px;color:var(--text-mute);font-weight:600}
+.sf input.sf-date{width:104px;text-align:center;font-variant-numeric:tabular-nums}
+.sf .b,.sf .fbtn,.fpop .btn,.sfd .btn{min-height:36px}
+.sf .b.sf-adv{border:1px solid var(--line);background:#fff;color:var(--text);border-radius:8px;padding:7px 12px;font:600 13px var(--sans);cursor:pointer}
+.sf .b.sf-adv:hover{background:var(--brand-soft)}.sf .b.sf-adv.has{border-color:var(--brand);color:var(--brand-dark);background:var(--brand-soft)}
+.sf .fbtn{background:#fff;color:var(--text);border:1px solid var(--line);font-weight:600}
+.sf .fbtn.has,.sf .fbtn.on{border-color:var(--brand);background:var(--brand-soft);color:var(--brand-dark)}
+.sf .fchips{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-top:8px}
+.fchip{border:1px solid var(--brand);background:var(--brand-soft);color:var(--brand-dark);border-radius:999px;padding:3px 10px;font:600 12px var(--sans);cursor:pointer}
+.fchip:hover{background:#d5eef0}.fchip span{margin-left:4px;font-weight:700}
+.sf .sf-sum{display:flex;flex-wrap:wrap;gap:6px 14px;align-items:baseline;margin-top:8px;font-size:12.5px;color:var(--text)}
+.sf .sf-sum .hint{font-size:12px}.sf .sf-sum-i{color:var(--text-mute)}.sf .sf-warn{color:var(--red);font-weight:600}
+.sf .sf-act{margin-left:auto;display:inline-flex;gap:6px}
+/* ô chọn nhiều (popover) */
+.fpop{position:fixed;z-index:60;background:#fff;border:1px solid var(--line);border-radius:12px;box-shadow:0 12px 32px rgba(16,35,58,.22);display:flex;flex-direction:column;overflow:hidden}
+.fpop-head{padding:10px 12px;border-bottom:1px solid var(--line);display:flex;flex-direction:column;gap:6px}
+.fpop-tools{display:flex;gap:6px;align-items:center;flex-wrap:wrap}.fpop-tools .btn{padding:3px 9px;font-size:12px;min-height:28px}
+.fpop-list{overflow:auto;padding:6px 8px;flex:1}
+.fpop-row,.sfm-row{display:flex;gap:8px;align-items:center;padding:5px 6px;border-radius:6px;font-size:13px;cursor:pointer}
+.fpop-row:hover,.sfm-row:hover{background:var(--brand-soft)}
+.fpop-foot{display:flex;justify-content:flex-end;gap:8px;padding:8px 12px;border-top:1px solid var(--line);background:var(--bg)}
+.fpop .btn:not(.pri):not(.ghost){background:#fff;color:var(--text);border-color:var(--line)}.fpop .btn.pri{background:var(--green);color:#fff;border-color:var(--green)}
+/* ngăn kéo bộ lọc nâng cao */
+.sfd-mask{position:fixed;inset:0;background:rgba(15,39,64,.35);z-index:70}
+.sfd{position:fixed;top:0;right:0;bottom:0;width:min(440px,100vw);background:var(--card);z-index:71;display:flex;flex-direction:column;box-shadow:-12px 0 32px rgba(16,35,58,.25)}
+.sfd-head{padding:16px 18px;background:var(--sidebar-bg);color:#fff;display:flex;justify-content:space-between;gap:10px}
+.sfd-head small{display:block;font-size:10.5px;letter-spacing:.08em;color:#9fb3c8}.sfd-head b{font-size:16px}.sfd-head span{font-size:12px;color:#c8d6e4}
+.sfd-body{flex:1;overflow:auto;padding:14px 18px;display:flex;flex-direction:column;gap:14px}
+.sfd-f{display:flex;flex-direction:column;gap:5px}.sfd-l{font-size:12px;font-weight:700;color:var(--text-mute);text-transform:uppercase;letter-spacing:.04em}
+.sfd-f select,.sfd-f .i{width:100%}
+.sfd-foot{display:flex;gap:8px;padding:12px 18px;border-top:1px solid var(--line);background:var(--bg)}.sfd-foot .sp{flex:1}
+.sfd .btn:not(.pri):not(.ghost){background:#fff;color:var(--text);border-color:var(--line)}
+.sfd-presets{border-top:1px dashed var(--line);padding-top:12px}.sfd-presets .bar{display:flex;gap:6px;grid-template-columns:none}
+.sfm{display:flex;flex-direction:column;gap:6px}.sfm-list{max-height:220px;overflow:auto;border:1px solid var(--line);border-radius:8px;padding:4px}
+.sfd .sfdr{display:flex;flex-wrap:wrap;gap:8px;align-items:center}.sfd .sf-warn{color:var(--red)}
+body.sfd-open{overflow:hidden}
+.sf :focus-visible,.fpop :focus-visible,.sfd :focus-visible{outline:2px solid var(--brand);outline-offset:1px}
+@media (max-width:900px){.sf .i.search{max-width:none;flex-basis:100%}}
+.sfd-head>div{display:flex;flex-direction:column;gap:3px}.sfd-head b{display:block}.sfd-head span{display:block;max-width:300px;line-height:1.35}
+.sfd-head .btn{color:#fff;border-color:#4b6785;background:transparent;min-height:32px;padding:2px 12px;align-self:flex-start}.sfd-head .btn:hover{background:rgba(255,255,255,.12)}
+.sf .sfdr .chip,.sfd .sfdr .chip{display:inline-flex;flex-direction:row;gap:6px;align-items:center;font-size:12px;font-weight:600;color:var(--text-mute)}
+.sf .bar.sf-bar .btn.ghost{min-height:36px}

@@ -7,6 +7,8 @@ const { fromDb } = require('../utils/dbMoney');
 const { buildTimeline } = require('./TimeAnomalyService');
 const { buildStatement } = require('./StatementService');
 const { normalizePlate } = require('../utils/plate');
+const { asIds, oneId } = require('../utils/filterIds');
+const { fold } = require('../excel/columnMapping');
 
 const MONEY = ['don_gia', 'tien_truoc_vat', 'tien_vat', 'tong_tien'];
 const conv = (r) => { for (const k of MONEY) if (k in r) r[k] = fromDb(r[k]); return r; };
@@ -24,18 +26,45 @@ class ReportService {
     const add = (sql, ...v) => { w.push(sql); p.push(...v); };
     if (f.tu_ngay) add(`${alias}.ngay_can >= ?`, f.tu_ngay);
     if (f.den_ngay) add(`${alias}.ngay_can <= ?`, f.den_ngay);
-    if (f.dot_id) add(`${alias}.dot_van_chuyen_id = ?`, f.dot_id);
-    if (f.noi_xuat_id) add(`${alias}.noi_xuat_id = ?`, f.noi_xuat_id);
-    if (f.tuyen_id) add(`${alias}.tuyen_id = ?`, f.tuyen_id);
-    if (f.don_vi_id) add(`${alias}.don_vi_van_chuyen_id = ?`, f.don_vi_id);
+    // chọn nhiều giá trị: mảng id → IN (...); một id → = (cùng ý nghĩa với bộ lọc cũ)
+    const inIds = (col, v) => { const ids = asIds(v); if (ids.length) add(`${col} IN (${ids.map(() => '?').join(',')})`, ...ids); };
+    inIds(`${alias}.dot_van_chuyen_id`, f.dot_id);
+    inIds(`${alias}.noi_xuat_id`, f.noi_xuat_id);
+    inIds(`${alias}.tuyen_id`, f.tuyen_id);
+    inIds(`${alias}.don_vi_van_chuyen_id`, f.don_vi_id);
     if (f.bien_so) add(`${alias}.bien_so_chuan = ?`, normalizePlate(f.bien_so));
     if (f.trang_thai_tinh_gia) add(`${alias}.trang_thai_tinh_gia = ?`, f.trang_thai_tinh_gia);
     if (f.chua_tinh_gia) w.push(`NOT ${pricedSql(alias)}`);
     if (f.da_tinh_gia) w.push(pricedSql(alias));
     if (f.chua_chot) w.push(`${alias}.chot_ky_id IS NULL`);
     if (f.chot_ky_id) add(`${alias}.chot_ky_id = ?`, f.chot_ky_id);
-    if (f.search) { const s = `%${f.search}%`; add(`(${alias}.so_phieu LIKE ? OR ${alias}.bien_so LIKE ? OR ${alias}.noi_xuat_goc LIKE ?)`, s, s, s); }
+    if (f.search && String(f.search).trim()) this._search(String(f.search).trim(), alias, add);
     return { sql: w.join(' AND '), params: p };
+  }
+
+  /** Tìm kiếm không phân biệt dấu/hoa-thường: số phiếu, biển số (gõ kiểu nào cũng được), tên nơi xuất (kể cả tên gọi khác). */
+  _search(q, alias, add) {
+    const like = `%${q}%`, parts = [`${alias}.so_phieu LIKE ?`, `${alias}.bien_so LIKE ?`, `${alias}.noi_xuat_goc LIKE ?`], params = [like, like, like];
+    const plate = normalizePlate(q);
+    if (plate.length >= 2) { parts.push(`${alias}.bien_so_chuan LIKE ?`); params.push(`%${plate}%`); }
+    const fq = fold(q);
+    if (fq) {
+      const ids = this.db.all('SELECT id, ten FROM dia_diem').filter((d) => fold(d.ten).includes(fq)).map((d) => d.id);
+      for (const a of this.db.all('SELECT dia_diem_id, alias_folded FROM dia_diem_alias')) if (a.alias_folded.includes(fq) && !ids.includes(a.dia_diem_id)) ids.push(a.dia_diem_id);
+      if (ids.length) { parts.push(`${alias}.noi_xuat_id IN (${ids.map(() => '?').join(',')})`); params.push(...ids); }
+    }
+    add(`(${parts.join(' OR ')})`, ...params);
+  }
+
+  /** Số dòng khớp bộ lọc / tổng số phiếu đang hoạt động (cho dòng "Hiển thị x / y dòng"). */
+  count(f = {}) {
+    const { sql, params } = this.where(f);
+    return { kept: this.db.get(`SELECT COUNT(*) n FROM phieu_can p WHERE ${sql}`, params).n, total: this.db.get(`SELECT COUNT(*) n FROM phieu_can WHERE trang_thai='ACTIVE'`).n };
+  }
+
+  /** Các kỳ (yyyy-MM) có phiếu, mới nhất trước — cho ô chọn kỳ. */
+  periods(limit = 36) {
+    return this.db.all(`SELECT substr(ngay_can,1,7) ky, COUNT(*) n FROM phieu_can WHERE trang_thai='ACTIVE' AND ngay_can IS NOT NULL GROUP BY 1 ORDER BY 1 DESC LIMIT ${Number(limit)}`);
   }
 
   /** Chi tiết vận chuyển (phân trang phía SQL). */
@@ -99,14 +128,15 @@ class ReportService {
 
   /** Bảng kê 1 đơn vị (làm tròn theo bảng kê). */
   statement(f) {
-    if (!f || !f.don_vi_id) throw new Error('Cần chọn đơn vị vận chuyển');
+    const dvId = f ? oneId(f.don_vi_id) : null;
+    if (dvId === null) throw new Error('Cần chọn đúng một đơn vị vận chuyển');
     const { sql, params } = this.where(f);
     const rows = this.db.all(`SELECT p.kl_hang_kg, p.don_gia, p.tuyen_id, p.don_vi_tinh, p.ty_le_vat AS vat_percent, p.bien_so, p.trang_thai_tinh_gia AS status
                               FROM phieu_can p WHERE ${sql}`, params).map(conv);
     const routes = new Map(this.db.all('SELECT id, ma_tuyen FROM tuyen_van_chuyen').map((t) => [t.id, t.ma_tuyen]));
     const r = this.settings.get('rounding') || {};
     const st = buildStatement(rows, { rounding: r.statement, routeLabel: (id) => routes.get(id) || '(chưa có tuyến)' });
-    st.don_vi = this.db.get('SELECT * FROM don_vi_van_chuyen WHERE id=?', [f.don_vi_id]);
+    st.don_vi = this.db.get('SELECT * FROM don_vi_van_chuyen WHERE id=?', [dvId]);
     return st;
   }
 
@@ -140,7 +170,7 @@ class ReportService {
       byDate: this.byDate(f).map((r) => ({ label: r.label, so_chuyen: r.so_chuyen, tong_tan: r.tong_tan, tong_tien: r.tong_tien })),
       byOrigin: this.byOrigin(f).map((r) => ({ label: r.label, tong_tan: r.tong_tan, so_chuyen: r.so_chuyen })),
       byCarrier: this.byCarrier(f).map((r) => ({ label: r.label, tong_tien: r.tong_tien, so_chuyen: r.so_chuyen })),
-      giamDinh: f.dot_id ? this.giamDinh(f.dot_id, k.tong_kg / 1000) : null,
+      giamDinh: oneId(f.dot_id) !== null ? this.giamDinh(oneId(f.dot_id), k.tong_kg / 1000) : null,
       topTrips: top('so_chuyen'), topWeight: top('tong_kg'),
     };
   }

@@ -1,4 +1,5 @@
 'use strict';
+const { oneId } = require('../utils/filterIds');
 /**
  * 3 biểu mẫu in/ký hai bên (theo các sheet của file V.47):
  *  1) tauSummaryDoc  — TỔNG HỢP XUẤT HÀNG TÀU … tại <nơi xuất> của <đơn vị>: theo xe (số chuyến, KG, tấn, đơn giá, thành tiền, VAT, tổng).
@@ -31,7 +32,7 @@ function carriers(app, ngay) {
   return new Map(app.db.all('SELECT * FROM don_vi_van_chuyen').map((d) => [d.ma, withContract(app, d, ngay)]));
 }
 function periodText(app, filter, tickets) {
-  let dot = filter.dot_id ? app.db.get('SELECT * FROM dot_van_chuyen WHERE id=?', [filter.dot_id]) : null;
+  let dot = oneId(filter.dot_id) !== null ? app.db.get('SELECT * FROM dot_van_chuyen WHERE id=?', [oneId(filter.dot_id)]) : null;
   if (!dot) { const codes = [...new Set(tickets.map((t) => t.dot).filter(Boolean))]; if (codes.length === 1) dot = app.db.get('SELECT * FROM dot_van_chuyen WHERE ma_dot=?', [codes[0]]); }
   const ds0 = tickets.map((t) => (t.ngay_can || '').slice(0, 10)).filter(Boolean).sort();
   if (!dot && ds0.length) { const c = app.db.all('SELECT * FROM dot_van_chuyen WHERE IFNULL(tu_ngay,\'0000\') <= ? AND IFNULL(den_ngay,\'9999\') >= ?', [ds0[ds0.length - 1], ds0[0]]); if (c.length === 1) dot = c[0]; }

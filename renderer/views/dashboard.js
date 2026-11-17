@@ -146,13 +146,14 @@
       const load = async () => {
         const f = App.cleanFilter(App.state.filter);
         App.clear(body);
-        if (!f.don_vi_id) {
+        const dvOne = App.one(f.don_vi_id);
+        if (!dvOne) {
           const sts = await api('reports.statements', f);
           body.append(h('div', { class: 'card' }, h('h3', {}, 'Tổng hợp bảng kê theo từng đơn vị (hóa đơn xuất riêng)'),
             table({
               columns: [{ key: 'don_vi', label: 'Đơn vị', render: (s) => s.don_vi.ma, mono: true }, { key: 'so_chuyen', label: 'Chuyến', fmt: 'int' }, { key: 'tong_tan', label: 'KL (tấn)', fmt: 'tan' },
                 { key: 'tien_truoc_vat', label: 'Thành tiền', fmt: 'money' }, { key: 'tien_vat', label: 'VAT', fmt: 'money' }, { key: 'tong_tien', label: 'Tổng thanh toán', fmt: 'money' }],
-              rows: sts, onRow: (s) => { App.state.filter.don_vi_id = String(s.don_vi.id); App.reload(); },
+              rows: sts, onRow: (s) => { App.state.filter.don_vi_id = [String(s.don_vi.id)]; App.reload(); },
             }), (() => { const n = sts.reduce((a, s) => a + (s.so_chuyen_chua_tinh_gia || 0), 0); return n ? h('p', { class: 'tag amber' }, `⚠ ${n} chuyến chưa tính được giá — chưa nằm trong bảng kê`) : null; })(),
             h('p', { class: 'muted' }, 'Chọn đơn vị ở bộ lọc (hoặc bấm một dòng) để xem bảng kê chi tiết, xuất Excel/PDF để in và ký.')));
           return;

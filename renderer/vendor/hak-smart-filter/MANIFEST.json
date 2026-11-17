@@ -1,0 +1,19 @@
+{
+  "source": "https://github.com/saoluucvhak-pixel/HAK_SMART_FILTER",
+  "commit": "e99bb7e0fbf0835bf94aa5fb2077abeadbee5a73",
+  "note": "Bản sao NGUYÊN VĂN (không chỉnh sửa). Cập nhật: chép lại từ repo nguồn rồi chạy `node scripts/vendor-manifest.js` ghi lại băm; test tests/vendor.test.js chặn sửa tay.",
+  "files": {
+    "smart-filter.js": {
+      "upstream": "core/smart-filter.js",
+      "sha256": "8024c3b23b5aad269e02e0d66396b97a2cfe43e2d13699f3b31abdca03f060d4"
+    },
+    "filter-popover.js": {
+      "upstream": "ui/filter-popover.js",
+      "sha256": "86355a0b6ae97229eb80d5f8400e7eba4c4c1bcd9d5fd7898ba07125df6642e8"
+    },
+    "smart-filter-ui.js": {
+      "upstream": "ui/smart-filter.js",
+      "sha256": "0255f6c0eb47ce57dc117c0f4013be5a8edb3326b907b30fc60687ddcfb8b44a"
+    }
+  }
+}

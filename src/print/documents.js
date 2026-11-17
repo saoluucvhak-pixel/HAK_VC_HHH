@@ -5,6 +5,7 @@
  *  - reportDoc: báo cáo tổng hợp theo xe / đơn vị / nơi xuất / ngày / đợt.
  */
 const { docTienBangChu } = require('../utils/vnNumber');
+const { asIds, oneId } = require('../utils/filterIds');
 
 const { dmy, dmyHm } = require('../utils/datetime');
 
@@ -18,12 +19,14 @@ function companyInfo(app) {
 function filterLabels(app, f = {}) {
   const out = [];
   const name = (sql, id) => { const r = app.db.get(sql, [id]); return r ? Object.values(r)[0] : `#${id}`; };
+  const names = (sql, v) => asIds(v).map((id) => String(name(sql, id)).trim()).join(', ');
   if (f.tu_ngay || f.den_ngay) out.push(['Thời gian', `${f.tu_ngay ? dmy(f.tu_ngay) : '…'} → ${f.den_ngay ? dmy(f.den_ngay) : '…'}`]);
-  if (f.dot_id) out.push(['Đợt/Tàu', name(`SELECT COALESCE(ten_tau||' '||COALESCE(voyage,''), ma_dot) FROM dot_van_chuyen WHERE id=?`, f.dot_id).trim()]);
-  if (f.don_vi_id) out.push(['Đơn vị vận chuyển', name('SELECT ma FROM don_vi_van_chuyen WHERE id=?', f.don_vi_id)]);
-  if (f.noi_xuat_id) out.push(['Nơi xuất', name('SELECT ten FROM dia_diem WHERE id=?', f.noi_xuat_id)]);
-  if (f.tuyen_id) out.push(['Tuyến', name('SELECT ma_tuyen FROM tuyen_van_chuyen WHERE id=?', f.tuyen_id)]);
+  if (asIds(f.dot_id).length) out.push(['Đợt/Tàu', names(`SELECT COALESCE(ten_tau||' '||COALESCE(voyage,''), ma_dot) FROM dot_van_chuyen WHERE id=?`, f.dot_id)]);
+  if (asIds(f.don_vi_id).length) out.push(['Đơn vị vận chuyển', names('SELECT ma FROM don_vi_van_chuyen WHERE id=?', f.don_vi_id)]);
+  if (asIds(f.noi_xuat_id).length) out.push(['Nơi xuất', names('SELECT ten FROM dia_diem WHERE id=?', f.noi_xuat_id)]);
+  if (asIds(f.tuyen_id).length) out.push(['Tuyến', names('SELECT ma_tuyen FROM tuyen_van_chuyen WHERE id=?', f.tuyen_id)]);
   if (f.bien_so) out.push(['Biển số', f.bien_so]);
+  if (f.search && String(f.search).trim()) out.push(['Tìm', String(f.search).trim()]);
   return out;
 }
 
@@ -53,7 +56,7 @@ const contractText = (c, benB, prefix = 'Căn cứ Hợp đồng vận chuyển'
 
 function statementDoc(app, filter = {}, opt = {}) {
   const st = app.reports.statement(filter);
-  const dot = filter.dot_id ? app.db.get('SELECT * FROM dot_van_chuyen WHERE id=?', [filter.dot_id]) : null;
+  const dot = oneId(filter.dot_id) !== null ? app.db.get('SELECT * FROM dot_van_chuyen WHERE id=?', [oneId(filter.dot_id)]) : null;
   const rn = routeNames(app);
   st.lines.forEach((l) => { l.tuyen_ten = rn.get(l.tuyen_id) || l.tuyen; });
   const all = app.reports.tickets(filter, { offset: 0, limit: 10_000_000, sort: 'ngay_gio_can_1', dir: 'asc' }).rows;

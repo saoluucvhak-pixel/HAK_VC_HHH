@@ -45,7 +45,41 @@ for (const [id, n] of [['dashboard', '05-dashboard'], ['tickets', '06-tickets'],
   if (bad.length) console.log('ALIGN', id, JSON.stringify(bad));
 }
 // bảng kê 1 đơn vị
-await nav('statements'); await page.selectOption('label:has-text("Đơn vị vận chuyển") select', { index: 1 }); await page.waitForSelector('.stmt'); await shot('21-statement-one');
+await nav('statements'); await page.click('[data-fkey="sf:statements:don_vi_id"]'); await page.locator('[data-fpop] .fpop-row input').nth(0).check(); await page.click('[data-fpop] .btn.pri'); await page.waitForSelector('.stmt'); await shot('21-statement-one');
+
+// ---- Bộ lọc thông minh (HAK Smart Filter): chọn nhiều, tìm không dấu, ngăn nâng cao, bộ lọc đã lưu, chip, dòng phạm vi
+const check = (ok, msg) => { if (!ok) errors.push('filter: ' + msg); };
+const sumNums = async () => { await page.waitForTimeout(500); const t = await page.textContent('[data-sf-summary]'); const m = t.match(/Hiển thị ([\d.]+) \/ ([\d.]+) dòng/); return m ? [Number(m[1].replace(/\./g, '')), Number(m[2].replace(/\./g, ''))] : null; };
+await nav('tickets'); await page.waitForSelector('[data-sf=tickets]'); await page.click('[data-sf-reset]').catch(() => {});
+const base = await sumNums(); check(base && base[0] === base[1] && base[1] > 1000, 'tổng ban đầu ' + JSON.stringify(base)); await shot('30-filter-default');
+await page.click('[data-fkey="sf:tickets:don_vi_id"]'); await page.waitForSelector('[data-fpop]'); await shot('31-filter-multiselect');
+const nOpt = await page.locator('[data-fpop] .fpop-row input').count(); check(nOpt >= 3, 'ít đơn vị để chọn: ' + nOpt);
+await page.locator('[data-fpop] .fpop-row input').nth(0).check(); await page.locator('[data-fpop] .fpop-row input').nth(1).check(); await page.click('[data-fpop] .btn.pri');
+const two = await sumNums(); check(two && two[0] < base[0] && two[0] > 0, 'chọn 2 đơn vị: ' + JSON.stringify(two));
+check((await page.locator('[data-sf=tickets] .fchip').count()) === 1, 'phải có đúng 1 chip');
+check(/Đơn vị vận chuyển: 2 mục/.test(await page.textContent('[data-sf=tickets] .fchips')), 'chip nêu "2 mục"');
+check(/Phạm vi: Đơn vị vận chuyển: 2 mục/.test(await page.textContent('[data-sf-summary]')), 'dòng phạm vi');
+await page.click('[data-sf=tickets] .fchip'); const back = await sumNums(); check(back[0] === base[0], 'bỏ chip → quay về tổng: ' + JSON.stringify(back));
+await page.fill('[data-sf-q]', 'que son'); const q1 = await sumNums(); check(q1 && q1[0] > 0 && q1[0] <= base[0], 'tìm không dấu "que son": ' + JSON.stringify(q1));
+await page.fill('[data-sf-q]', '92h 00903'); const q2 = await sumNums(); check(q2 && q2[0] > 0 && q2[0] < base[0], 'tìm biển số gõ khác kiểu: ' + JSON.stringify(q2));
+await page.fill('[data-sf-q]', ''); await sumNums();
+await page.fill('[data-sf-tu]', '15102026'); await page.fill('[data-sf-den]', '31/02/2026'); await page.dispatchEvent('[data-sf-den]', 'change');
+check((await page.inputValue('[data-sf-tu]')) === '15/10/2026', 'ô ngày tự chèn dấu /: ' + (await page.inputValue('[data-sf-tu]')));
+await page.click('[data-sf-reset]'); await sumNums();
+await page.click('[data-sf-adv]'); await page.waitForSelector('[data-sf-drawer]'); await shot('32-filter-drawer');
+await page.selectOption('[data-sf-field=trang_thai]', 'DA_TINH'); await page.click('.sfd-foot .btn.pri:has-text("Áp dụng")');
+const priced = await sumNums(); check(priced && priced[0] === base[0], 'đã tính giá = tất cả (mẫu đã tính hết): ' + JSON.stringify(priced));
+check(/Trạng thái tính giá: Đã tính giá/.test(await page.textContent('[data-sf=tickets] .fchips')), 'chip trạng thái tính giá');
+// bộ lọc đã lưu theo màn hình
+await page.click('[data-sf-adv]'); await page.waitForSelector('[data-sf-presets]'); await page.click('[data-sf-presets] button:has-text("Lưu bộ lọc hiện tại")');
+await page.waitForSelector('.modal input'); await page.fill('.modal input', 'Chỉ đã tính giá'); await page.click('.modal .btn:not(.ghost)'); await page.waitForTimeout(300);
+check((await page.locator('[data-sf-presets] option', { hasText: 'Chỉ đã tính giá' }).count()) === 1, 'bộ lọc đã lưu xuất hiện trong danh sách');
+await page.click('.sfd-foot .btn:has-text("Hủy")'); await page.click('[data-sf-reset]'); await sumNums();
+// bộ lọc đã lưu chỉ của màn hình này
+await nav('statements'); await page.click('[data-sf-adv]'); await page.waitForSelector('[data-sf-presets]');
+check((await page.locator('[data-sf-presets] option', { hasText: 'Chỉ đã tính giá' }).count()) === 0, 'bộ lọc đã lưu không lẫn sang màn khác');
+await page.click('.sfd-foot .btn:has-text("Hủy")');
+await nav('tickets'); await page.click('[data-sf-reset]'); await sumNums();
 // xóa phiếu: chọn 2 dòng → hộp xóa (không bấm xóa)
 await nav('tickets');
 await page.click('table.t tbody tr:nth-child(1) input[type=checkbox]'); await page.click('table.t tbody tr:nth-child(2) input[type=checkbox]');

@@ -17,6 +17,7 @@ const App = (() => {
       if (v === null || v === undefined || v === false) continue;
       if (k === 'class') e.className = v;
       else if (k === 'html') e.innerHTML = v;
+      else if (k === 'text') e.textContent = v;
       else if (k.startsWith('on') && typeof v === 'function') e.addEventListener(k.slice(2), v);
       else if (k === 'value') e.value = v;
       else if (k === 'style' && typeof v === 'object') Object.assign(e.style, v);
@@ -197,24 +198,6 @@ const App = (() => {
   }
 
   // ---------------------------------------------------------------- filter dùng chung
-  async function filterBar(onChange, { fields = ['tu_ngay', 'den_ngay', 'dot_id', 'noi_xuat_id', 'don_vi_id'], filter = state.filter } = {}) {
-    const [dots, nx, dv, tuyen] = await Promise.all([
-      api('catalog.options', { table: 'dot_van_chuyen' }), api('catalog.options', { table: 'dia_diem' }),
-      api('catalog.options', { table: 'don_vi_van_chuyen' }), api('catalog.options', { table: 'tuyen_van_chuyen' }),
-    ]);
-    const sel = (key, label, opts) => h('label', { class: 'field' }, label, h('select', { onchange: (e) => { filter[key] = e.target.value; onChange(); } },
-      h('option', { value: '' }, 'Tất cả'), opts.map((o) => h('option', { value: o.id, selected: String(filter[key]) === String(o.id) }, o.label))));
-    const dateF = (key, label) => h('label', { class: 'field' }, label, h('input', { type: 'date', value: filter[key] || '', onchange: (e) => { filter[key] = e.target.value; onChange(); } }));
-    const textF = (key, label, ph) => h('label', { class: 'field' }, label, h('input', { type: 'text', placeholder: ph || '', value: filter[key] || '', style: { width: '130px' },
-      onchange: (e) => { filter[key] = e.target.value.trim(); onChange(); } }));
-    const map = { bien_so: () => textF('bien_so', 'Biển số', '43H-01021'), tu_ngay: () => dateF('tu_ngay', 'Từ ngày'), den_ngay: () => dateF('den_ngay', 'Đến ngày'), dot_id: () => sel('dot_id', 'Đợt/Tàu', dots),
-      noi_xuat_id: () => sel('noi_xuat_id', 'Nơi xuất', nx.filter((x) => true)), tuyen_id: () => sel('tuyen_id', 'Tuyến', tuyen), don_vi_id: () => sel('don_vi_id', 'Đơn vị vận chuyển', dv) };
-    // Bộ lọc đang bật ở trang khác (VD Tuyến, Biển số) vẫn phải hiện ra để không lọc ngầm
-    const hidden = Object.keys(filter).filter((k) => filter[k] !== '' && filter[k] != null && !fields.includes(k) && map[k]);
-    return h('div', { class: 'card filters' }, [...fields, ...hidden].map((f) => map[f]()),
-      h('button', { class: 'btn ghost sm', onclick: () => { Object.keys(filter).forEach((k) => (filter[k] = '')); onChange(true); } }, 'Xóa lọc'));
-  }
-  const cleanFilter = (f) => Object.fromEntries(Object.entries(f).filter(([, v]) => v !== '' && v !== null && v !== undefined));
 
   // ---------------------------------------------------------------- điều hướng
   const NAV = [
@@ -263,5 +246,5 @@ const App = (() => {
 
   async function start() { await refreshInfo(); await go('dashboard'); }
 
-  return { h, clear, bindNum, fmt, tag, api, call, pickFile, saveExport, exportXlsx, toast, modal, confirmBox, promptBox, table, filterBar, cleanFilter, register, go, reload, start, refreshInfo, state, pageHead, STATUS_TAG, get info() { return info; } };
+  return { h, clear, bindNum, fmt, tag, api, call, pickFile, saveExport, exportXlsx, toast, modal, confirmBox, promptBox, table, register, viewId: () => current, go, reload, start, refreshInfo, state, pageHead, STATUS_TAG, get info() { return info; } };
 })();

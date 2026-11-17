@@ -89,6 +89,8 @@ function createHandlers(app, env = {}) {
     'vehicles.importCommit': ({ token, ...o }) => app.vehicleImport.commit(token, o),
 
     // ---------------- phiếu & báo cáo
+    'tickets.count': ({ filter }) => app.reports.count(filter || {}),
+    'tickets.periods': () => app.reports.periods(),
     'tickets.list': ({ filter, ...o }) => app.reports.tickets(filter || {}, o),
     'tickets.ids': ({ filter }) => { const { sql, params } = app.reports.where(filter || {}); return app.db.all(`SELECT p.id FROM phieu_can p WHERE ${sql}`, params).map((r) => r.id); },
     'tickets.removePreview': ({ ids }) => app.tickets.removePreview(ids),
