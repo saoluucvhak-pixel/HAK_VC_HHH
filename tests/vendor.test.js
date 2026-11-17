@@ -37,3 +37,16 @@ test('băm không đổi khi file được checkout với xuống dòng CRLF (Wi
   assert.equal(h(crlf), h(lf));
   assert.equal(h(lf), manifest.files['smart-filter.js'].sha256);
 });
+
+test('hak-report-standard nhúng: băm khớp MANIFEST, nạp trước app.js, và định dạng số khớp bản chuẩn', () => {
+  const d = path.join(__dirname, '..', 'renderer', 'vendor', 'hak-report-standard');
+  const m = JSON.parse(fs.readFileSync(path.join(d, 'MANIFEST.json'), 'utf8'));
+  assert.match(m.commit, /^[0-9a-f]{40}$/);
+  for (const [name, f] of Object.entries(m.files)) assert.equal(sha(path.join(d, name)), f.sha256, `${name} đã bị sửa so với bản nguồn`);
+  const html = fs.readFileSync(path.join(__dirname, '..', 'renderer', 'index.html'), 'utf8');
+  assert.ok(html.indexOf('vendor/hak-report-standard/hak-report-standard.js') >= 0 && html.indexOf('vendor/hak-report-standard/hak-report-standard.js') < html.indexOf('src="app.js"'));
+  const R = require('../renderer/vendor/hak-report-standard/hak-report-standard.js');
+  const { fmtVN } = require('../src/utils/numfmt');
+  for (const [v, dgt] of [[1234567.891, 2], [-0.004, 2], [-0.3, 0], [0, 3], [1250000, 0], [-1234.5, 1]]) assert.equal(fmtVN(v, dgt), R.formatNumber(v, { minDecimals: dgt, maxDecimals: dgt }));
+  assert.equal(R.formatNumber(-0.3, { maxDecimals: 0 }), '0');
+});

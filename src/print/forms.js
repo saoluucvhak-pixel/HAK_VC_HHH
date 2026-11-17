@@ -100,8 +100,8 @@ function priceSteps(x, sh) {
   const steps = []; const H = (t) => steps.push({ head: t });
   const S = (stt, label, how, note, value, unit, o = {}) => steps.push({ stt, label, how, note, value, unit, ...o });
   const fix = x.phuong_thuc !== 'DIEU_CHINH_DAU';
-  const n0 = (v) => require('../utils/numfmt').noNegZero(v, 0).toLocaleString('vi-VN', { maximumFractionDigits: 0 });
-  const n2 = (v) => require('../utils/numfmt').noNegZero(v, 2).toLocaleString('vi-VN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const n0 = (v) => require('../utils/numfmt').fmtVN(v == null ? 0 : v, 0);
+  const n2 = (v) => require('../utils/numfmt').fmtVN(v == null ? 0 : v, 2);
   if (fix) {
     H('A. ĐƠN GIÁ THEO BẢNG GIÁ (giá cố định, không điều chỉnh theo dầu)');
     S(1, 'Đơn giá cước vận chuyển (chưa VAT)', 'Bảng giá', '', x.don_gia_goc, 'đ/tấn', { fmt: 'money', bold: true });

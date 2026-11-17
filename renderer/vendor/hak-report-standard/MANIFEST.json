@@ -1,0 +1,11 @@
+{
+  "source": "https://github.com/saoluucvhak-pixel/HAK_ACCOUNTING_REPORT_STANDARD",
+  "commit": "b6bd885c41eca57c012ce16eda21228f226d664d",
+  "note": "Bản sao NGUYÊN VĂN bản dựng trình duyệt (UMD: window.HAKReport / require trong Node). Cập nhật: chép lại dist/hak-report-standard.js từ repo nguồn rồi chạy `node scripts/vendor-manifest.js`; tests/vendor.test.js chặn sửa tay.",
+  "files": {
+    "hak-report-standard.js": {
+      "upstream": "dist/hak-report-standard.js",
+      "sha256": "45adb697ae33bb51e6958d11c0bced58c42dac9b7ba2678642262e3f0b1d266f"
+    }
+  }
+}

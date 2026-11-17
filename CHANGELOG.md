@@ -1,6 +1,7 @@
 # CHANGELOG
 
 ## Chưa phát hành
+- **Định dạng số dùng bản chuẩn HAK_ACCOUNTING_REPORT_STANDARD**: nhúng nguyên văn `dist/hak-report-standard.js` (commit b6bd885) vào `renderer/vendor/hak-report-standard` (có MANIFEST + băm SHA-256, test chặn sửa tay). Giao diện (`App.fmt`), PDF/in (`htmlTemplates`) và biểu mẫu (`forms`) cùng dùng một hàm `formatNumber`, hết bộ định dạng chép riêng. Khác biệt nhỏ: làm tròn nửa-xa-0 như Excel (trước đây số âm .5 làm tròn về phía +∞).
 - **Chế độ tối** (token luxe tối của Design System): nút "Giao diện: Theo hệ thống / Sáng / Tối" ở thanh bên, nhớ lựa chọn trên máy, theo hệ điều hành khi để tự động. Mọi nền đi qua token (hết nền trắng cứng); tag/chênh lệch có bản tối; khối bổ sung token cảnh báo/thông tin cho nền tối (Design System chưa có). Cặp chữ/nền tối đạt WCAG AA (có test). Thay màu teal cũ còn sót ở logo/mục đang chọn bằng champagne.
 - **"Cần kiểm tra" ngay trong bước Kết quả của import**: danh sách trùng khóa của chính lần import vừa làm, so sánh cũ/mới và xử lý từng dòng **hoặc hàng loạt** (Giữ cũ tất cả / Bỏ qua tất cả / Cập nhật tất cả theo file mới — bắt buộc lý do, bỏ phiếu đã chốt kỳ, ghi nhật ký từng phiếu). Màn "Cần kiểm tra" riêng dùng chung cùng thành phần và cũng có xử lý hàng loạt.
 - `docs/TODO_ROADMAP.md` cập nhật đúng thực tế (bảng tiêu chí hoàn thành, việc đã làm thêm, việc còn lại).
