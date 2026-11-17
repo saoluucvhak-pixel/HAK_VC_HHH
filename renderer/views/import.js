@@ -107,15 +107,19 @@
       async function s4() {
         const r = S.result;
         const t = await api('workflow.todo').catch(() => null);
+        // trùng khóa của CHÍNH lần import này còn chờ xử lý (đã xử lý xong thì biến mất, danh sách tự cập nhật)
+        const conflictRows = (await api('import.pending').catch(() => [])).filter((x) => x.batch_id === r.batchId);
         const next = (n, text, btn, go, urgent) => h('div', { class: 'todo-row ' + (urgent ? 'open' : 'info') }, h('span', { class: 'todo-n' }, n), h('div', { class: 'todo-t' }, h('b', {}, text)), h('span', {}), h('button', { class: 'btn sm' + (urgent ? '' : ' ghost'), onclick: go }, btn));
         const steps = [];
-        if (r.conflict) steps.push(next('1', `${fmt.int(r.conflict)} dòng trùng khóa nhưng khác nội dung — chọn giữ cũ / cập nhật / bỏ qua`, 'Xử lý ngay', () => App.go('review'), true));
+        if (conflictRows.length) steps.push(next('1', `${fmt.int(conflictRows.length)} dòng trùng khóa nhưng khác nội dung — xử lý ở danh sách phía trên`, 'Mở màn Cần kiểm tra', () => App.go('review'), true));
         if (t && t.chua_tinh_gia) steps.push(next(String(steps.length + 1), `${fmt.int(t.chua_tinh_gia)} phiếu chưa tính được giá (thiếu xe, nơi xuất hoặc bảng giá)`, 'Xem phiếu cần hoàn thiện', () => App.go('tickets', { chua_tinh_gia: true }), true));
         steps.push(next(String(steps.length + 1), 'Kiểm tra số liệu rồi đối chiếu với đối tác', 'Đối chiếu', () => App.go('reconcile'), false));
         steps.push(next(String(steps.length + 1), 'Khi số liệu đã đúng: chốt kỳ để ký bảng kê', 'Chốt kỳ', () => App.go('lock'), false));
         root.append(h('div', { class: 'card', 'data-result': '1' }, h('h3', {}, '✅ Import hoàn tất'), h('div', { class: 'grid g4' },
           h('div', { class: 'kpi' }, h('small', {}, 'Phiếu mới'), h('b', {}, fmt.int(r.inserted))), h('div', { class: 'kpi' }, h('small', {}, 'Trùng bỏ qua'), h('b', {}, fmt.int(r.duplicate))),
           h('div', { class: 'kpi' + (r.conflict ? ' warn' : '') }, h('small', {}, 'Cần kiểm tra'), h('b', {}, fmt.int(r.conflict))), h('div', { class: 'kpi' }, h('small', {}, 'Đã tính giá'), h('b', {}, fmt.int(r.calculated)))),
+          conflictRows.length ? h('h3', { style: { marginTop: '16px' } }, 'Cần kiểm tra — xử lý ngay tại đây') : null,
+          conflictRows.length ? reviewCard(conflictRows, () => { App.refreshInfo(); draw(); }) : null,
           h('h3', { style: { marginTop: '16px' } }, 'Việc tiếp theo'), h('div', { class: 'todo' }, steps),
           h('div', { class: 'row', style: { marginTop: '14px' } }, h('button', { class: 'btn ghost', onclick: () => App.go('tickets') }, 'Xem phiếu cân'), h('button', { class: 'btn ghost', onclick: () => App.go('alerts') }, 'Xem cảnh báo'),
             h('button', { class: 'btn ghost', onclick: () => App.go('import') }, 'Import file khác'), h('span', { class: 'grow' }),
@@ -144,22 +148,47 @@
   }
 
   // ------------------------------------------------------------ Cần kiểm tra
+  /**
+   * Danh sách "Cần kiểm tra" dùng chung (màn riêng + ngay trong bước Kết quả của import): so sánh cũ/mới từng phiếu và xử lý từng dòng hoặc HÀNG LOẠT.
+   * Không bao giờ tự ghi đè: mỗi lựa chọn là một hành động có chủ đích (cập nhật bắt buộc ghi lý do).
+   */
+  function reviewCard(rows, onDone) {
+    const FIELD = { ngay_gio_can_1: 'Cân 1', ngay_gio_can_2: 'Cân 2', bien_so: 'Biển số', can_lan_1: 'Cân lần 1', can_lan_2: 'Cân lần 2', kl_hang_kg: 'KL (kg)', noi_xuat: 'Nơi xuất' };
+    const resolve = async (r, a, note) => call('import.resolve', { id: r.id, action: a, note });
+    const act = (r, a, label, cls) => ({ label, cls, onClick: async () => {
+      const note = a === 'UPDATE' ? await App.promptBox('Lý do cập nhật', 'Ghi chú') : '';
+      if (a === 'UPDATE' && !note) return false;
+      const x = await resolve(r, a, note); if (x) { App.toast('Đã xử lý'); onDone(); }
+    } });
+    const show = (r) => App.modal({ title: `Phiếu ${r.so_phieu}: so sánh dữ liệu cũ và mới`, wide: true,
+      body: h('div', {}, r.chot_ky_id ? h('p', { class: 'tag purple' }, 'Phiếu đã chốt kỳ — không thể cập nhật') : null,
+        table({ columns: [{ key: 'f', label: 'Trường' }, { key: 'o', label: 'Đang lưu', render: (x) => h('span', { class: 'diff-old' }, x.o) }, { key: 'n', label: 'File mới', render: (x) => h('span', { class: 'diff-new' }, x.n) }],
+          rows: (r.diffs.length ? r.diffs : []).map((d) => ({ f: FIELD[d.field] || d.field, o: String(d.old ?? ''), n: String(d.new ?? '') })), empty: 'Không có chênh lệch chi tiết' })),
+      actions: [{ label: 'Đóng', primary: false }, act(r, 'IGNORE', 'Bỏ qua dòng mới', 'ghost'), act(r, 'KEEP_OLD', 'Giữ dữ liệu cũ', ''), ...(r.chot_ky_id ? [] : [act(r, 'UPDATE', 'Cập nhật theo file mới', 'amber')])] });
+    // hàng loạt: một lựa chọn cho tất cả dòng đang hiện (cập nhật bỏ qua phiếu đã chốt kỳ)
+    const bulk = async (a, label) => {
+      const todo = a === 'UPDATE' ? rows.filter((r) => !r.chot_ky_id) : rows;
+      if (!todo.length) return App.toast('Không có dòng nào áp dụng được', true);
+      let note = '';
+      if (a === 'UPDATE') { note = await App.promptBox('Lý do cập nhật hàng loạt', `Cập nhật ${todo.length} phiếu theo file mới — ghi chú`); if (!note) return; }
+      if (!(await App.confirmBox(label, `${label}: ${todo.length} phiếu${a === 'UPDATE' && todo.length < rows.length ? ` (bỏ ${rows.length - todo.length} phiếu đã chốt kỳ)` : ''}. Có ghi nhật ký từng phiếu. Tiếp tục?`))) return;
+      let ok = 0; for (const r of todo) { if (await resolve(r, a, note)) ok++; else break; }
+      App.toast(`Đã xử lý ${ok}/${todo.length} phiếu`, ok < todo.length); onDone();
+    };
+    return h('div', { class: 'card', 'data-review': '1' },
+      rows.length ? h('div', { class: 'row gap-s', style: { marginBottom: '10px' } }, h('b', {}, `${rows.length} phiếu cần kiểm tra`), h('span', { class: 'grow' }),
+        h('button', { class: 'btn ghost sm', 'data-act': 'bulk-keep', onclick: () => bulk('KEEP_OLD', 'Giữ dữ liệu cũ cho tất cả') }, 'Giữ cũ tất cả'),
+        h('button', { class: 'btn ghost sm', 'data-act': 'bulk-ignore', onclick: () => bulk('IGNORE', 'Bỏ qua tất cả dòng mới') }, 'Bỏ qua tất cả'),
+        h('button', { class: 'btn amber sm', 'data-act': 'bulk-update', onclick: () => bulk('UPDATE', 'Cập nhật tất cả theo file mới') }, 'Cập nhật tất cả theo file mới')) : null,
+      table({ columns: [{ key: 'so_phieu', label: 'Số phiếu', mono: true }, { key: 'bien_so', label: 'Biển số đang lưu', mono: true }, { key: 'kl_hang_kg', label: 'KL đang lưu', fmt: 'kg' }, { key: 'file_name', label: 'File nguồn' }, { key: 'source_row', label: 'Dòng', num: true },
+        { key: 'diffs', label: 'Khác biệt', render: (r) => (r.diffs || []).map((d) => FIELD[d.field] || d.field).join(', ') }, { key: 'x', label: '', render: (r) => h('button', { class: 'btn sm', onclick: (e) => { e.stopPropagation(); show(r); } }, 'Xem & xử lý') }],
+      rows, empty: '🎉 Không có phiếu nào cần kiểm tra', onRow: show }));
+  }
+
   App.register('review', {
     async render(v) {
       const rows = await api('import.pending');
-      const show = (r) => {
-        const FIELD = { ngay_gio_can_1: 'Cân 1', ngay_gio_can_2: 'Cân 2', bien_so: 'Biển số', can_lan_1: 'Cân lần 1', can_lan_2: 'Cân lần 2', kl_hang_kg: 'KL (kg)', noi_xuat: 'Nơi xuất' };
-        const act = (a, label, cls) => ({ label, cls, onClick: async () => { const note = a === 'UPDATE' ? await App.promptBox('Lý do cập nhật', 'Ghi chú') : ''; if (a === 'UPDATE' && !note) return false; const x = await call('import.resolve', { id: r.id, action: a, note }, 'Đã xử lý'); if (x) App.reload(); } });
-        App.modal({ title: `Phiếu ${r.so_phieu}: so sánh dữ liệu cũ và mới`, wide: true,
-          body: h('div', {}, r.chot_ky_id ? h('p', { class: 'tag purple' }, 'Phiếu đã chốt kỳ — không thể cập nhật') : null,
-            table({ columns: [{ key: 'f', label: 'Trường' }, { key: 'o', label: 'Đang lưu', render: (x) => h('span', { class: 'diff-old' }, x.o) }, { key: 'n', label: 'File mới', render: (x) => h('span', { class: 'diff-new' }, x.n) }],
-              rows: (r.diffs.length ? r.diffs : []).map((d) => ({ f: FIELD[d.field] || d.field, o: String(d.old ?? ''), n: String(d.new ?? '') })), empty: 'Không có chênh lệch chi tiết' })),
-          actions: [{ label: 'Đóng', primary: false }, act('IGNORE', 'Bỏ qua dòng mới', 'ghost'), act('KEEP_OLD', 'Giữ dữ liệu cũ', ''), ...(r.chot_ky_id ? [] : [act('UPDATE', 'Cập nhật theo file mới', 'amber')])] });
-      };
-      v.append(App.pageHead('Cần kiểm tra', 'Phiếu cùng số phiếu + nơi xuất nhưng dữ liệu khác — không bao giờ tự ghi đè'),
-        h('div', { class: 'card' }, table({ columns: [{ key: 'so_phieu', label: 'Số phiếu', mono: true }, { key: 'bien_so', label: 'Biển số đang lưu', mono: true }, { key: 'kl_hang_kg', label: 'KL đang lưu', fmt: 'kg' }, { key: 'file_name', label: 'File nguồn' }, { key: 'source_row', label: 'Dòng', num: true },
-          { key: 'diffs', label: 'Khác biệt', render: (r) => (r.diffs || []).map((d) => d.field).join(', ') }, { key: 'x', label: '', render: (r) => h('button', { class: 'btn sm', onclick: (e) => { e.stopPropagation(); show(r); } }, 'Xem & xử lý') }],
-        rows, empty: '🎉 Không có phiếu nào cần kiểm tra', onRow: show })));
+      v.append(App.pageHead('Cần kiểm tra', 'Phiếu cùng số phiếu + nơi xuất nhưng dữ liệu khác — không bao giờ tự ghi đè'), reviewCard(rows, () => { App.refreshInfo(); App.reload(); }));
     },
   });
 

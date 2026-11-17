@@ -1,6 +1,10 @@
 # CHANGELOG
 
 ## Chưa phát hành
+- **Chế độ tối** (token luxe tối của Design System): nút "Giao diện: Theo hệ thống / Sáng / Tối" ở thanh bên, nhớ lựa chọn trên máy, theo hệ điều hành khi để tự động. Mọi nền đi qua token (hết nền trắng cứng); tag/chênh lệch có bản tối; khối bổ sung token cảnh báo/thông tin cho nền tối (Design System chưa có). Cặp chữ/nền tối đạt WCAG AA (có test). Thay màu teal cũ còn sót ở logo/mục đang chọn bằng champagne.
+- **"Cần kiểm tra" ngay trong bước Kết quả của import**: danh sách trùng khóa của chính lần import vừa làm, so sánh cũ/mới và xử lý từng dòng **hoặc hàng loạt** (Giữ cũ tất cả / Bỏ qua tất cả / Cập nhật tất cả theo file mới — bắt buộc lý do, bỏ phiếu đã chốt kỳ, ghi nhật ký từng phiếu). Màn "Cần kiểm tra" riêng dùng chung cùng thành phần và cũng có xử lý hàng loạt.
+- `docs/TODO_ROADMAP.md` cập nhật đúng thực tế (bảng tiêu chí hoàn thành, việc đã làm thêm, việc còn lại).
+- Test: `design.test.js` (+2: AA ở chế độ tối, không còn nền trắng cứng); kịch bản giao diện thật: chế độ tối (nền/ô nhập/thẻ theo token, nhớ sau khi tải lại, quay lại sáng) và xử lý trùng khóa hàng loạt ngay sau import (giữ cũ → KL không đổi; cập nhật tất cả với lý do → KL đổi).
 - **Nhập liệu phiếu cân — kiểm tra ngay tại chỗ (bước ghép cột)**: kết luận 1 dòng cạnh các ô ghép cột (✓ đủ cột / ✗ thiếu cột bắt buộc / ⚠ cảnh báo), tóm tắt lỗi cả sheet theo lý do (kèm dòng ví dụ), và **đọc thử 8 dòng đầu** (ngày giờ đọc được, biển số chuẩn hóa ← bản gốc, KL, nơi xuất nhận ra hay chưa). Nút "Xem trước" tự tắt khi thiếu cột bắt buộc (nhận cả trường hợp KL = Cân lần 1 + Cân lần 2); cảnh báo cột bị gán cho 2 trường, thiếu nơi xuất/giờ cân 2. Backend `import.check` (chỉ đọc, không ghi).
 - **Xem trước:** nút "⬇ Tải các dòng cần xử lý (Excel)" — liệt kê dòng lỗi, trùng khóa khác nội dung, thiếu xe/nơi xuất/giá kèm lý do và **cách xử lý**; sửa rồi import lại (dòng đã đúng không bị trùng). Backend `import.issuesXlsx`.
 - **Kết quả import:** khối "Việc tiếp theo" theo dữ liệu thật (xử lý trùng khóa → hoàn thiện phiếu chưa tính giá → đối chiếu → chốt kỳ) và nút **"↩ Hoàn tác lần import này"** (bắt buộc lý do, có nhật ký).
