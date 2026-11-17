@@ -12,7 +12,8 @@ const need = (cond, msg) => { if (!cond) throw new ValidationError(msg); };
  */
 const VALIDATORS = {
   money_scale(v) { need(v === 1000, 'Hệ số lưu tiền (money_scale) cố định 1000 — không đổi được'); },
-  duplicate_key(v) { need(typeof v === 'string' && v.length > 0 && v.length <= 50, 'Khóa chống trùng không hợp lệ'); },
+  // Chỉ một quy tắc được cài đặt trong mã: số phiếu + nơi xuất. Giá trị khác sẽ bị mã bỏ qua âm thầm → từ chối thay vì nhận rồi không áp dụng.
+  duplicate_key(v) { need(v === 'SO_PHIEU_NOI_XUAT', 'Khóa chống trùng chỉ hỗ trợ SO_PHIEU_NOI_XUAT (số phiếu + nơi xuất)'); },
   default_noi_den(v) { need(v === null || (typeof v === 'string' && v.length <= 50), 'Mã nơi đến mặc định không hợp lệ'); },
   initial_data(v) { need(isObj(v), 'initial_data phải là đối tượng'); },
   company(v) {

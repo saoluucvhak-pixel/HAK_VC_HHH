@@ -63,3 +63,14 @@ test('sao lưu: cấu hình lưu trữ bị hỏng (chữ/âm/0) KHÔNG làm xó
   bk.backupNow('AUTO');
   assert.ok(autos() <= 4 && autos() >= 3);
 });
+
+test('duplicate_key: chỉ nhận quy tắc thật sự được áp dụng (số phiếu + nơi xuất)', () => {
+  const { SettingsService } = require('../src/services/SettingsService');
+  const { createApp } = require('../src/app');
+  const app = createApp({ dbFile: ':memory:', driver: 'node:sqlite' });
+  assert.throws(() => app.settings.set('duplicate_key', 'SO_PHIEU'), /chỉ hỗ trợ/);
+  assert.throws(() => app.settings.set('duplicate_key', ''), /chỉ hỗ trợ/);
+  app.settings.set('duplicate_key', 'SO_PHIEU_NOI_XUAT');
+  assert.equal(app.settings.get('duplicate_key'), 'SO_PHIEU_NOI_XUAT');
+  assert.ok(SettingsService);
+});

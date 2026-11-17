@@ -14,7 +14,7 @@ const BY_PERM = {
     'reports.byCarrier', 'reports.byOrigin', 'reports.byDate', 'reports.byDot', 'reports.timeline', 'reports.statement', 'reports.statements', 'reports.dashboard', 'recon.batches',
     'recon.results', 'lock.list', 'lock.preview', 'price.fuelPeriods', 'price.sheet', 'price.calc', 'template.tickets', 'template.vehicles', 'export.tickets', 'export.statement',
     'export.statementPdf', 'export.report', 'export.reportPdf', 'export.timeline', 'export.priceSheet', 'export.priceSheetPdf', 'export.tauSummary', 'export.tauSummaryPdf', 'export.detail',
-    'export.detailPdf', 'forms.preview', 'export.recon', 'backup.list', 'auth.me', 'auth.logout', 'auth.changePassword'],
+    'export.detailPdf', 'forms.preview', 'export.recon', 'backup.list', 'system.integrity', 'auth.me', 'auth.logout', 'auth.changePassword'],
   nhap: ['cost.recalc', 'alerts.setStatus', 'catalog.create', 'catalog.update', 'catalog.remove', 'import.open', 'import.check', 'import.sheetInfo', 'import.preview', 'import.previewRows',
     'import.commit', 'import.issuesXlsx', 'import.cancel', 'vehicles.importPreview', 'vehicles.importCommit', 'tickets.update', 'tickets.remove', 'recon.open', 'recon.sheetInfo', 'recon.run',
     'price.previewFuel', 'price.createFuelPeriod', 'fuel.importPreview', 'backup.now', 'backup.export'],

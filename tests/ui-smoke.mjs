@@ -210,6 +210,15 @@ console.log('app.info', JSON.stringify(info.data.counts));
   ck(after && after.kl_hang_kg === rows[0].kl_hang_kg + 100, 'cập nhật tất cả: KL phải đổi sang ' + (rows[0].kl_hang_kg + 100) + ', thực tế ' + (after && after.kl_hang_kg));
 }
 
+// ---- Kiểm tra toàn vẹn dữ liệu (chỉ đọc) từ màn Backup
+{
+  await page.evaluate(() => App.go('backup')); await page.waitForSelector('[data-act=integrity]');
+  await page.click('[data-act=integrity]'); await page.waitForSelector('.modal h2');
+  const title = await page.textContent('.modal h2');
+  if (!/toàn vẹn|nhóm lỗi/.test(title)) errors.push('toàn vẹn: tiêu đề hộp thoại lạ: ' + title);
+  await page.click('.modal .btn');
+}
+
 // ---- Phân quyền tùy chọn: bật → đăng xuất → màn đăng nhập → đăng nhập → ẩn mục theo quyền → tắt
 {
   const ck = (ok, msg) => { if (!ok) errors.push('phân quyền: ' + msg); };
