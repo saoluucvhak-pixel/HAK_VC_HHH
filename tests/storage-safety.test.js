@@ -150,7 +150,7 @@ for (const driver of drivers) {
     raw.exec('PRAGMA wal_autocheckpoint = 1000');
     const rt = createRuntime({ dataDir: dir, driver });   // mở thêm một kết nối thứ hai, như khi ứng dụng khởi động lại sau sự cố
     try {
-      assert.deepEqual(rt.app.db.migration.applied, ['005_bat_bien.sql']);
+      assert.deepEqual(rt.app.db.migration.applied, ['005_bat_bien.sql', '006_phan_quyen.sql']);
       const [b] = rt.backup.list().filter((x) => x.kind === 'PRE_MIGRATION');
       assert.ok(b); const c = openFile(b.file, driver);
       assert.equal(c.prepare(`SELECT COUNT(*) n FROM audit_log WHERE action='KHOI_DONG'`).get().n, 1);

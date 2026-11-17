@@ -13,7 +13,7 @@ function freshDb() {
 test('migration chạy được (v1→v2), idempotent, có đủ bảng & index', () => {
   const db = freshDb();
   const r1 = migrate(db);
-  assert.equal(r1.to, 5);
+  assert.equal(r1.to, 6);
   const cols = db.prepare('PRAGMA table_info(don_vi_van_chuyen)').all().map((c) => c.name);
   for (const c of ['dai_dien', 'ke_toan', 'so_hop_dong', 'ngay_hop_dong', 'so_tai_khoan', 'ten_in_bao_cao', 'noi_ky']) assert.ok(cols.includes(c), `thiếu cột ${c}`);
   const r2 = migrate(db);
@@ -21,7 +21,7 @@ test('migration chạy được (v1→v2), idempotent, có đủ bảng & index'
   const tables = db.prepare("SELECT name FROM sqlite_master WHERE type='table'").all().map((x) => x.name);
   for (const t of ['phieu_can', 'xe', 'xe_don_vi_lich_su', 'don_vi_van_chuyen', 'dia_diem', 'tuyen_van_chuyen', 'bang_gia_van_chuyen',
     'gia_dau', 'ky_dieu_chinh_gia_dau', 'dot_van_chuyen', 'import_batch', 'import_batch_row', 'chot_ky', 'chot_ky_snapshot',
-    'doi_chieu_batch', 'doi_chieu_dong_b', 'doi_chieu_ket_qua', 'canh_bao', 'audit_log', 'backup_log', 'settings']) {
+    'doi_chieu_batch', 'doi_chieu_dong_b', 'doi_chieu_ket_qua', 'canh_bao', 'audit_log', 'backup_log', 'settings', 'nguoi_dung']) {
     assert.ok(tables.includes(t), `thiếu bảng ${t}`);
   }
   const idx = db.prepare("SELECT name FROM sqlite_master WHERE type='index' AND tbl_name='phieu_can'").all().map((x) => x.name);

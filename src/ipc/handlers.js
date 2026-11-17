@@ -17,6 +17,10 @@ const formXlsx = require('../excel/forms');
 
 function createHandlers(app, env = {}) {
   const { exportsDir = null, importsDir = null, seedDir = null, backup = null } = env;
+  const session = env.session || { get: () => null, set: () => {} };
+  const { ROLE_PERMS, ROLE_LABEL } = require('../utils/permissions');
+  const authStatus = () => { const u = session.get(); return { enabled: app.auth.enabled(), user: u ? { id: u.id, ten_dang_nhap: u.ten_dang_nhap, ho_ten: u.ho_ten, vai_tro: u.vai_tro } : null, perms: u ? ROLE_PERMS[u.vai_tro] : [], roles: ROLE_LABEL }; };
+  const actor = () => { const u = session.get(); return u ? u.id : null; };
   const saveImportCopy = (buf, name) => {
     if (!importsDir || !buf) return null;
     fs.mkdirSync(importsDir, { recursive: true });
@@ -193,6 +197,18 @@ function createHandlers(app, env = {}) {
     'backup.list': () => (backup ? backup.list() : []),
     'backup.now': () => (backup ? backup.backupNow('MANUAL') : null),
     'backup.restore': ({ file }) => (backup ? backup.restore(file) : null),
+    // ---------------- phân quyền
+    'auth.status': () => authStatus(),
+    'auth.login': ({ ten_dang_nhap, mat_khau }) => { session.set(app.auth.login(ten_dang_nhap, mat_khau)); return authStatus(); },
+    'auth.logout': () => { session.set(null); return authStatus(); },
+    'auth.me': () => authStatus(),
+    'auth.enable': (o) => { session.set(app.auth.enable(o)); return authStatus(); },
+    'auth.disable': ({ mat_khau }) => { app.auth.disable(actor(), mat_khau); session.set(null); return authStatus(); },
+    'auth.users': () => app.auth.list(),
+    'auth.createUser': (o) => app.auth.createUser(actor(), o),
+    'auth.updateUser': ({ id, ...patch }) => app.auth.updateUser(actor(), id, patch),
+    'auth.resetPassword': ({ id, mat_khau }) => app.auth.resetPassword(actor(), id, mat_khau),
+    'auth.changePassword': ({ cu, moi }) => { if (!actor()) throw new Error('Chưa bật phân quyền / chưa đăng nhập'); app.auth.changeOwnPassword(actor(), cu, moi); return { ok: true }; },
     'backup.export': ({ file, dir }) => (backup ? backup.exportTo(file, dir) : null),
   };
 }

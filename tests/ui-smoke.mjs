@@ -210,6 +210,28 @@ console.log('app.info', JSON.stringify(info.data.counts));
   ck(after && after.kl_hang_kg === rows[0].kl_hang_kg + 100, 'cập nhật tất cả: KL phải đổi sang ' + (rows[0].kl_hang_kg + 100) + ', thực tế ' + (after && after.kl_hang_kg));
 }
 
+// ---- Phân quyền tùy chọn: bật → đăng xuất → màn đăng nhập → đăng nhập → ẩn mục theo quyền → tắt
+{
+  const ck = (ok, msg) => { if (!ok) errors.push('phân quyền: ' + msg); };
+  await page.evaluate(() => App.go('users')); await page.waitForSelector('[data-act=enable-auth]');
+  ck((await page.textContent('.card')).includes('Đang dùng 1 người'), 'mặc định không áp dụng phân quyền');
+  const inputs = page.locator('.card input');
+  await inputs.nth(0).fill('admin'); await inputs.nth(1).fill('Quản trị viên'); await inputs.nth(2).fill('matkhau-manh-1');
+  await page.click('[data-act=enable-auth]'); await page.click('.modal .btn:has-text("Bật")');
+  await page.waitForSelector('[data-user=admin]'); await shot('40-phan-quyen-bat');
+  ck((await page.locator('[data-act=add-user]').count()) === 1, 'quản trị thấy nút thêm người dùng');
+  await page.click('[data-act=logout]'); await page.waitForSelector('[data-login]');
+  ck((await page.locator('#view *').count()) === 0, 'đăng xuất: nội dung bị xóa');
+  await page.fill('[data-login] input[name=ten]', 'admin'); await page.fill('[data-login] input[name=mk]', 'sai-mat-khau');
+  await page.click('[data-act=login]'); await page.waitForSelector('[data-login] .tag.red');
+  await page.fill('[data-login] input[name=mk]', 'matkhau-manh-1'); await page.click('[data-act=login]');
+  await page.waitForSelector('[data-user=admin]'); await page.waitForFunction(() => !document.querySelector('[data-login]'));
+  await page.evaluate(() => App.go('users')); await page.waitForSelector('[data-act=disable-auth]');
+  await page.click('[data-act=disable-auth]'); await page.fill('.modal input', 'matkhau-manh-1'); await page.click('.modal .btn.danger');
+  await page.waitForSelector('[data-act=enable-auth]');
+  ck((await page.locator('[data-user]').count()) === 0, 'tắt phân quyền: không còn ô người dùng');
+}
+
 console.log('errors:', errors.length ? errors : 'none');
 await browser.close(); srv.close();
 process.exit(errors.length ? 1 : 0);

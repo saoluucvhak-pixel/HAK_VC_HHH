@@ -274,3 +274,9 @@ span.chk{display:inline;margin:0;padding:0;background:none;border:0}
 [data-theme="dark"] .sfd-head .btn{border-color:#5d7390}
 .theme-toggle{margin:10px 10px 0;width:calc(100% - 20px);background:transparent;border:1px solid var(--sbLine);color:var(--sbText);border-radius:8px;padding:6px 10px;font:600 12px var(--sans);cursor:pointer;text-align:left}
 .theme-toggle:hover{background:rgba(255,255,255,.07);color:#fff}
+
+/* Phân quyền: ô người dùng ở thanh bên + màn đăng nhập */
+.user-chip { display: flex; flex-direction: column; gap: 2px; margin: 10px 12px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--card); }
+.user-chip small { color: var(--text-mute); }
+.overlay.login { z-index: 200; background: var(--bg); }
+.overlay.login .modal { max-width: 380px; }

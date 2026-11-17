@@ -106,7 +106,7 @@ const App = (() => {
       const res = await fetch(`/api/${channel}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(args || {}) });
       r = await res.json();
     }
-    if (!r.ok) { const e = new Error(r.error || 'Lỗi không xác định'); e.type = r.type; throw e; }
+    if (!r.ok) { if (r.type === 'AuthRequired' && channel !== 'auth.login') showLogin(r.error); const e = new Error(r.error || 'Lỗi không xác định'); e.type = r.type; throw e; }
     return r.data;
   }
   /** Gọi API, lỗi → toast, trả null. */
@@ -211,6 +211,29 @@ const App = (() => {
   applyTheme();
   if (window.matchMedia) { try { window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => { if (themePref() === 'auto') applyTheme(); }); } catch (e) { /* trình duyệt cũ */ } }
 
+  // ---------------------------------------------------------------- phân quyền (tùy chọn)
+  // Tắt (mặc định): 1 người dùng, không đăng nhập. Bật: đăng nhập + quyền theo vai trò (máy chủ là nơi quyết định; giao diện chỉ ẩn mục không dùng được).
+  let auth = { enabled: false, user: null, perms: [], roles: {} };
+  const can = (perm) => !auth.enabled || auth.perms.includes(perm);
+  const NAV_NEED = { import: 'nhap', review: 'duyet', settings: 'admin' };
+  async function refreshAuth() { try { auth = await api('auth.status'); } catch (e) { /* bỏ qua */ } return auth; }
+  let loginOpen = false;
+  function showLogin(msg) {
+    if (loginOpen) return; loginOpen = true;
+    const user = h('input', { name: 'ten', autocomplete: 'username', placeholder: 'Tên đăng nhập' }), pw = h('input', { name: 'mk', type: 'password', autocomplete: 'current-password', placeholder: 'Mật khẩu' });
+    const err = h('p', { class: 'tag red', style: { display: msg ? '' : 'none' } }, msg || '');
+    const submit = async () => {
+      try { auth = await api('auth.login', { ten_dang_nhap: user.value.trim(), mat_khau: pw.value }); ov.remove(); loginOpen = false; await refreshInfo(); go(current || 'dashboard'); }
+      catch (e) { err.textContent = e.message; err.style.display = ''; pw.value = ''; pw.focus(); }
+    };
+    pw.addEventListener('keydown', (e) => { if (e.key === 'Enter') submit(); });
+    const ov = h('div', { class: 'overlay login', 'data-login': '1' }, h('div', { class: 'modal' }, h('h2', {}, 'Đăng nhập VC Cost'),
+      h('p', { class: 'muted' }, 'Phân quyền đang bật. Nhập tài khoản được cấp.'), err, h('label', { class: 'field' }, 'Tên đăng nhập', user), h('label', { class: 'field' }, 'Mật khẩu', pw),
+      h('div', { class: 'actions' }, h('button', { class: 'btn', 'data-act': 'login', onclick: submit }, 'Đăng nhập'))));
+    document.body.append(ov); user.focus();
+  }
+  async function logout() { try { await api('auth.logout'); } catch (e) { /* bỏ qua */ } await refreshAuth(); clear(document.getElementById('view')); showLogin(); renderNav(); }
+
   const NAV = [
     ['TỔNG QUAN', [['dashboard', '📊', 'Dashboard · việc cần làm']]],
     ['① NHẬP & KIỂM TRA', [['import', '📥', 'Import phiếu cân'], ['review', '🔍', 'Cần kiểm tra', 'pending'], ['tickets', '🧾', 'Phiếu cân'], ['vehicle', '🚛', 'Chi tiết theo xe']]],
@@ -218,7 +241,7 @@ const App = (() => {
     ['③ ĐỐI CHIẾU & CHỐT KỲ', [['reconcile', '⚖️', 'Đối chiếu'], ['lock', '🔒', 'Chốt kỳ']]],
     ['④ BẢNG KÊ & BÁO CÁO', [['statements', '📄', 'Bảng kê thanh toán'], ['forms', '🖨', 'Biểu mẫu in ký 2 bên'], ['rp:vehicle', '📋', 'Theo xe'], ['rp:carrier', '📋', 'Theo đơn vị'], ['rp:origin', '📋', 'Theo nơi xuất'], ['rp:date', '📋', 'Theo thời gian'], ['rp:dot', '📋', 'Theo tàu']]],
     ['DANH MỤC', [['cat:xe', '🚛', 'Xe'], ['cat:don_vi_van_chuyen', '🏢', 'Đơn vị vận chuyển'], ['cat:hop_dong', '📑', 'Hợp đồng vận chuyển'], ['cat:dia_diem', '📍', 'Địa điểm'], ['cat:tuyen_van_chuyen', '🛣', 'Tuyến'], ['cat:dot_van_chuyen', '🚢', 'Đợt / Tàu']]],
-    ['HỆ THỐNG', [['alerts', '🔔', 'Trung tâm cảnh báo', 'alerts'], ['batches', '🕘', 'Lịch sử import'], ['audit', '📜', 'Audit log'], ['backup', '💾', 'Backup'], ['settings', '⚙️', 'Cài đặt']]],
+    ['HỆ THỐNG', [['alerts', '🔔', 'Trung tâm cảnh báo', 'alerts'], ['batches', '🕘', 'Lịch sử import'], ['audit', '📜', 'Audit log'], ['backup', '💾', 'Backup'], ['users', '👥', 'Người dùng & phân quyền'], ['settings', '⚙️', 'Cài đặt']]],
   ];
   function renderNav() {
     const sb = clear(document.getElementById('sidebar'));
@@ -226,12 +249,14 @@ const App = (() => {
     for (const [group, items] of NAV) {
       sb.append(h('div', { class: 'nav-group' }, group));
       for (const [id, ic, label, bk] of items) {
+        if (NAV_NEED[id] && !can(NAV_NEED[id])) continue;
         const n = bk && info ? (bk === 'pending' ? info.pendingReviews : info.alertsOpen) : 0;
         sb.append(h('div', { class: 'nav-item' + (current === id ? ' active' : ''), 'data-nav': id, onclick: () => go(id) },
           h('span', { class: 'ic' }, ic), label, n ? h('span', { class: 'badge' + (bk === 'alerts' ? ' red' : '') }, n) : null));
       }
     }
     sb.append(h('button', { class: 'theme-toggle', 'data-act': 'theme', title: 'Đổi giao diện: theo hệ thống → sáng → tối', onclick: cycleTheme }, 'Giao diện: ' + THEMES[themePref()]));
+    if (auth.enabled && auth.user) sb.append(h('div', { class: 'user-chip', 'data-user': auth.user.ten_dang_nhap }, h('b', {}, auth.user.ho_ten), h('small', {}, auth.roles[auth.user.vai_tro] || auth.user.vai_tro), h('button', { class: 'btn ghost sm', 'data-act': 'logout', onclick: logout }, 'Đăng xuất')));
     sb.append(h('div', { class: 'foot' }, info ? `v${info.version} · ${info.counts.phieu} phiếu · ${info.counts.xe} xe` : ''));
   }
   async function refreshInfo() { try { info = await api('app.info'); } catch (e) { /* bỏ qua */ } renderNav(); }
@@ -256,7 +281,7 @@ const App = (() => {
   const reload = () => go(current);
   const pageHead = (title, subtitle, ...actions) => h('div', { class: 'row', style: { marginBottom: '12px' } }, h('div', { class: 'grow' }, h('h1', {}, title), subtitle ? h('p', { class: 'sub', style: { margin: 0 } }, subtitle) : null), ...actions);
 
-  async function start() { await refreshInfo(); await go('dashboard'); }
+  async function start() { await refreshAuth(); if (auth.enabled && !auth.user) { renderNav(); showLogin(); return; } await refreshInfo(); await go('dashboard'); }
 
-  return { h, clear, bindNum, fmt, tag, api, call, pickFile, saveExport, exportXlsx, toast, modal, confirmBox, promptBox, table, register, viewId: () => current, go, reload, start, refreshInfo, state, pageHead, STATUS_TAG, get info() { return info; } };
+  return { h, clear, bindNum, fmt, tag, api, call, pickFile, saveExport, exportXlsx, toast, modal, confirmBox, promptBox, table, register, viewId: () => current, go, reload, start, refreshInfo, refreshAuth, can, get auth() { return auth; }, logout, state, pageHead, STATUS_TAG, get info() { return info; } };
 })();

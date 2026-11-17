@@ -148,6 +148,7 @@ app.whenReady().then(() => {
   ipcMain.handle('storage.info', () => ({ current: w.dir, default: w.defaultDir, source: w.source, size: dirSize(w.dir) }));
   ipcMain.handle('dialog.pickFolder', async () => { const r = await dialog.showOpenDialog(win, { properties: ['openDirectory', 'createDirectory'], title: 'Chọn thư mục' }); return r.canceled ? null : r.filePaths[0]; });
   ipcMain.handle('storage.change', (_e, { target, mode }) => {
+    { const u = rt.session.get(); if (rt.app.auth.enabled() && !(u && u.vai_tro === 'ADMIN')) return { ok: false, error: 'Chỉ quản trị mới đổi được thư mục lưu trữ' }; }
     if (w.source === 'ENV') return { ok: false, error: 'Thư mục đang bị cố định bởi biến môi trường VCCOST_DATA_DIR' };
     const target_ = target === null ? w.defaultDir : target;
     const m = target === null ? 'USE' : mode;

@@ -10,8 +10,9 @@ const { createApp, SEED_DIR } = require('./app');
 const { createHandlers } = require('./ipc/handlers');
 const { loadInitialData, isFreshDb } = require('./services/InitialDataService');
 const { BackupService } = require('./services/BackupService');
+const { permissionFor, roleAllows } = require('./utils/permissions');
 
-function createRuntime({ dataDir, version = 'dev', driver = null, autoInit = false, renderPdf = null }) {
+function createRuntime({ dataDir, version = 'dev', driver = null, autoInit = false, renderPdf = null, idleMs = 30 * 60 * 1000 }) {
   const dirs = {
     dataDir,
     db: path.join(dataDir, 'data', 'app.db'),
@@ -25,11 +26,18 @@ function createRuntime({ dataDir, version = 'dev', driver = null, autoInit = fal
   const log = (msg) => fs.appendFileSync(logFile, `[${new Date().toISOString()}] ${msg}\n`);
 
   const rt = { dirs, log };
+  // Phiên đăng nhập (chỉ có ý nghĩa khi bật phân quyền): lưu id người dùng + lần hoạt động cuối; luôn nạp lại từ DB để vai trò/khóa tài khoản có hiệu lực ngay
+  const sess = { id: null, last: 0 };
+  rt.session = {
+    get: () => { if (!sess.id) return null; const u = rt.app && rt.app.auth.user(sess.id); return u && u.trang_thai === 'ACTIVE' ? u : null; },
+    set: (u) => { sess.id = u ? u.id : null; sess.last = Date.now(); },
+  };
   // PRE_MIGRATION lấy từ kết nối đang mở của migrator (gồm cả dữ liệu còn trong WAL); lỗi → migration không chạy
   const preMigrationBackup = (info) => { const r = rt.backup.preMigration(info); log(`Backup trước migration: ${r.file}`); };
   const open = () => {
-    rt.app = createApp({ dbFile: dirs.db, driver, backupFn: preMigrationBackup });
-    rt.handlers = createHandlers(rt.app, { exportsDir: dirs.exports, importsDir: dirs.imports, seedDir: SEED_DIR, backup: rt.backup, version, dataDir, renderPdf: (...a) => { const f = rt.renderPdf || renderPdf; if (!f) throw new Error('Xuất PDF chưa khả dụng trong môi trường này'); return f(...a); } });
+    rt.app = createApp({ dbFile: dirs.db, driver, backupFn: preMigrationBackup, user: () => { const u = rt.session.get(); return u ? u.ten_dang_nhap : null; } });
+    if (process.env.VCCOST_RESET_AUTH === '1') { rt.app.auth.forceDisable(); log('VCCOST_RESET_AUTH=1: đã tắt phân quyền'); }
+    rt.handlers = createHandlers(rt.app, { exportsDir: dirs.exports, importsDir: dirs.imports, seedDir: SEED_DIR, backup: rt.backup, session: rt.session, version, dataDir, renderPdf: (...a) => { const f = rt.renderPdf || renderPdf; if (!f) throw new Error('Xuất PDF chưa khả dụng trong môi trường này'); return f(...a); } });
     log(`Mở DB (${rt.app.db.driver}), migration: ${JSON.stringify(rt.app.db.migration)}`);
   };
   rt.backup = new BackupService({ getDb: () => rt.app.db, dbFile: dirs.db, backupsDir: dirs.backups, settings: { get: (k) => rt.app.settings.get(k) }, reopen: () => open() });
@@ -48,6 +56,17 @@ function createRuntime({ dataDir, version = 'dev', driver = null, autoInit = fal
     await rt.ready;
     const h = Object.hasOwn(rt.handlers, channel) ? rt.handlers[channel] : null;
     if (typeof h !== 'function') return { ok: false, error: `Kênh không tồn tại: ${channel}` };
+    // Phân quyền (chỉ khi được bật): chưa đăng nhập chỉ gọi được kênh công khai; còn lại theo vai trò; từ chối theo mặc định với kênh chưa khai báo
+    if (rt.app.auth.enabled()) {
+      const perm = permissionFor(channel);
+      if (perm !== 'public') {
+        const u = rt.session.get();
+        if (u && sess.last && Date.now() - sess.last > idleMs) { rt.session.set(null); return { ok: false, error: 'Phiên đăng nhập đã hết hạn do không hoạt động — hãy đăng nhập lại', type: 'AuthRequired' }; }
+        if (!u) return { ok: false, error: 'Cần đăng nhập', type: 'AuthRequired' };
+        if (!roleAllows(u.vai_tro, perm)) return { ok: false, error: `Bạn không có quyền thực hiện thao tác này (${u.ho_ten} — vai trò hiện tại không đủ quyền)`, type: 'Forbidden' };
+        sess.last = Date.now();
+      }
+    }
     try {
       return { ok: true, data: await h(args || {}) };
     } catch (e) {

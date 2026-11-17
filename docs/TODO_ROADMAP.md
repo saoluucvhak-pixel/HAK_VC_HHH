@@ -24,13 +24,13 @@ Q1–Q10 ✅ đã chốt đủ (07/10/2026) — chi tiết: `PHAN_TICH_THIET_KE_
 ## Đã làm thêm so với kế hoạch ban đầu
 - **Bộ lọc thông minh HAK Smart Filter** dùng chung mọi màn hình; **Design System luxe** (sáng/tối, AA); menu theo luồng công việc ①–④.
 - **Chốt kỳ** (khóa số liệu, snapshot bất biến), **kỳ giá dầu**, **hợp đồng vận chuyển**, **bảng tính đơn giá**.
+- **Phân quyền tùy chọn**: mặc định dùng 1 người (không đăng nhập); bật được 4 vai trò (Quản trị / Người duyệt / Người nhập liệu / Chỉ xem), nhật ký ghi tên đăng nhập, mọi kênh API có khai báo quyền (có test).
 - Nâng Electron 45 + better-sqlite3 13 (N-API), đọc Excel bằng exceljs (bỏ SheetJS), CI Linux + Windows (cả hai driver CSDL).
 
 ## Việc còn lại (đề xuất)
 2. Ký số bộ cài (SmartScreen); `minimatch` trong `electron-builder` (chờ bản sửa upstream).
-3. Phân quyền người nhập / người duyệt (luồng Nháp → Duyệt); ghi tên người dùng vào nhật ký.
+3. (Tùy chọn, sau) trạng thái phiếu Nháp → Duyệt từng phiếu; hiện đã có phân quyền theo vai trò (người nhập không duyệt xung đột/chốt kỳ).
 
 ## Ý tưởng sau
 - Đọc trực tiếp file xuất từ phần mềm trạm cân theo lịch.
 - Mẫu in bảng kê thanh toán theo đơn vị VC.
-- Phân quyền người nhập / người duyệt (luồng Nháp → Duyệt).
