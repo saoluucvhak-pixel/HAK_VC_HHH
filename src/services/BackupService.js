@@ -27,7 +27,7 @@ class BackupService {
     const buf = fs.readFileSync(file);
     const sha = crypto.createHash('sha256').update(buf).digest('hex');
     try { db.run('INSERT INTO backup_log(kind, file_path, size_bytes, sha256, note) VALUES (?,?,?,?,?)', [kind === 'PRE_IMPORT' ? 'MANUAL' : kind, file, buf.length, sha, note || kind]); } catch (e) { /* DB chỉ đọc */ }
-    this.applyRetention();
+    this.applyRetention(file);
     return { file, size: buf.length, sha256: sha };
   }
 
@@ -49,15 +49,19 @@ class BackupService {
     return null;
   }
 
-  applyRetention() {
-    const cfg = (this.settings && this.settings.get('backup')) || { keepDaily: 30, keepMonthly: 12 };
+  applyRetention(justCreated = null) {
+    const cfg = (this.settings && this.settings.get('backup')) || {};
+    // Số bản giữ lại phải là số nguyên dương hợp lệ; giá trị lạ (chữ, âm, 0, rất lớn) → mặc định, KHÔNG bao giờ dẫn tới xóa hàng loạt.
+    const n = (x, d, hi) => (Number.isInteger(x) && x >= 1 ? Math.min(x, hi) : d);
+    const keepDaily = n(cfg.keepDaily, 30, 3650), keepMonthly = n(cfg.keepMonthly, 12, 240);
     const all = this.list();
     const keep = new Set();
+    if (justCreated) keep.add(justCreated);       // bản vừa tạo không bao giờ bị xóa ngay
     const auto = all.filter((b) => b.kind === 'AUTO');
-    auto.slice(0, cfg.keepDaily || 30).forEach((b) => keep.add(b.file));
+    auto.slice(0, keepDaily).forEach((b) => keep.add(b.file));
     const months = new Map();
     for (const b of auto) { const m = b.time.slice(0, 7); if (!months.has(m)) months.set(m, b.file); }
-    [...months.values()].slice(0, cfg.keepMonthly || 12).forEach((f) => keep.add(f));
+    [...months.values()].slice(0, keepMonthly).forEach((f) => keep.add(f));
     for (const kind of ['MANUAL', 'PRE_RESTORE', 'PRE_MIGRATION', 'PRE_IMPORT', 'KHAC']) all.filter((b) => b.kind === kind).slice(0, 20).forEach((b) => keep.add(b.file));
     for (const b of all) if (!keep.has(b.file)) fs.unlinkSync(b.file);
   }

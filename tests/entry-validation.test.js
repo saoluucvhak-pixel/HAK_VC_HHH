@@ -99,3 +99,27 @@ test('isInside chỉ có một bản: storageLocation dùng safePath', () => {
   const sl = fs.readFileSync(path.join(__dirname, '..', 'src', 'utils', 'storageLocation.js'), 'utf8');
   assert.ok(/require\('\.\/safePath'\)/.test(sl));
 });
+
+test('tính lại: kết quả không đổi thì không ghi lại phiếu (updated_at giữ nguyên); đổi giá thì cập nhật', async () => {
+  const app = await setup(true);
+  app.db.run(`UPDATE phieu_can SET updated_at='2000-01-01T00:00:00'`);
+  const snap = () => JSON.stringify(app.db.all('SELECT id, xe_id, noi_xuat_id, tuyen_id, don_vi_van_chuyen_id, bang_gia_id, don_gia, tien_truoc_vat, tien_vat, tong_tien, trang_thai_tinh_gia FROM phieu_can ORDER BY id'));
+  const before = snap();
+  const r = app.cost.recalc({ all: true });
+  assert.equal(r.count, 2035);
+  assert.equal(snap(), before);                                                       // kết quả y hệt
+  assert.equal(app.db.get(`SELECT COUNT(*) n FROM phieu_can WHERE updated_at <> '2000-01-01T00:00:00'`).n, 0);   // không ghi lại
+  const t = app.db.get(`SELECT id, tuyen_id, ngay_can FROM phieu_can LIMIT 1`);
+  app.price.createVersion({ tuyen_id: t.tuyen_id, tu_ngay: t.ngay_can, don_gia: 99000, phuong_thuc: 'CO_DINH' });
+  assert.ok(app.db.get(`SELECT COUNT(*) n FROM phieu_can WHERE updated_at <> '2000-01-01T00:00:00'`).n > 0);   // giá đổi → có ghi
+  assert.notEqual(snap(), before);
+});
+
+test('timeline: các chuyến cùng giờ cân có thứ tự cố định (theo id), không phụ thuộc thứ tự đầu vào; giờ rỗng không làm lỗi', () => {
+  const { buildTimeline } = require('../src/services/TimeAnomalyService');
+  const mk = (id, t1, t2) => ({ id, so_phieu: String(id), ngay_gio_can_1: t1, ngay_gio_can_2: t2, can_lan_1: 30000, can_lan_2: 13000 });
+  const a = mk(1, '2026-10-01T08:00:00', '2026-10-01T08:10:00'), b = mk(2, '2026-10-01T08:00:00', '2026-10-01T08:10:00'), c = mk(3, '2026-10-01T09:00:00', '2026-10-01T09:10:00');
+  const o1 = buildTimeline([c, b, a]).map((t) => t.id), o2 = buildTimeline([a, c, b]).map((t) => t.id), o3 = buildTimeline([b, a, c]).map((t) => t.id);
+  assert.deepEqual(o1, [1, 2, 3]); assert.deepEqual(o2, [1, 2, 3]); assert.deepEqual(o3, [1, 2, 3]);
+  assert.doesNotThrow(() => buildTimeline([mk(5, null, null), a]));
+});

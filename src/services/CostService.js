@@ -68,12 +68,17 @@ class CostService {
           changedPrice++;
           this.alerts.open('PRICE_CHANGED', 'phieu_can', t.id, { cu: fromDb(t.don_gia), moi: r.don_gia }, `Đơn giá đổi ${fromDb(t.don_gia)} → ${r.don_gia}`);
         }
-        this.db.run(`UPDATE phieu_can SET xe_id=?, noi_xuat_id=?, noi_xuat=?, noi_den=?, tuyen_id=?, don_vi_van_chuyen_id=?, bang_gia_id=?,
-                       don_vi_tinh=?, don_gia=?, tien_truoc_vat=?, ty_le_vat=?, tien_vat=?, tong_tien=?, trang_thai_tinh_gia=?,
-                       updated_at=strftime('%Y-%m-%dT%H:%M:%S','now','localtime') WHERE id=?`,
-        [xeId.get(t.bien_so_chuan) || null, nx, nx ? locName.get(nx) : null, t.noi_den_id ? locName.get(t.noi_den_id) : null,
+        const next = [xeId.get(t.bien_so_chuan) || null, nx, nx ? locName.get(nx) : null, t.noi_den_id ? locName.get(t.noi_den_id) : null,
           r.tuyen_id, r.don_vi_van_chuyen_id, r.price_rule_id, r.don_vi_tinh, newGia, toDb(r.tien_truoc_vat), r.vat_percent,
-          toDb(r.tien_vat), toDb(r.tong_tien), r.status, t.id]);
+          toDb(r.tien_vat), toDb(r.tong_tien), r.status];
+        const cur = [t.xe_id, t.noi_xuat_id, t.noi_xuat, t.noi_den, t.tuyen_id, t.don_vi_van_chuyen_id, t.bang_gia_id,
+          t.don_vi_tinh, t.don_gia, t.tien_truoc_vat, t.ty_le_vat, t.tien_vat, t.tong_tien, t.trang_thai_tinh_gia];
+        // Chỉ ghi khi kết quả thật sự đổi: tính lại hàng loạt không đổi gì thì không ghi lại (nhanh hơn, và updated_at phản ánh đúng lần đổi thật)
+        if (next.some((v, i) => (v ?? null) !== (cur[i] ?? null))) {
+          this.db.run(`UPDATE phieu_can SET xe_id=?, noi_xuat_id=?, noi_xuat=?, noi_den=?, tuyen_id=?, don_vi_van_chuyen_id=?, bang_gia_id=?,
+                         don_vi_tinh=?, don_gia=?, tien_truoc_vat=?, ty_le_vat=?, tien_vat=?, tong_tien=?, trang_thai_tinh_gia=?,
+                         updated_at=strftime('%Y-%m-%dT%H:%M:%S','now','localtime') WHERE id=?`, [...next, t.id]);
+        }
         this.alerts.syncTicket(t.id, r.warnings, { so_phieu: t.so_phieu, bien_so: t.bien_so, noi_xuat: t.noi_xuat_goc });
       }
       this.syncTimeAlerts([...new Set(tickets.map((t) => t.bien_so_chuan))]);
