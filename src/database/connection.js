@@ -80,7 +80,8 @@ function openDatabase(file, { backupFn = null, driver = null } = {}) {
   if (file !== ':memory:') db.exec('PRAGMA journal_mode = WAL');
   db.exec('PRAGMA foreign_keys = ON');
   db.exec('PRAGMA busy_timeout = 5000');
-  db.migration = migrate(db.raw, { backupFn });
+  try { db.migration = migrate(db.raw, { backupFn }); }
+  catch (e) { try { db.close(); } catch { /* bỏ qua */ } throw e; }   // không để rò kết nối/khóa tệp (Windows) khi migration hoặc sao lưu lỗi
   return db;
 }
 
