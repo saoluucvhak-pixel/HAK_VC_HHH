@@ -35,6 +35,8 @@ function createRuntime({ dataDir, version = 'dev', driver = null, autoInit = fal
   // PRE_MIGRATION lấy từ kết nối đang mở của migrator (gồm cả dữ liệu còn trong WAL); lỗi → migration không chạy
   const preMigrationBackup = (info) => { const r = rt.backup.preMigration(info); log(`Backup trước migration: ${r.file}`); };
   const open = () => {
+    // ID người dùng chỉ có ý nghĩa trong DB đã xác thực, phải đăng nhập lại sau khôi phục.
+    rt.session.set(null);
     rt.app = createApp({ dbFile: dirs.db, driver, backupFn: preMigrationBackup, user: () => { const u = rt.session.get(); return u ? u.ten_dang_nhap : null; } });
     if (process.env.VCCOST_RESET_AUTH === '1') { rt.app.auth.forceDisable(); log('VCCOST_RESET_AUTH=1: đã tắt phân quyền'); }
     rt.handlers = createHandlers(rt.app, { exportsDir: dirs.exports, importsDir: dirs.imports, seedDir: SEED_DIR, backup: rt.backup, session: rt.session, version, dataDir, renderPdf: (...a) => { const f = rt.renderPdf || renderPdf; if (!f) throw new Error('Xuất PDF chưa khả dụng trong môi trường này'); return f(...a); } });

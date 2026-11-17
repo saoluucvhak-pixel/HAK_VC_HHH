@@ -1,6 +1,9 @@
 # CHANGELOG
 
 ## 0.7.0 — chờ nghiệm thu (schema 6)
+- Khôi phục DB xóa phiên đăng nhập cũ, yêu cầu xác thực lại trong bộ dữ liệu vừa khôi phục để tránh nhận nhầm người dùng khi ID trùng nhau giữa hai DB. Có test hồi quy tái hiện trước bản sửa.
+- Kiểm thử giao diện nhận `CHROMIUM_PATH` giống dev server, hỗ trợ chạy bằng trình duyệt trên Windows.
+- Kiểm tra dependency khi nghiệm thu: `npm audit` hiện báo 9 mục mức cao trong cây công cụ build do `picomatch` (GHSA-fc5q-39xc-vjpf); registry đang cung cấp bản mới nhất 4.0.7 vẫn thuộc phạm vi cảnh báo. Kết quả này thay thế mốc 0 cảnh báo của lần kiểm tra trước. Ghi riêng kết quả `npm audit --omit=dev` trong biên bản nghiệm thu.
 - **Kiểm tra toàn vẹn dữ liệu (chỉ đọc)**: `npm run integrity -- <db>` và nút "Kiểm tra toàn vẹn" ở màn Backup — phát hiện phiếu trùng danh tính (kể cả bản trùng do lỗi cũ: cùng số phiếu + nơi xuất viết khác chữ), chốt kỳ mồ côi/lệch snapshot, lô lệch bộ đếm, tiền lệch…; không tự sửa. Tài liệu mô hình cha–con: `docs/MO_HINH_DU_LIEU.md`.
 - Import: một cột bị gán cho hai trường nay là **lỗi chặn** ở bước ghép cột (trước là cảnh báo); cài đặt `duplicate_key` chỉ nhận quy tắc thật sự được áp dụng.
 - **Phân quyền tùy chọn** (migration 006 `nguoi_dung`, không ảnh hưởng dữ liệu cũ): tắt = 1 người dùng như trước; bật = đăng nhập + 4 vai trò (ADMIN/DUYET/NHAP/XEM). Quyền thực thi ở máy chủ (`runtime.dispatch`, bảng `utils/permissions.js`, kênh chưa khai báo → chỉ admin), mật khẩu băm scrypt, khóa 60 giây sau 5 lần sai, phiên hết hạn 30 phút, bảo vệ quản trị cuối cùng, đổi thư mục lưu trữ chỉ quản trị, `audit_log.user_name` ghi tên đăng nhập, khôi phục khi mất mật khẩu bằng `VCCOST_RESET_AUTH=1`. Giao diện: màn đăng nhập, ô người dùng, màn Người dùng & phân quyền. Test: `tests/auth.test.js` (8) + kịch bản UI.

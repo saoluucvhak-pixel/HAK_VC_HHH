@@ -7,7 +7,7 @@ import fs from 'fs'; import path from 'path';
 const out = path.resolve('docs/screenshots'); fs.mkdirSync(out, { recursive: true });
 const srv = await start({ port: 5191 });
 const errors = [];
-const browser = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium', args: ['--no-sandbox'] });
+const browser = await chromium.launch({ executablePath: process.env.CHROMIUM_PATH || '/opt/pw-browsers/chromium', args: ['--no-sandbox'] });
 const page = await browser.newPage({ viewport: { width: 1440, height: 900 } });
 page.on('pageerror', (e) => errors.push('pageerror: ' + e.message));
 page.on('console', (m) => { if (m.type() === 'error') errors.push('console: ' + m.text()); });
