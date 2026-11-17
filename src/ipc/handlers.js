@@ -193,6 +193,7 @@ function createHandlers(app, env = {}) {
     'backup.list': () => (backup ? backup.list() : []),
     'backup.now': () => (backup ? backup.backupNow('MANUAL') : null),
     'backup.restore': ({ file }) => (backup ? backup.restore(file) : null),
+    'backup.export': ({ file, dir }) => (backup ? backup.exportTo(file, dir) : null),
   };
 }
 

@@ -160,3 +160,21 @@ for (const driver of drivers) {
     } finally { rt.close(); try { raw.close(); } catch { /* đã đóng */ } }
   });
 }
+
+test('xuất bản sao lưu ra thư mục khác: hợp lệ, không ghi đè, đối chiếu SHA-256; từ chối file ngoài thư mục sao lưu/hỏng/thư mục không có', () => {
+  const dir = tmp(); const file = path.join(dir, 'app.db');
+  const raw = v4Db(file, drivers[0]);
+  const bk = new BackupService({ getDb: () => ({ driver: drivers[0] }), dbFile: file, backupsDir: path.join(dir, 'b'), settings: { get: () => ({}) }, reopen: () => {} });
+  const made = bk.preMigration({ raw, from: 4 }).file;
+  const usb = tmp();
+  const a = bk.exportTo(made, usb); const b = bk.exportTo(made, usb);
+  assert.notEqual(a.path, b.path); assert.equal(a.sha256, b.sha256);
+  assert.ok(inspect(a.path, drivers[0]).ok);
+  assert.throws(() => bk.exportTo(a.path, usb), /File backup không hợp lệ/);
+  assert.throws(() => bk.exportTo(made, path.join(usb, 'khong-co')), /Thư mục đích không tồn tại/);
+  assert.throws(() => bk.exportTo(made, path.join(dir, 'b')), /khác thư mục sao lưu/);
+  const bad = path.join(dir, 'b', 'app_2020-01-01T00-00-00_MANUAL.db'); fs.writeFileSync(bad, Buffer.concat([Buffer.from('SQLite format 3\0'), Buffer.alloc(200)]));
+  assert.throws(() => bk.exportTo(bad, usb), /không hợp lệ, không xuất/);
+  assert.ok(fs.existsSync(made), 'bản gốc giữ nguyên');
+  raw.close();
+});
