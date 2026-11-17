@@ -95,7 +95,24 @@ function runSmoke() {
           }
         }
       } catch (e) { problems.push('xuất PDF ngoại lệ: ' + (e && e.message)); }
-      finish(problems.length === 0, { version: app.getVersion(), platform: process.platform, electron: process.versions.electron, title: r.title, driver: d && d.driver, schema: d && d.schema, counts: d && d.counts, viewChildren: r.viewChildren, pdf, problems });
+      // Sao lưu → Khôi phục thật trên bản đóng gói (đổi tên tệp, WAL/SHM, mở lại): số liệu phải giữ nguyên, DB đọc/ghi được sau đó
+      let backup = null;
+      try {
+        const before = rt.app.db.get('SELECT COUNT(*) n FROM phieu_can').n;
+        const b = await rt.dispatch('backup.now', {});
+        if (!b.ok) problems.push('sao lưu lỗi: ' + b.error);
+        else {
+          const x = await rt.dispatch('backup.restore', { file: b.data.file });
+          if (!x.ok) problems.push('khôi phục lỗi: ' + x.error);
+          else {
+            const after = rt.app.db.get('SELECT COUNT(*) n FROM phieu_can').n;
+            rt.app.db.run(`INSERT INTO audit_log(action, entity) VALUES ('SMOKE_RESTORE','smoke')`);
+            backup = { before, after, safety: !!x.data.safetyBackup };
+            if (before !== after) problems.push(`khôi phục làm đổi số phiếu: ${before} → ${after}`);
+          }
+        }
+      } catch (e) { problems.push('sao lưu/khôi phục ngoại lệ: ' + (e && e.message)); }
+      finish(problems.length === 0, { version: app.getVersion(), platform: process.platform, electron: process.versions.electron, title: r.title, driver: d && d.driver, schema: d && d.schema, counts: d && d.counts, viewChildren: r.viewChildren, pdf, backup, problems });
     } catch (e) { finish(false, { error: String(e && e.stack || e) }); }
   });
   win.webContents.once('did-fail-load', (_e, code, desc) => finish(false, { error: `did-fail-load ${code} ${desc}` }));
