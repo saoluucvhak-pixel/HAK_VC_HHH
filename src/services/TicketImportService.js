@@ -208,6 +208,9 @@ class TicketImportService {
           // kiểm tra lại ngay trong transaction (phòng import song song)
           const again = this.db.get(`SELECT id FROM phieu_can WHERE business_key=? AND trang_thai='ACTIVE'`, [r.key]);
           if (again) throw new ValidationError(`Phiếu ${r.so_phieu} vừa được import ở nơi khác — hãy preview lại`);
+          // cùng số phiếu + cùng nơi xuất (dù viết bằng tên gọi khác, vd "QS" / "Quế Sơn") cũng là một phiếu
+          const sameLoc = r.noi_xuat_id ? this.db.get(`SELECT id FROM phieu_can WHERE trang_thai='ACTIVE' AND so_phieu=? AND noi_xuat_id=?`, [String(r.so_phieu ?? '').trim(), r.noi_xuat_id]) : null;
+          if (sameLoc) throw new ValidationError(`Phiếu ${r.so_phieu} đã có (ghi nơi xuất bằng tên gọi khác) — hãy preview lại`);
           const id = this.db.run(`INSERT INTO phieu_can(so_phieu, ngay_gio_can_1, ngay_gio_can_2, bien_so_goc, bien_so, bien_so_chuan, can_lan_1, can_lan_2, kl_hang_kg,
                                     noi_xuat_goc, noi_xuat_id, noi_den_id, cong_ty_vc_nguon, dot_van_chuyen_id, business_key, strong_key, fingerprint, import_batch_id, source_row)
                                   VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
@@ -265,6 +268,32 @@ class TicketImportService {
       .map((x) => ({ ...x, raw: JSON.parse(x.raw_json), diffs: JSON.parse(x.diffs_json || '[]') }));
   }
 
+  _parseRaw(raw) {
+    const [t] = parseTickets([['so_phieu', 't1', 't2', 'bs', 'c1', 'c2', 'kg', 'nx'], [raw.so_phieu, raw.ngay_gio_can_1, raw.ngay_gio_can_2, raw.bien_so, raw.can_lan_1, raw.can_lan_2, raw.kl_hang_kg, raw.noi_xuat]],
+      0, { so_phieu: 0, ngay_gio_can_1: 1, ngay_gio_can_2: 2, bien_so: 3, can_lan_1: 4, can_lan_2: 5, kl_hang_kg: 6, noi_xuat: 7 });
+    return t;
+  }
+
+  /**
+   * Xử lý hàng loạt: mỗi dòng một giao dịch riêng, KHÔNG dừng ở lỗi đầu tiên; trả kết quả từng ID.
+   * batchId (nếu có): chỉ nhận dòng thuộc lô đó — dòng của lô khác bị từ chối.
+   */
+  resolveMany(ids, action, note = null, { batchId = null } = {}) {
+    if (!Array.isArray(ids) || !ids.length) throw new ValidationError('Chưa chọn dòng nào');
+    if (action === 'UPDATE' && !String(note || '').trim()) throw new ValidationError('Cập nhật hàng loạt cần ghi lý do');
+    const results = [];
+    for (const id of [...new Set(ids.map(Number))]) {
+      const row = this.db.get(`SELECT r.id, r.batch_id, r.hanh_dong, p.so_phieu FROM import_batch_row r LEFT JOIN phieu_can p ON p.id=r.phieu_can_id WHERE r.id=?`, [id]);
+      const base = { id, so_phieu: row ? row.so_phieu : null };
+      if (!row) { results.push({ ...base, ok: false, reason: 'Dòng không tồn tại' }); continue; }
+      if (batchId != null && row.batch_id !== Number(batchId)) { results.push({ ...base, ok: false, reason: `Dòng thuộc lô #${row.batch_id}, không thuộc lô đang xử lý` }); continue; }
+      try { this.resolveReview(id, action, note); results.push({ ...base, ok: true }); }
+      catch (e) { results.push({ ...base, ok: false, reason: e.message }); }
+    }
+    const ok = results.filter((x) => x.ok).length;
+    return { action, total: results.length, ok, failed: results.length - ok, results };
+  }
+
   /** action: KEEP_OLD | UPDATE | IGNORE */
   resolveReview(rowId, action, note = null) {
     if (!['KEEP_OLD', 'UPDATE', 'IGNORE'].includes(action)) throw new ValidationError('Hành động không hợp lệ');
@@ -275,9 +304,17 @@ class TicketImportService {
       if (action === 'UPDATE') {
         if (!old || old.trang_thai !== 'ACTIVE') throw new ValidationError('Phiếu gốc không còn hiệu lực');
         if (old.chot_ky_id) throw new ValidationError('Phiếu đã chốt — phải mở khóa kỳ trước khi cập nhật');
-        const raw = JSON.parse(r.raw_json);
-        const [t] = parseTickets([['so_phieu', 't1', 't2', 'bs', 'c1', 'c2', 'kg', 'nx'], [raw.so_phieu, raw.ngay_gio_can_1, raw.ngay_gio_can_2, raw.bien_so, raw.can_lan_1, raw.can_lan_2, raw.kl_hang_kg, raw.noi_xuat]],
-          0, { so_phieu: 0, ngay_gio_can_1: 1, ngay_gio_can_2: 2, bien_so: 3, can_lan_1: 4, can_lan_2: 5, kl_hang_kg: 6, noi_xuat: 7 });
+        const t = this._parseRaw(JSON.parse(r.raw_json));
+        // Cùng phạm vi bảo vệ như sửa trực tiếp: đợt đã khóa, kỳ đã chốt (ngày mới), trùng khóa với phiếu khác
+        if (old.dot_van_chuyen_id) {
+          const sd = this.db.get('SELECT trang_thai FROM dot_van_chuyen WHERE id=?', [old.dot_van_chuyen_id]);
+          if (sd && sd.trang_thai === 'KHOA') throw new ValidationError('Phiếu thuộc đợt đã khóa — mở khóa đợt trước khi cập nhật');
+        }
+        require('./ChotKyService').ChotKyService.prototype.assertOpenForDates.call({ db: this.db }, [(t.ngay_gio_can_1 || '').slice(0, 10)]);
+        const clash = this.db.get(`SELECT id FROM phieu_can WHERE business_key=? AND trang_thai='ACTIVE' AND id<>?`, [businessKey(t), old.id]);
+        if (clash) throw new ValidationError(`Dữ liệu mới trùng khóa với phiếu khác (#${clash.id}) — không cập nhật được`);
+        // Bản chụp "ngay trước lần cập nhật" (không phải lúc vào hàng chờ): hoàn tác khôi phục đúng trạng thái này
+        this.db.run('UPDATE import_batch_row SET old_json=? WHERE id=?', [JSON.stringify(old), r.id]);
         this.db.run(`UPDATE phieu_can SET ngay_gio_can_1=?, ngay_gio_can_2=?, bien_so_goc=?, bien_so=?, bien_so_chuan=?, can_lan_1=?, can_lan_2=?, kl_hang_kg=?,
                        noi_xuat_goc=?, noi_xuat_id=NULL, business_key=?, strong_key=?, fingerprint=?, updated_at=strftime('%Y-%m-%dT%H:%M:%S','now','localtime') WHERE id=?`,
         [t.ngay_gio_can_1, t.ngay_gio_can_2, t.bien_so_goc, t.bien_so, t.bien_so_chuan, t.can_lan_1, t.can_lan_2, t.kl_hang_kg, t.noi_xuat,
@@ -326,6 +363,14 @@ class TicketImportService {
           WHERE r.phieu_can_id=? AND r.hanh_dong='UPDATE' AND b.id>? AND b.trang_thai<>'UNDONE' LIMIT 1`, [u.phieu_can_id, batchId]);
         if (later) throw new ValidationError(`Phiếu #${u.phieu_can_id} đã được lần import #${later.id} cập nhật tiếp — hoàn tác lần import #${later.id} trước`);
         const o = JSON.parse(u.old_json);
+        const cur = this.db.get('SELECT * FROM phieu_can WHERE id=?', [u.phieu_can_id]);
+        if (cur && cur.trang_thai === 'ACTIVE') {
+          // phiếu đã bị sửa tay sau lần cập nhật này → khôi phục bản cũ sẽ ghi đè thay đổi mới hơn
+          const expect = fingerprint(this._parseRaw(JSON.parse(this.db.get('SELECT raw_json FROM import_batch_row WHERE id=?', [u.id]).raw_json)));
+          if (cur.fingerprint !== expect) throw new ValidationError(`Phiếu ${cur.so_phieu} (#${cur.id}) đã được sửa sau lần cập nhật từ import — không hoàn tác để tránh ghi đè thay đổi mới hơn. Xử lý riêng phiếu này rồi hoàn tác lại`);
+          const clash = this.db.get(`SELECT id, so_phieu FROM phieu_can WHERE business_key=? AND trang_thai='ACTIVE' AND id<>?`, [o.business_key, o.id]);
+          if (clash) throw new ValidationError(`Khóa cũ của phiếu ${cur.so_phieu} đã bị phiếu #${clash.id} chiếm — không hoàn tác được`);
+        }
         this.db.run(`UPDATE phieu_can SET ngay_gio_can_1=?, ngay_gio_can_2=?, bien_so_goc=?, bien_so=?, bien_so_chuan=?, can_lan_1=?, can_lan_2=?, kl_hang_kg=?,
                        noi_xuat_goc=?, noi_xuat_id=?, business_key=?, strong_key=?, fingerprint=? WHERE id=?`,
         [o.ngay_gio_can_1, o.ngay_gio_can_2, o.bien_so_goc, o.bien_so, o.bien_so_chuan, o.can_lan_1, o.can_lan_2, o.kl_hang_kg, o.noi_xuat_goc, o.noi_xuat_id,

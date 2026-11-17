@@ -74,9 +74,11 @@ function createHandlers(app, env = {}) {
     'import.commit': ({ token, ...o }) => {
       if (backup) backup.backupNow('PRE_IMPORT');
       const r = app.imports.commit(token, o);
-      const copy = saveImportCopy(r.fileBuffer, r.fileName);
+      // Batch đã ghi xong: lỗi chép file nguồn chỉ là cảnh báo, không được báo như import thất bại
+      let copy = null, copyWarning = null;
+      try { copy = saveImportCopy(r.fileBuffer, r.fileName); } catch (e) { copyWarning = `Đã nhập xong nhưng không lưu được bản sao file nguồn: ${e.message}`; }
       delete r.fileBuffer;
-      return { ...r, savedCopy: copy };
+      return { ...r, savedCopy: copy, copyWarning };
     },
     'import.issuesXlsx': async ({ token }) => {
       const rows = app.imports.issueRows(token);
@@ -86,6 +88,7 @@ function createHandlers(app, env = {}) {
     'import.cancel': ({ token }) => app.imports.cancel(token),
     'import.pending': () => app.imports.pendingReviews(),
     'import.resolve': ({ id, action, note }) => app.imports.resolveReview(id, action, note),
+    'import.resolveMany': ({ ids, action, note, batchId }) => app.imports.resolveMany(ids, action, note, { batchId }),
     'import.batches': () => app.imports.listBatches(),
     'import.batchRows': ({ batchId, ...o }) => app.imports.batchRows(batchId, o),
     'import.undo': ({ batchId, reason }) => app.imports.undoBatch(batchId, reason),
