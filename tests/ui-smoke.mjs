@@ -210,6 +210,21 @@ console.log('app.info', JSON.stringify(info.data.counts));
   ck(after && after.kl_hang_kg === rows[0].kl_hang_kg + 100, 'cập nhật tất cả: KL phải đổi sang ' + (rows[0].kl_hang_kg + 100) + ', thực tế ' + (after && after.kl_hang_kg));
 }
 
+// ---- Cửa sổ nhỏ (820×600): các màn chính không làm trang cuộn ngang; focus bàn phím nhìn thấy được; chế độ Tối vẫn đạt
+{
+  await page.setViewportSize({ width: 820, height: 600 });
+  for (const id of ['dashboard', 'import', 'review', 'tickets', 'lock', 'backup', 'statements']) {
+    await page.evaluate((v) => App.go(v), id); await page.waitForTimeout(500);
+    const w = await page.evaluate(() => ({ sw: document.documentElement.scrollWidth, iw: window.innerWidth }));
+    if (w.sw > w.iw + 2) errors.push(`cửa sổ nhỏ: màn ${id} cuộn ngang (${w.sw} > ${w.iw})`);
+  }
+  await page.evaluate(() => App.go('backup')); await page.waitForTimeout(400);
+  await page.keyboard.press('Tab'); await page.keyboard.press('Tab');
+  const focus = await page.evaluate(() => { const e = document.activeElement; if (!e || e === document.body) return null; const c = getComputedStyle(e); return { tag: e.tagName, outline: c.outlineStyle, ow: c.outlineWidth, shadow: c.boxShadow }; });
+  if (!focus || (focus.outline === 'none' && (!focus.shadow || focus.shadow === 'none'))) errors.push('focus bàn phím không nhìn thấy: ' + JSON.stringify(focus));
+  await page.setViewportSize({ width: 1440, height: 900 });
+}
+
 // ---- Kiểm tra toàn vẹn dữ liệu (chỉ đọc) từ màn Backup
 {
   await page.evaluate(() => App.go('backup')); await page.waitForSelector('[data-act=integrity]');
