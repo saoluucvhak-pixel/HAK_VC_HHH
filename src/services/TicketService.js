@@ -33,6 +33,10 @@ class TicketService {
         if (!iso) throw new ValidationError(`${k === 'ngay_gio_can_1' ? 'Ngày giờ cân 1' : 'Ngày giờ cân 2'}: sai định dạng hoặc ngày không tồn tại`);
         ch[k] = iso;
       }
+      // Đổi ngày cân 1 sang một ngày thuộc kỳ đã chốt → số đã chốt sẽ lệch Bảng kê: phải mở khóa kỳ trước
+      if (ch.ngay_gio_can_1 && ch.ngay_gio_can_1.slice(0, 10) !== (old.ngay_gio_can_1 || '').slice(0, 10)) {
+        require('./ChotKyService').ChotKyService.prototype.assertOpenForDates.call({ db: this.db }, [ch.ngay_gio_can_1.slice(0, 10)]);
+      }
       const t1 = ch.ngay_gio_can_1 ?? old.ngay_gio_can_1, t2 = ch.ngay_gio_can_2 ?? old.ngay_gio_can_2;
       if (('ngay_gio_can_1' in ch || 'ngay_gio_can_2' in ch) && t1 && t2 && t2 < t1) throw new ValidationError('Giờ cân 2 phải sau giờ cân 1');
       for (const k of ['can_lan_1', 'can_lan_2']) if (k in ch && ch[k] !== null && !(Number(ch[k]) >= 0)) throw new ValidationError('Trọng lượng cân không được âm');
