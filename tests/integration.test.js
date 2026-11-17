@@ -174,9 +174,12 @@ test('bảng giá: chỉ nhập thông số, đơn giá áp dụng TỰ TÍNH th
   const { computeFuelAdjustment } = require('../src/services/FuelAdjustmentService');
   const exp = computeFuelAdjustment({ basePrice: cur.don_gia_goc, baseFuelPrice: cur.gia_dau_co_so, currentFuelPrice: cur.gia_dau_ap_dung, distanceKm: cur.khoang_cach_km + 10, fuelNormPer100km: cur.dinh_muc_dau, avgTonPerTrip: cur.khoi_luong_binh_quan });
   assert.equal(n.don_gia_ap_dung, exp.appliedPrice);
-  const c = app.catalog.create('bang_gia_van_chuyen', { ma_bang_gia: 'X1', tuyen_id: t.id, tu_ngay: '2027-01-01', phuong_thuc: 'CO_DINH', don_gia_goc: 150000, don_gia_ap_dung: 999, vat_percent: 8 });
+  // tuyến riêng (không có bảng giá ACTIVE nào) để thử nhập trực tiếp mà không chồng lấn với phiên bản giá ở trên
+  const l1 = app.catalog.create('dia_diem', { ma: 'TST1', ten: 'Điểm thử một' }), l2 = app.catalog.create('dia_diem', { ma: 'TST2', ten: 'Điểm thử hai' });
+  const t2 = app.catalog.create('tuyen_van_chuyen', { ma_tuyen: 'TST-TUYEN', noi_xuat_id: l1.id, noi_den_id: l2.id, khoang_cach_km: 10 });
+  const c = app.catalog.create('bang_gia_van_chuyen', { ma_bang_gia: 'X1', tuyen_id: t2.id, tu_ngay: '2027-01-01', phuong_thuc: 'CO_DINH', don_gia_goc: 150000, don_gia_ap_dung: 999, vat_percent: 8 });
   assert.equal(c.don_gia_ap_dung, 150000);
-  assert.throws(() => app.catalog.create('bang_gia_van_chuyen', { ma_bang_gia: 'X2', tuyen_id: t.id, tu_ngay: '2027-02-01', phuong_thuc: 'DIEU_CHINH_DAU', don_gia_goc: 150000, vat_percent: 8 }), /cần nhập/);
+  assert.throws(() => app.catalog.create('bang_gia_van_chuyen', { ma_bang_gia: 'X2', tuyen_id: t2.id, tu_ngay: '2027-02-01', phuong_thuc: 'DIEU_CHINH_DAU', don_gia_goc: 150000, vat_percent: 8 }), /cần nhập/);
 });
 
 test('bảng tính đơn giá: từng bước khớp Excel, giả định giá dầu, xuất Excel, áp dụng thành bảng giá mới', async () => {

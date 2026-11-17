@@ -19,7 +19,7 @@ function printSetup(ws, { landscape = false, titleRow = null, footer = '' } = {}
 const THIN = { style: 'thin', color: { argb: 'FF7F7F7F' } };
 const BOX = { top: THIN, bottom: THIN, left: THIN, right: THIN };
 const PRINT_HEAD = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFEFEFEF' } };
-const dmy = (iso) => (iso && /^\d{4}-\d{2}-\d{2}/.test(iso) ? `${iso.slice(8, 10)}/${iso.slice(5, 7)}/${iso.slice(0, 4)}` : iso || '');
+const { dmy } = require('../utils/datetime');
 
 const toDate = (iso) => (iso ? new Date(iso.length <= 10 ? iso + 'T00:00:00Z' : iso + 'Z') : null);
 const filterText = (f = {}) => Object.entries(f).filter(([, v]) => v !== null && v !== undefined && v !== '').map(([k, v]) => `${k}=${v}`).join('; ') || 'Tất cả';

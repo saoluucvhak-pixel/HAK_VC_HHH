@@ -1,6 +1,13 @@
 # CHANGELOG
 
 ## Chưa phát hành
+- Nhập liệu danh mục — chống trùng/chồng lấn/giá trị vô lý (trước đây các trường hợp này được nhận, gây tách bảng kê hoặc MULTIPLE_PRICE):
+  - Đơn vị vận chuyển: không trùng Mã/Tên (không phân biệt hoa-thường, dấu, khoảng trắng); Mã số thuế 10 số (hoặc 10-3 số), tự chuẩn hóa; email đúng dạng.
+  - Địa điểm: không trùng Tên địa điểm khác, không trùng tên gọi (alias) của địa điểm khác.
+  - Bảng giá nhập trực tiếp ở danh mục: đơn giá > 0, VAT 0–100%, không chồng hiệu lực với bảng giá ACTIVE cùng tuyến/đơn vị/loại hàng (dùng "Tạo phiên bản giá mới" để tự đóng bảng cũ).
+  - Giá dầu phải > 0.
+- Gom xử lý trùng lặp về một chỗ: `dayBefore`, `dmy`, `dmyHm` (utils/datetime), định dạng số không "-0" cho PDF/in (utils/numfmt), `isInside` (utils/safePath; storageLocation dùng lại). Test khẳng định định nghĩa "đã tính giá" của báo cáo và bảng kê trùng nhau theo từng đơn vị.
+- Test: `tests/entry-validation.test.js` (7 test). Rà soát import (biển số viết khác, nơi xuất viết khác, KL sửa, số phiếu tái dùng, xe khác, đợt khác, dòng trùng trong file, xe chồng giờ cân) — hành vi hiện tại đúng, không đổi.
 - Bản vá: `electron` 45.3.1 → 45.3.3, `better-sqlite3` 13.1.1 → 13.2.0, `playwright-core` 1.65.0 → 1.65.1. Kiểm chứng: 76/76 test bằng cả hai driver, kiểm tra khởi động + PDF thật (Electron 45.3.3) và `test:ui` đạt.
 - Phụ thuộc: ép `uuid` ≥ 11.1.1 (qua `overrides`; `exceljs` chỉ dùng `uuid.v4`) để hết cảnh báo; nâng `chart.js` 4.5 → 4.6.1, `tabulator-tables` 6.6 → 6.7.1, `playwright-core` 1.63 → 1.65. `npm audit`: 9 → 7 cảnh báo, còn `xlsx` (high, chưa có bản vá trên npm) và chuỗi `minimatch` trong `electron-builder` (moderate, chỉ công cụ build, không đóng gói vào app).
 - Nâng Electron 33.4.11 → **45.3.1** (bản 33 hết hỗ trợ, `npm audit` mức cao đã hết) và `better-sqlite3` 11.10 → **13.1.1** (N-API prebuilt dùng chung Node/Electron: không còn build lại module native, bỏ bước `install-app-deps` trong CI). `electron-builder` → 26.18. Loại các prebuilt nền tảng khác và mã nguồn C của better-sqlite3 khỏi bản đóng gói.

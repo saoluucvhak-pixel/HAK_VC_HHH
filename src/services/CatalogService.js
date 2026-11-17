@@ -27,7 +27,7 @@ const REFERENCES = {
 const PRICE_LOCKED_FIELDS = ['tuyen_id', 'don_vi_van_chuyen_id', 'loai_hang', 'tu_ngay', 'don_gia_goc', 'don_gia_dieu_chinh', 'don_gia_ap_dung', 'don_vi_tinh', 'vat_percent',
   'phuong_thuc', 'gia_dau_co_so', 'gia_dau_ap_dung', 'khoang_cach_km', 'dinh_muc_dau', 'khoi_luong_binh_quan'];
 
-const dayBefore = (d) => { const t = new Date(d + 'T00:00:00Z'); t.setUTCDate(t.getUTCDate() - 1); return t.toISOString().slice(0, 10); };
+const { dayBefore } = require('../utils/datetime');
 
 class CatalogService {
   constructor(db, audit, { onChange = () => {} } = {}) {
@@ -130,9 +130,12 @@ class CatalogService {
       const dup = this.db.get('SELECT a.id, d.ten FROM dia_diem_alias a JOIN dia_diem d ON d.id=a.dia_diem_id WHERE alias_folded = ? AND a.id <> ?', [row.alias_folded, existing ? existing.id : -1]);
       if (dup) throw new ValidationError(`Tên gọi "${row.alias}" đã gán cho địa điểm ${dup.ten}`);
     }
+    if (table === 'don_vi_van_chuyen') this._checkCarrier(row, existing);
+    if (table === 'dia_diem') this._checkLocation(row, existing);
+    if (table === 'gia_dau' && 'gia' in row && !(Number(row.gia) > 0)) throw new ValidationError('Giá dầu phải > 0');
     if ((row.tu_ngay && row.den_ngay) && row.tu_ngay > row.den_ngay) throw new ValidationError('Từ ngày phải ≤ Đến ngày');
     if (table === 'tuyen_van_chuyen' && row.noi_xuat_id && row.noi_den_id && row.noi_xuat_id === row.noi_den_id) throw new ValidationError('Nơi xuất và nơi đến phải khác nhau');
-    if (table === 'bang_gia_van_chuyen') this._derivePrice(row, existing);
+    if (table === 'bang_gia_van_chuyen') { this._derivePrice(row, existing); this._checkPriceRule(row, existing); }
     if (table === 'bang_gia_van_chuyen' && existing) {
       const used = this.db.get('SELECT COUNT(*) n FROM phieu_can WHERE bang_gia_id = ? AND trang_thai = \'ACTIVE\'', [existing.id]).n;
       if (used) {
@@ -145,6 +148,47 @@ class CatalogService {
       }
     }
     return row;
+  }
+
+  /** Đơn vị vận chuyển: không trùng Mã / Tên (không phân biệt hoa-thường, dấu, khoảng trắng); MST và email đúng dạng. */
+  _checkCarrier(row, existing) {
+    const self = existing ? existing.id : -1;
+    for (const [k, label] of [['ma', 'Mã'], ['ten', 'Tên']]) {
+      if (!(k in row) || row[k] === null) continue;
+      const f = fold(row[k]);
+      const dup = this.db.all('SELECT id, ma, ten FROM don_vi_van_chuyen WHERE id <> ?', [self]).find((o) => fold(o[k]) === f);
+      if (dup) throw new ValidationError(`${label} "${row[k]}" trùng với đơn vị ${dup.ma} (${dup.ten}) — không phân biệt hoa/thường và dấu`);
+    }
+    if (row.ma_so_thue) {
+      const d = String(row.ma_so_thue).replace(/[\s.]/g, '');
+      if (!/^\d{10}(-\d{3})?$/.test(d)) throw new ValidationError('Mã số thuế phải gồm 10 số (hoặc 10 số-3 số chi nhánh)');
+      row.ma_so_thue = d;
+    }
+    if (row.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(row.email)) throw new ValidationError('Email không đúng định dạng');
+  }
+
+  /** Địa điểm: Tên không trùng địa điểm khác và không trùng tên gọi (alias) của địa điểm khác — tránh 2 nơi cùng tên làm import không phân giải được. */
+  _checkLocation(row, existing) {
+    if (!('ten' in row) || row.ten === null) return;
+    const self = existing ? existing.id : -1, f = fold(row.ten);
+    const dup = this.db.all('SELECT id, ten FROM dia_diem WHERE id <> ?', [self]).find((o) => fold(o.ten) === f);
+    if (dup) throw new ValidationError(`Tên địa điểm "${row.ten}" trùng với địa điểm "${dup.ten}" — không phân biệt hoa/thường và dấu`);
+    const al = this.db.get('SELECT d.ten FROM dia_diem_alias a JOIN dia_diem d ON d.id = a.dia_diem_id WHERE a.alias_folded = ? AND a.dia_diem_id <> ?', [f, self]);
+    if (al) throw new ValidationError(`Tên "${row.ten}" đã là tên gọi khác của địa điểm "${al.ten}"`);
+  }
+
+  /** Bảng giá nhập/sửa trực tiếp ở danh mục: đơn giá > 0, VAT 0–100, không chồng hiệu lực với bảng giá ACTIVE cùng tuyến/đơn vị/loại hàng (tránh MULTIPLE_PRICE). */
+  _checkPriceRule(row, existing) {
+    const m = { ...(existing || {}), ...row };
+    if ('don_gia_ap_dung' in row && !(Number(row.don_gia_ap_dung) > 0)) throw new ValidationError('Đơn giá áp dụng phải > 0');
+    if ('vat_percent' in row && row.vat_percent !== null && !(Number(row.vat_percent) >= 0 && Number(row.vat_percent) <= 100)) throw new ValidationError('VAT phải trong khoảng 0–100%');
+    if ((m.trang_thai || 'ACTIVE') !== 'ACTIVE' || !m.tu_ngay || !m.tuyen_id) return;
+    const rows = this.db.all(`SELECT id, ma_bang_gia, tu_ngay, den_ngay FROM bang_gia_van_chuyen WHERE trang_thai = 'ACTIVE' AND tuyen_id = ? AND id <> ?
+                              AND IFNULL(don_vi_van_chuyen_id, 0) = IFNULL(?, 0) AND IFNULL(loai_hang, '') = IFNULL(?, '')`,
+    [m.tuyen_id, existing ? existing.id : -1, m.don_vi_van_chuyen_id ?? null, m.loai_hang ?? null]);
+    const nTu = m.tu_ngay, nDen = m.den_ngay || '9999-12-31';
+    const hit = rows.find((o) => !((o.den_ngay || '9999-12-31') < nTu || nDen < o.tu_ngay));
+    if (hit) throw new ValidationError(`Hiệu lực chồng lấn với bảng giá ${hit.ma_bang_gia} (${hit.tu_ngay} → ${hit.den_ngay || '…'}). Dùng "Tạo phiên bản giá mới" để tự đóng bảng giá cũ.`);
   }
 
   /** Đơn giá áp dụng + điều chỉnh luôn TỰ TÍNH từ thông số (không nhận giá nhập tay). Khi sửa: chỉ tính lại nếu đổi thông số. */
