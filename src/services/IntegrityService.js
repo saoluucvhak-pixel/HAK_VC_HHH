@@ -23,6 +23,14 @@ class IntegrityService {
       db.all(`SELECT bien_so_chuan, ngay_gio_can_1, COUNT(*) so_ban, group_concat(id) ids, group_concat(so_phieu) so_phieu FROM phieu_can
               WHERE trang_thai='ACTIVE' GROUP BY bien_so_chuan, ngay_gio_can_1 HAVING COUNT(*) > 1 ORDER BY ngay_gio_can_1`));
 
+    add('SO_PHIEU_KHAC_SO_0_DAU', 'Số phiếu chỉ khác số 0 đầu (vd 0123 / 123) cùng nơi xuất — nghi cùng một phiếu', 'CANH_BAO',
+      db.all(`SELECT noi_xuat_id, ltrim(so_phieu,'0') so_khong_0, COUNT(DISTINCT so_phieu) so_cach_viet, group_concat(DISTINCT so_phieu) cac_so_phieu, group_concat(id) ids FROM phieu_can
+              WHERE trang_thai='ACTIVE' AND noi_xuat_id IS NOT NULL AND ltrim(so_phieu,'0') <> '' GROUP BY noi_xuat_id, ltrim(so_phieu,'0') HAVING COUNT(DISTINCT so_phieu) > 1`),
+      'Số phiếu có số 0 đầu được giữ nguyên khi nhập; nếu hai cách viết là một phiếu cân thật thì xóa mềm bản thừa.');
+    add('KL_BAT_THUONG', 'Phiếu có KL ngoài khoảng hợp lý (dưới 100 kg hoặc trên 100.000 kg/chuyến) — nghi sai đơn vị tấn/kg', 'LOI',
+      db.all(`SELECT id, so_phieu, kl_hang_kg FROM phieu_can WHERE trang_thai='ACTIVE' AND (kl_hang_kg < 100 OR kl_hang_kg > 100000)`),
+      'Sửa KL của phiếu (kèm lý do) hoặc xóa mềm và nhập lại từ file đã sửa đơn vị.');
+
     // 2) chốt kỳ
     add('CHOT_MO_COI', 'Phiếu mang chot_ky_id không tồn tại', 'LOI', db.all(`SELECT p.id, p.so_phieu, p.chot_ky_id FROM phieu_can p LEFT JOIN chot_ky k ON k.id=p.chot_ky_id WHERE p.chot_ky_id IS NOT NULL AND k.id IS NULL`));
     add('CHOT_DA_MO_KHOA', 'Phiếu còn gắn với kỳ đã mở khóa', 'LOI', db.all(`SELECT p.id, p.so_phieu, p.chot_ky_id FROM phieu_can p JOIN chot_ky k ON k.id=p.chot_ky_id WHERE k.trang_thai<>'DA_CHOT'`));

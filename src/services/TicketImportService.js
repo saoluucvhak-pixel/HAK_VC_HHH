@@ -161,8 +161,14 @@ class TicketImportService {
         engine_status: calc.status, warnings: calc.warnings, don_vi_van_chuyen_id: calc.don_vi_van_chuyen_id, don_gia: calc.don_gia,
         tien_truoc_vat: calc.tien_truoc_vat, tong_tien: calc.tong_tien, key: c.key, fp: c.fp };
     });
-    Object.assign(p, { stage: 'previewed', sheetName, headerRow: Number(headerRow), mapping, dotId, noiDenId: nd, rows: out, counts });
-    return { token, counts, sheetName, headerRow: Number(headerRow), noiDenId: nd };
+    // Tổng KL: đối chiếu với dòng "Tổng cộng" của chính file (nếu có) và tổng tạm tính của phiếu mới — để thấy ngay nếu mất dòng/sai đơn vị
+    const readKg = out.reduce((a, r) => a + (Number(r.kl_hang_kg) || 0), 0);
+    const news = out.filter((r) => r.phan_loai === 'NEW');
+    const totals = { so_dong: out.length, read_kg: Math.round(readKg * 1000) / 1000, file_kg: rows.totalRow ? rows.totalRow.kl_hang_kg : null, file_total_row: rows.totalRow ? rows.totalRow.source_row : null,
+      new_kg: Math.round(news.reduce((a, r) => a + (Number(r.kl_hang_kg) || 0), 0) * 1000) / 1000, new_truoc_vat: news.reduce((a, r) => a + (Number(r.tien_truoc_vat) || 0), 0) };
+    totals.lech_kg = totals.file_kg === null ? null : Math.round((totals.read_kg - totals.file_kg) * 1000) / 1000;
+    Object.assign(p, { stage: 'previewed', sheetName, headerRow: Number(headerRow), mapping, dotId, noiDenId: nd, rows: out, counts, totals });
+    return { token, counts, totals, sheetName, headerRow: Number(headerRow), noiDenId: nd };
   }
 
   /** Trang dữ liệu preview (cho bảng ảo hóa). filter: phan_loai hoặc cờ cảnh báo */

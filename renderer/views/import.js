@@ -85,6 +85,14 @@
         const c = S.prev.counts;
         const d = await api('import.previewRows', { token: S.open.token, filter: S.filter, offset: 0, limit: 300 });
         const chip = (key, label, n, cls = '') => h('div', { class: 'kpi click' + (cls ? ' ' + cls : ''), style: S.filter === key ? { outline: '2px solid var(--green)' } : null, onclick: () => { S.filter = S.filter === key ? null : key; draw(); } }, h('small', {}, label), h('b', {}, fmt.int(n)));
+        // Đối chiếu khối lượng: tổng KL đọc được ↔ dòng "Tổng cộng" của file; tổng tạm tính của phiếu mới
+        const T = S.prev.totals || {}; const kgf = (v) => `${fmt.kg(v)} kg (${fmt.tan(v / 1000)} tấn)`;
+        const klCls = T.lech_kg === null || T.lech_kg === undefined ? 'ok' : T.lech_kg === 0 ? 'ok' : 'bad';
+        root.append(h('div', { class: 'chk-verdict ' + klCls, 'data-kl-check': '1' },
+          `Đọc ${fmt.int(T.so_dong)} dòng, tổng KL ${kgf(T.read_kg || 0)}. `,
+          T.file_kg === null || T.file_kg === undefined ? 'File không có dòng "Tổng cộng" để đối chiếu. '
+            : T.lech_kg === 0 ? `Khớp dòng "Tổng cộng" của file (dòng ${T.file_total_row}). ` : `LỆCH ${kgf(Math.abs(T.lech_kg))} so với dòng "Tổng cộng" của file (${kgf(T.file_kg)}) — có thể mất dòng, dòng bị loại hoặc sai đơn vị: kiểm tra trước khi import. `,
+          `Phiếu mới: ${kgf(T.new_kg || 0)}, tạm tính trước VAT ${fmt.money(T.new_truoc_vat || 0)} đ.`));
         root.append(h('div', { class: 'grid g6', style: { marginBottom: '12px' } },
           chip(null, 'Tổng dòng', c.total), chip('new', 'Mới', c.new), chip('exact', 'Trùng hoàn toàn', c.exact), chip('conflict', 'Trùng khóa – khác', c.conflict, c.conflict ? 'warn' : ''), chip('inFile', 'Trùng trong file', c.inFile), chip('error', 'Lỗi', c.error, c.error ? 'warn' : '')),
         h('div', { class: 'grid g4', style: { marginBottom: '12px' } }, chip('unknownVehicle', 'Xe chưa xác định', c.unknownVehicle, c.unknownVehicle ? 'warn' : ''), chip('unknownLocation', 'Nơi xuất chưa rõ', c.unknownLocation, c.unknownLocation ? 'warn' : ''),

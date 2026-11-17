@@ -6,6 +6,7 @@
 const { parseDateTime } = require('../utils/datetime');
 const { normalizePlate, displayPlate, isValidPlate } = require('../utils/plate');
 const { fold } = require('./columnMapping');
+const { weightProblem } = require('../utils/weight');
 
 const num = (v) => {
   if (v === null || v === undefined || v === '') return null;
@@ -21,11 +22,17 @@ function parseTickets(aoa, headerRow, mapping, { maxBlankRun = 50 } = {}) {
   const klIsTon = /\((tan|t)\)|\btan\b/.test(klHead) && !/\bkg\b/.test(klHead);
   const get = (row, f) => (mapping[f] === undefined ? undefined : row[mapping[f]]);
   const out = [];
+  let totalRow = null;
   let blank = 0;
   for (let r = headerRow + 1; r < aoa.length; r++) {
     const row = aoa[r] || [];
     const first = fold(row.find((c) => c !== null && c !== undefined && c !== '') ?? '');
-    if (first.startsWith('tong cong')) break;
+    if (first.startsWith('tong cong')) {
+      // dòng tổng của chính file: lấy KL tổng (nếu có) để đối chiếu với tổng các dòng đã đọc — phát hiện mất dòng / sai đơn vị
+      const t = num(get(row, 'kl_hang_kg'));
+      if (t !== null && !Number.isNaN(t)) totalRow = { source_row: r + 1, kl_hang_kg: klIsTon ? Math.round(t * 1000 * 1000) / 1000 : t };
+      break;
+    }
     const soPhieu = get(row, 'so_phieu');
     const hasData = ['bien_so', 'kl_hang_kg', 'ngay_gio_can_1', 'can_lan_1', 'can_lan_2'].some((f) => { const v = get(row, f); return v !== null && v !== undefined && v !== ''; });
     const noSoPhieu = soPhieu === null || soPhieu === undefined || soPhieu === '';
@@ -49,6 +56,8 @@ function parseTickets(aoa, headerRow, mapping, { maxBlankRun = 50 } = {}) {
     else if (!isValidPlate(bsGoc)) errors.push('Biển số không đúng định dạng');
     if (kg === null && c1 !== null && c2 !== null) kg = Math.abs(c2 - c1);
     if (kg === null || isNaN(kg) || kg <= 0) errors.push('INVALID_WEIGHT: KL hàng không hợp lệ');
+    if ((c1 !== null && c1 < 0) || (c2 !== null && c2 < 0)) errors.push('INVALID_WEIGHT: số cân không được âm');
+    const wp = weightProblem(kg); if (wp) errors.push('INVALID_WEIGHT: ' + wp);
     if (c1 !== null && c2 !== null && !isNaN(c1) && !isNaN(c2) && kg !== null && Math.abs(Math.abs(c2 - c1) - kg) > 0.5) {
       errors.push(`INVALID_WEIGHT: |cân2 - cân1| = ${Math.abs(c2 - c1)} ≠ KL hàng ${kg}`);
     }
@@ -66,6 +75,7 @@ function parseTickets(aoa, headerRow, mapping, { maxBlankRun = 50 } = {}) {
       errors,
     });
   }
+  out.totalRow = totalRow;
   return out;
 }
 
