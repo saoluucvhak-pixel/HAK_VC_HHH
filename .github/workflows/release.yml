@@ -1,0 +1,65 @@
+name: Release
+
+# Phát hành đúng các bộ cài ĐÃ nghiệm thu: lấy artifact của một run "Windows build" (installers=true) đã xanh, kiểm tra commit + checksum,
+# rồi tạo tag + GitHub Release đính kèm đúng các tệp đó (không build lại → không đổi băm). Chạy tay, cần người có quyền ghi.
+on:
+  workflow_dispatch:
+    inputs:
+      run_id:
+        description: 'ID run "Windows build" đã nghiệm thu (installers=true, conclusion=success)'
+        required: true
+      tag:
+        description: 'Tag phát hành, vd v0.7.0'
+        required: true
+      notes_file:
+        description: 'Tệp ghi chú phát hành trong repo'
+        required: true
+        default: 'docs/RELEASE_NOTES.md'
+
+permissions:
+  contents: write
+  actions: read
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Kiểm tra run đã nghiệm thu
+        id: run
+        env: { GH_TOKEN: '${{ github.token }}' }
+        run: |
+          set -euo pipefail
+          info=$(gh api repos/${{ github.repository }}/actions/runs/${{ inputs.run_id }})
+          concl=$(jq -r .conclusion <<<"$info"); ev=$(jq -r .event <<<"$info"); sha=$(jq -r .head_sha <<<"$info"); name=$(jq -r .name <<<"$info")
+          echo "run: $name / $ev / $concl / $sha"
+          [ "$name" = "Windows build" ] || { echo "Không phải run Windows build"; exit 1; }
+          [ "$concl" = "success" ] || { echo "Run chưa xanh ($concl) — không phát hành"; exit 1; }
+          [ "$ev" = "workflow_dispatch" ] || { echo "Cần run chạy tay với installers=true"; exit 1; }
+          git ls-remote --exit-code origin "refs/tags/${{ inputs.tag }}" >/dev/null 2>&1 && { echo "Tag ${{ inputs.tag }} đã tồn tại"; exit 1; } || true
+          echo "sha=$sha" >> "$GITHUB_OUTPUT"
+
+      - name: Tải bộ cài đã nghiệm thu
+        env: { GH_TOKEN: '${{ github.token }}' }
+        run: |
+          set -euo pipefail
+          mkdir -p assets && gh run download ${{ inputs.run_id }} -n vc-cost-installers -D assets
+          ls -la assets
+
+      - name: Kiểm tra SHA-256 khớp SHA256SUMS.txt
+        run: |
+          set -euo pipefail
+          cd assets
+          cat SHA256SUMS.txt
+          sha256sum -c SHA256SUMS.txt
+          [ "$(ls VC-Cost-*-Setup.exe | wc -l)" = 1 ] && [ "$(ls VC-Cost-*-Portable.exe | wc -l)" = 1 ]
+
+      - name: Tạo tag và Release
+        env: { GH_TOKEN: '${{ github.token }}' }
+        run: |
+          set -euo pipefail
+          { cat "${{ inputs.notes_file }}"; echo; echo '## SHA-256'; echo '```'; cat assets/SHA256SUMS.txt; echo '```'; echo; echo "Commit: ${{ steps.run.outputs.sha }} · build + nghiệm thu: run ${{ inputs.run_id }}"; } > notes.md
+          gh release create "${{ inputs.tag }}" assets/VC-Cost-*-Setup.exe assets/VC-Cost-*-Portable.exe assets/SHA256SUMS.txt \
+            --target "${{ steps.run.outputs.sha }}" --title "VC Cost ${{ inputs.tag }}" --notes-file notes.md --latest
+          gh release view "${{ inputs.tag }}" --json tagName,targetCommitish,assets --jq '{tag: .tagName, target: .targetCommitish, files: [.assets[] | {name, size}]}'
