@@ -58,10 +58,11 @@
           go && (count || info) ? h('button', { class: 'btn sm ' + (count ? '' : 'ghost'), onclick: go }, label) : h('span', {}));
         const last = t.import_gan_nhat;
         return h('div', { class: 'card todo', 'data-todo': '1' },
-          h('h3', {}, 'Việc cần làm theo quy trình'),
+          h('h3', {}, 'Việc cần làm theo quy trình ', h('span', { class: 'tag gray', title: 'Số đếm của khối này luôn tính trên toàn bộ phiếu, không theo bộ lọc bên dưới. Bấm xử lý sẽ mở danh sách toàn hệ thống (bộ lọc được bỏ).' }, 'Toàn hệ thống')),
+          Object.keys(App.cleanFilter(App.state.filter)).length ? h('p', { class: 'muted small', style: { margin: '0 0 6px' } }, 'Khối này đếm toàn hệ thống, không áp dụng bộ lọc đang chọn — số liệu bên dưới mới theo bộ lọc.') : null,
           step('1', 'Nhập phiếu cân', last ? `Lần nhập gần nhất: ${fmt.dt(last.import_time)} · ${fmt.int(last.inserted_rows)} phiếu mới` : 'Chưa nhập phiếu cân nào', t.tong_phieu ? 0 : 1, 'việc', () => App.go('import'), t.tong_phieu ? 'Nhập thêm' : 'Nhập ngay', `${fmt.int(t.tong_phieu)} phiếu trong hệ thống`, true),
           step('2', 'Xử lý phiếu trùng khóa', 'Cùng số phiếu nhưng nội dung khác file cũ — chọn giữ cũ / cập nhật / bỏ qua', t.cho_xu_ly, 'phiếu chờ', () => App.go('review'), 'Xử lý'),
-          step('3', 'Hoàn thiện dữ liệu để tính giá', 'Thiếu xe, đơn vị, nơi xuất hoặc bảng giá — chưa vào bảng kê và chặn chốt kỳ', t.chua_tinh_gia, 'phiếu', () => App.go('tickets', { chua_tinh_gia: true }), 'Xem phiếu'),
+          step('3', 'Hoàn thiện dữ liệu để tính giá', 'Thiếu xe, đơn vị, nơi xuất hoặc bảng giá — chưa vào bảng kê và chặn chốt kỳ', t.chua_tinh_gia, 'phiếu', () => { Object.keys(App.state.filter).forEach((k) => delete App.state.filter[k]); App.go('tickets', { chua_tinh_gia: true }); }, 'Xem phiếu'),   // bỏ bộ lọc ngầm: danh sách đích = đúng số đếm toàn hệ thống
           step('4', 'Đối chiếu với đối tác', 'Phiếu đã tính giá nhưng chưa khớp / chưa đối chiếu', t.can_doi_chieu, 'phiếu', () => App.go('reconcile'), 'Đối chiếu'),
           step('5', 'Chốt kỳ', 'Khóa số liệu để ký bảng kê và xuất hóa đơn', t.chua_chot, 'phiếu chưa chốt', () => App.go('lock'), 'Chốt kỳ'),
           step('6', 'Bảng kê thanh toán', `Đã chốt ${fmt.int(t.da_chot)} phiếu — in/ký bảng kê từng đơn vị`, 0, '', () => App.go('statements'), 'Mở bảng kê', `${fmt.int(t.da_chot)} phiếu đã chốt`, true),

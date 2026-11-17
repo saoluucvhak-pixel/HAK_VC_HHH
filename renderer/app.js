@@ -154,7 +154,12 @@ const App = (() => {
     const box = h('div', { class: 'modal' + (wide ? ' wide' : '') }, h('h2', {}, title), body,
       h('div', { class: 'actions' }, actions.map((a) => h('button', {
         class: 'btn ' + (a.cls || (a.primary === false ? 'ghost' : '')), disabled: a.disabled,
-        onclick: async () => { const keep = a.onClick ? await a.onClick(close) : undefined; if (!a.keepOpen && keep !== false) close(); },
+        onclick: async (e) => {
+          const btn = e.currentTarget; if (btn.dataset.busy) return;            // bấm lặp: bỏ qua lần bấm khi thao tác trước chưa xong
+          btn.dataset.busy = '1'; btn.disabled = true; btn.classList.add('busy');
+          try { const keep = a.onClick ? await a.onClick(close) : undefined; if (!a.keepOpen && keep !== false) close(); }
+          finally { delete btn.dataset.busy; btn.disabled = !!a.disabled; btn.classList.remove('busy'); }
+        },
       }, a.label))));
     const ov = h('div', { class: 'overlay', onmousedown: (e) => { if (e.target === ov) ov._down = true; }, onmouseup: (e) => { if (e.target === ov && ov._down) close(); ov._down = false; } }, box);
     document.body.append(ov);
@@ -268,13 +273,21 @@ const App = (() => {
     if (views[kind]) return [views[kind], { arg }];
     return [null, {}];
   }
+  let navSeq = 0;
   async function go(id, params = {}) {
     current = id; renderNav();
+    const seq = ++navSeq;                     // mỗi lần chuyển màn là một "phiên": phản hồi về chậm của màn cũ không được ghi đè màn mới
     const [v, p] = resolve(id);
     const view = clear(document.getElementById('view'));
     if (!v) { view.append(h('div', { class: 'empty' }, `Chưa có màn hình "${id}"`)); return; }
     view.append(h('div', { class: 'empty' }, 'Đang tải…'));
-    try { clear(view); await v.render(view, { ...p, ...params }); } catch (e) { clear(view); view.append(h('div', { class: 'card' }, h('h3', {}, 'Lỗi hiển thị'), h('pre', { class: 'json' }, e.stack || e.message))); }
+    const host = h('div', { class: 'view-host' });      // màn dựng trong host riêng; chỉ gắn vào trang nếu vẫn là phiên mới nhất
+    let failed = null;
+    try { await v.render(host, { ...p, ...params }); } catch (e) { failed = e; }
+    if (seq !== navSeq) return;                 // đã chuyển sang màn khác: bỏ kết quả này
+    clear(view);
+    if (failed) view.append(h('div', { class: 'card' }, h('h3', {}, 'Lỗi hiển thị'), h('pre', { class: 'json' }, failed.stack || failed.message)));
+    else view.append(host);                      // host vẫn là vùng chứa của màn (màn có thể vẽ tiếp vào đó sau khi tương tác)
     document.getElementById('main').scrollTop = 0;
     refreshInfo();
   }

@@ -63,3 +63,31 @@ test('preview: đối chiếu tổng KL với dòng "Tổng cộng" của file; 
   const none = await run([mk(5, 17000)]);
   assert.equal(none.file_kg, null); assert.equal(none.lech_kg, null);
 });
+
+test('dòng Tổng cộng: công thức chưa có giá trị, nhiều khối dữ liệu (dòng dưới Tổng cộng không bị bỏ qua âm thầm), cột tấn', async () => {
+  const ExcelJS = require('exceljs');
+  const app = createApp({ dbFile: ':memory:', driver: 'node:sqlite' });
+  app.seed.load(JSON.parse(fs.readFileSync(path.join(SEED_DIR, 'sample-v47.json'), 'utf8')));
+  app.vehicleImport.commit((await app.vehicleImport.preview({ filePath: path.join(__dirname, 'fixtures', 'sample-v47.xlsx') })).token);
+  const plate = app.db.get('SELECT bien_so_chuan b FROM xe LIMIT 1').b;
+  const mk = (ws, n, kl) => ws.addRow([String(n), plate, 'Quế Sơn', `0${n}/10/2026 10:00`, `0${n}/10/2026 10:30`, 30000, 30000 - kl, kl]);
+  const open = async (build, head = H) => {
+    const wb = new ExcelJS.Workbook(); const ws = wb.addWorksheet('S'); ws.addRow(head); build(ws);
+    const o = await app.imports.open({ buffer: Buffer.from(await wb.xlsx.writeBuffer()), fileName: 'b.xlsx' }); const si = app.imports.sheetInfo(o.token, o.suggestedSheet);
+    const args = { sheetName: si.sheetName, headerRow: si.headerRow, mapping: si.mapping };
+    return { chk: app.imports.check(o.token, args), totals: app.imports.preview(o.token, { ...args, dotId: null }).totals };
+  };
+  // 1) tổng là công thức không có giá trị lưu sẵn → nêu rõ là không đối chiếu được (không phải "không có dòng tổng")
+  const f = await open((ws) => { mk(ws, 1, 17000); mk(ws, 2, 18000); ws.addRow(['Tổng cộng', null, null, null, null, null, null, { formula: 'SUM(H2:H3)' }]); });
+  assert.equal(f.totals.file_kg, null); assert.ok(f.totals.file_total_row); assert.equal(f.totals.read_kg, 35000);
+  // 2) hai khối: dữ liệu dưới dòng Tổng cộng đầu tiên không được đọc → phải cảnh báo rõ, không im lặng
+  const two = await open((ws) => { mk(ws, 1, 17000); ws.addRow(['Tổng cộng', null, null, null, null, null, null, 17000]); mk(ws, 3, 18000); mk(ws, 4, 19000); ws.addRow(['Tổng cộng', null, null, null, null, null, null, 37000]); });
+  assert.equal(two.totals.so_dong, 1); assert.equal(two.totals.ignored_below_total, 2); assert.equal(two.totals.ignored_first_row, 4);
+  assert.ok(two.chk.problems.some((p) => p.level === 'warning' && /DƯỚI dòng "Tổng cộng"/.test(p.text)));
+  // 3) bảng tóm tắt dưới dòng tổng (như V.47) không bị tính là phiếu bị bỏ sót
+  const sum = await open((ws) => { mk(ws, 1, 17000); ws.addRow(['Tổng cộng', null, null, null, null, null, null, 17000]); ws.addRow([null, null, 'Xe xuống Cảng', null, 'Xe trả về']); ws.addRow(['Nơi xuất', null, 'Số lượng xe', 'Khối lượng']); });
+  assert.equal(sum.totals.ignored_below_total, 0);
+  // 4) cột tấn: tổng tính bằng tấn cũng được quy đổi để so với tổng kg đọc được
+  const ton = await open((ws) => { ws.addRow(['1', plate, 'Quế Sơn', '01/10/2026 10:00', '01/10/2026 10:30', null, null, 17.5]); ws.addRow(['Tổng cộng', null, null, null, null, null, null, 17.5]); }, [...H.slice(0, 7), 'KL hàng (tấn)']);
+  assert.equal(ton.totals.read_kg, 17500); assert.equal(ton.totals.file_kg, 17500); assert.equal(ton.totals.lech_kg, 0);
+});

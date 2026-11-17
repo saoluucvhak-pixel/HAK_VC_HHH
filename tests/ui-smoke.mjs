@@ -226,6 +226,31 @@ console.log('app.info', JSON.stringify(info.data.counts));
   await page.setViewportSize({ width: 1440, height: 900 });
 }
 
+// ---- Phản hồi về chậm không được ghi đè màn đang mở; "Việc cần làm" nêu phạm vi và khớp màn đích
+{
+  const ck = (ok, msg) => { if (!ok) errors.push('nhất quán màn hình: ' + msg); };
+  await page.route('**/api/reports.dashboard', async (route) => { await new Promise((r) => setTimeout(r, 1500)); await route.continue(); });
+  await page.evaluate(() => { App.go('dashboard'); App.go('batches'); });     // mở Dashboard (chậm) rồi chuyển ngay sang Lịch sử import
+  await page.waitForTimeout(2600);
+  const h1s = await page.$$eval('#view h1', (els) => els.map((e) => e.textContent));
+  ck(h1s.length === 1 && /import/i.test(h1s[0]), 'phản hồi chậm của Dashboard đã ghi đè màn Lịch sử import: ' + JSON.stringify(h1s));
+  await page.unroute('**/api/reports.dashboard');
+  // Bộ lọc đang bật không được làm lệch số "Việc cần làm" so với danh sách đích
+  await page.evaluate(() => App.go('dashboard')); await page.waitForSelector('[data-todo]');
+  const scopeTxt = await page.textContent('[data-todo]');
+  ck(/toàn hệ thống/i.test(scopeTxt), 'khối Việc cần làm không nêu phạm vi toàn hệ thống: ' + scopeTxt.slice(0, 120));
+  // bật bộ lọc đơn vị rồi bấm "Xem phiếu" của bước chưa tính giá: danh sách đích phải khớp số đếm toàn hệ thống (không còn bộ lọc ngầm)
+  const todoN = await page.evaluate(async () => (await App.api('workflow.todo')).chua_tinh_gia);
+  await page.evaluate(() => { App.state.filter.don_vi_id = [1]; });
+  await page.evaluate(() => App.go('dashboard')); await page.waitForSelector('[data-todo]');
+  if (todoN > 0) {
+    await page.click('[data-todo] .todo-row.open button:has-text("Xem phiếu")'); await page.waitForTimeout(700);
+    const shown = await page.evaluate(async () => (await App.api('tickets.count', { filter: App.cleanFilter(App.state.filter) })).kept);
+    ck(shown === todoN, `danh sách đích (${shown}) ≠ số đếm Việc cần làm (${todoN}) khi đang có bộ lọc`);
+  }
+  await page.evaluate(() => { Object.keys(App.state.filter).forEach((k) => delete App.state.filter[k]); });
+}
+
 // ---- Kiểm tra toàn vẹn dữ liệu (chỉ đọc) từ màn Backup
 {
   await page.evaluate(() => App.go('backup')); await page.waitForSelector('[data-act=integrity]');

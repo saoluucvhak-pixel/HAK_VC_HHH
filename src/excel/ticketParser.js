@@ -22,7 +22,7 @@ function parseTickets(aoa, headerRow, mapping, { maxBlankRun = 50 } = {}) {
   const klIsTon = /\((tan|t)\)|\btan\b/.test(klHead) && !/\bkg\b/.test(klHead);
   const get = (row, f) => (mapping[f] === undefined ? undefined : row[mapping[f]]);
   const out = [];
-  let totalRow = null;
+  let totalRow = null, totalAt = -1;
   let blank = 0;
   for (let r = headerRow + 1; r < aoa.length; r++) {
     const row = aoa[r] || [];
@@ -30,7 +30,9 @@ function parseTickets(aoa, headerRow, mapping, { maxBlankRun = 50 } = {}) {
     if (first.startsWith('tong cong')) {
       // dòng tổng của chính file: lấy KL tổng (nếu có) để đối chiếu với tổng các dòng đã đọc — phát hiện mất dòng / sai đơn vị
       const t = num(get(row, 'kl_hang_kg'));
-      if (t !== null && !Number.isNaN(t)) totalRow = { source_row: r + 1, kl_hang_kg: klIsTon ? Math.round(t * 1000 * 1000) / 1000 : t };
+      // ô tổng là công thức chưa có giá trị lưu sẵn (file chưa được Excel tính/lưu) → không đối chiếu được, nhưng vẫn ghi nhận có dòng tổng
+      totalRow = { source_row: r + 1, kl_hang_kg: t !== null && !Number.isNaN(t) ? (klIsTon ? Math.round(t * 1000 * 1000) / 1000 : t) : null };
+      totalAt = r;
       break;
     }
     const soPhieu = get(row, 'so_phieu');
@@ -76,6 +78,15 @@ function parseTickets(aoa, headerRow, mapping, { maxBlankRun = 50 } = {}) {
     });
   }
   out.totalRow = totalRow;
+  // Dữ liệu còn lại DƯỚI dòng "Tổng cộng" (file có nhiều khối/nhiều tháng) không được đọc — đếm các dòng trông như phiếu cân để cảnh báo, không im lặng bỏ qua
+  out.ignoredBelowTotal = { count: 0, first_row: null };
+  if (totalAt >= 0) {
+    for (let r = totalAt + 1; r < aoa.length; r++) {
+      const row = aoa[r] || [];
+      const bs = get(row, 'bien_so'), t1 = get(row, 'ngay_gio_can_1');
+      if (bs && isValidPlate(bs) && parseDateTime(t1)) { out.ignoredBelowTotal.count++; if (out.ignoredBelowTotal.first_row === null) out.ignoredBelowTotal.first_row = r + 1; }
+    }
+  }
   return out;
 }
 

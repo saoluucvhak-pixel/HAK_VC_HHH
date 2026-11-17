@@ -80,6 +80,7 @@ class TicketImportService {
     if (!problems.some((x) => x.level === 'error')) {
       try { rows = parseTickets(p.wb.aoa(sheetName), Number(headerRow), m); } catch (e) { problems.push({ level: 'error', field: null, text: `Không đọc được dữ liệu: ${e.message}` }); }
     }
+    if (rows.ignoredBelowTotal && rows.ignoredBelowTotal.count) problems.push({ level: 'warning', field: null, text: `Còn ${rows.ignoredBelowTotal.count} dòng giống phiếu cân nằm DƯỚI dòng "Tổng cộng" (từ dòng ${rows.ignoredBelowTotal.first_row}) — hệ thống dừng đọc ở dòng Tổng cộng nên các dòng này CHƯA được nhập. File có nhiều khối? Tách/sửa file rồi nhập lại` });
     const reasons = new Map();
     for (const r of rows) for (const e of r.errors) {
       const key = String(e).replace(/\d+([.,]\d+)?/g, '#').replace(/\s+/g, ' ').slice(0, 120);
@@ -166,6 +167,7 @@ class TicketImportService {
     const news = out.filter((r) => r.phan_loai === 'NEW');
     const totals = { so_dong: out.length, read_kg: Math.round(readKg * 1000) / 1000, file_kg: rows.totalRow ? rows.totalRow.kl_hang_kg : null, file_total_row: rows.totalRow ? rows.totalRow.source_row : null,
       new_kg: Math.round(news.reduce((a, r) => a + (Number(r.kl_hang_kg) || 0), 0) * 1000) / 1000, new_truoc_vat: news.reduce((a, r) => a + (Number(r.tien_truoc_vat) || 0), 0) };
+    totals.ignored_below_total = rows.ignoredBelowTotal ? rows.ignoredBelowTotal.count : 0; totals.ignored_first_row = rows.ignoredBelowTotal ? rows.ignoredBelowTotal.first_row : null;
     totals.lech_kg = totals.file_kg === null ? null : Math.round((totals.read_kg - totals.file_kg) * 1000) / 1000;
     Object.assign(p, { stage: 'previewed', sheetName, headerRow: Number(headerRow), mapping, dotId, noiDenId: nd, rows: out, counts, totals });
     return { token, counts, totals, sheetName, headerRow: Number(headerRow), noiDenId: nd };
@@ -311,6 +313,7 @@ class TicketImportService {
         if (!old || old.trang_thai !== 'ACTIVE') throw new ValidationError('Phiếu gốc không còn hiệu lực');
         if (old.chot_ky_id) throw new ValidationError('Phiếu đã chốt — phải mở khóa kỳ trước khi cập nhật');
         const t = this._parseRaw(JSON.parse(r.raw_json));
+        if (t.errors && t.errors.length) throw new ValidationError(`Dòng nguồn không còn hợp lệ theo quy tắc hiện hành (${t.errors[0]}) — không cập nhật`);
         // Cùng phạm vi bảo vệ như sửa trực tiếp: đợt đã khóa, kỳ đã chốt (ngày mới), trùng khóa với phiếu khác
         if (old.dot_van_chuyen_id) {
           const sd = this.db.get('SELECT trang_thai FROM dot_van_chuyen WHERE id=?', [old.dot_van_chuyen_id]);
