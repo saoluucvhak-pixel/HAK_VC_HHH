@@ -14,7 +14,8 @@ const DEFAULT_THRESHOLDS = {
 /** @param {Array} tickets phiếu của 1 xe (bất kỳ thứ tự) */
 function buildTimeline(tickets, thresholds = {}) {
   const th = { ...DEFAULT_THRESHOLDS, ...thresholds };
-  const list = [...tickets].sort((a, b) => (a.ngay_gio_can_1 < b.ngay_gio_can_1 ? -1 : 1));
+  // Bộ so sánh phải nhất quán (trả 0/tie-break khi bằng nhau): cùng giờ cân thì xếp theo id để thứ tự và khoảng cách giữa chuyến luôn cố định
+  const list = [...tickets].sort((a, b) => { const x = a.ngay_gio_can_1 || '', y = b.ngay_gio_can_1 || ''; return x < y ? -1 : x > y ? 1 : (a.id ?? 0) - (b.id ?? 0); });
   let prev = null;
   return list.map((t, i) => {
     const flags = [];

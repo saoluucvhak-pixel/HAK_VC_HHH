@@ -35,6 +35,10 @@ function createWindow() {
   });
   win.loadFile(path.join(__dirname, '..', 'renderer', 'index.html'));
   win.once('ready-to-show', () => win.show());
+  // App offline: từ chối mọi yêu cầu quyền của trang (camera, micro, vị trí, thông báo…) và không cho gắn <webview>
+  win.webContents.session.setPermissionRequestHandler((_wc, _perm, cb) => cb(false));
+  win.webContents.session.setPermissionCheckHandler(() => false);
+  win.webContents.on('will-attach-webview', (e) => e.preventDefault());
   // Chặn mọi điều hướng ra Internet
   win.webContents.on('will-navigate', (e) => e.preventDefault());
   win.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));

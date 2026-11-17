@@ -1,6 +1,12 @@
 # CHANGELOG
 
 ## Chưa phát hành
+- **Sửa lỗi mất dữ liệu sao lưu**: cấu hình sao lưu sai (vd số bản giữ lại = "abc", âm, 0) làm `applyRetention` xóa SẠCH bản sao lưu tự động (đã tái hiện: 5 bản → 0, kể cả bản vừa tạo). Nay số bản giữ lại luôn được kiểm tra (giá trị lạ → mặc định 30/12) và bản vừa tạo không bao giờ bị xóa.
+- **Cấu hình hệ thống có kiểm tra**: `settings.set` chỉ nhận các khóa đã biết (backup, company, rounding, time_anomaly, default_noi_den, duplicate_key, initial_data, money_scale) và kiểm tra giá trị (khoảng/kiểu). Trước đây nhận mọi khóa/giá trị: làm tròn `NaN` bỏ làm tròn âm thầm, ngưỡng cảnh báo âm, khóa `__proto__`…
+- Tính lại hàng loạt chỉ ghi phiếu khi kết quả thật sự đổi (tính lại 20.000 phiếu không đổi: 1,37 s → 0,87 s; `updated_at` phản ánh lần đổi thật).
+- Cảnh báo thời gian: bộ so sánh sắp xếp chuyến theo giờ cân nay nhất quán (cùng giờ → theo id; giờ rỗng không lỗi), thứ tự và khoảng cách giữa chuyến không còn phụ thuộc thứ tự đầu vào.
+- Electron: từ chối mọi yêu cầu quyền của trang (camera, micro, vị trí…) và chặn `<webview>`.
+- Test: `tests/settings.test.js` (3 test) + 2 test trong `entry-validation.test.js`.
 - Thay thư viện đọc Excel **SheetJS `xlsx` → `exceljs`** (xóa hẳn `xlsx`, hết cảnh báo mức cao Prototype Pollution/ReDoS). `npm audit`: còn 6 cảnh báo mức vừa của `minimatch` trong `electron-builder` (chỉ công cụ build).
   - Đọc `.xlsx` bằng exceljs, `.csv` bằng bộ đọc riêng (BOM, `,`/`;`, ngoặc kép RFC 4180). Đối chiếu trên file mẫu V.47: 29.702/29.751 ô giống hệt; 49 ô còn lại chỉ là ô công thức ở các dòng tổng cuối sheet (cache 0), ngoài vùng phiếu. Số liệu vẫn khớp Excel (`npm run validate`).
   - **Thay đổi hành vi: không còn đọc `.xls` (Excel 97-2003)** — báo lỗi rõ (cả khi đổi đuôi thành .xlsx) và hướng dẫn "Lưu thành" .xlsx. Hộp chọn file chỉ còn .xlsx/.csv.
