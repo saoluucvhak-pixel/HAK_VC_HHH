@@ -89,6 +89,7 @@ function createHandlers(app, env = {}) {
     'vehicles.importCommit': ({ token, ...o }) => app.vehicleImport.commit(token, o),
 
     // ---------------- phiếu & báo cáo
+    'workflow.todo': () => ({ ...app.reports.todo(), cho_xu_ly: app.imports.pendingReviews().length, canh_bao_mo: app.alerts.countOpen() }),
     'tickets.count': ({ filter }) => app.reports.count(filter || {}),
     'tickets.periods': () => app.reports.periods(),
     'tickets.list': ({ filter, ...o }) => app.reports.tickets(filter || {}, o),

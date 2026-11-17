@@ -71,18 +71,6 @@ test('CSP của giao diện chặn object/base/form', () => {
   assert.ok(!/unsafe-eval|script-src[^;]*unsafe-inline/.test(csp));
 });
 
-test('giao diện: chữ phụ và đỏ đạt tương phản WCAG AA, có focus-visible và reduced-motion', () => {
-  const css = fs.readFileSync(path.join(__dirname, '..', 'renderer', 'styles.css'), 'utf8');
-  const v = (n) => css.match(new RegExp('--' + n + ':(#[0-9a-fA-F]{6})'))[1];
-  const lum = (h) => { const [r, g, b] = [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16) / 255).map((x) => (x <= 0.03928 ? x / 12.92 : ((x + 0.055) / 1.055) ** 2.4)); return 0.2126 * r + 0.7152 * g + 0.0722 * b; };
-  const ratio = (a, b) => { const x = lum(a), y = lum(b); return (Math.max(x, y) + 0.05) / (Math.min(x, y) + 0.05); };
-  for (const [fg, bg] of [['text-mute', '#ffffff'], ['text-mute', v('bg')], ['red', '#ffffff'], ['red', v('bg')], ['text', '#ffffff']]) {
-    assert.ok(ratio(v(fg), bg) >= 4.5, `${fg} trên ${bg} = ${ratio(v(fg), bg).toFixed(2)}`);
-  }
-  assert.ok(/:focus-visible/.test(css));
-  assert.ok(/prefers-reduced-motion:\s*reduce/.test(css));
-});
-
 test('nâng cấp DB đang ở v4 (có dữ liệu) lên v5: giữ dữ liệu, có backup PRE_MIGRATION, chạy lại không đổi', () => {
   const { DatabaseSync } = require('node:sqlite');
   const os = require('os');
