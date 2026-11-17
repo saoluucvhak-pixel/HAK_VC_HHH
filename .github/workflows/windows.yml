@@ -71,6 +71,20 @@ jobs:
         if: github.event_name == 'workflow_dispatch' && inputs.installers
         run: npx electron-builder --win --x64
 
+      - name: SHA-256 bộ cài
+        if: github.event_name == 'workflow_dispatch' && inputs.installers
+        shell: pwsh
+        run: |
+          $lines = Get-ChildItem dist -Filter 'VC-Cost-*.exe' | Sort-Object Name | ForEach-Object { "$((Get-FileHash $_.FullName -Algorithm SHA256).Hash.ToLower())  $($_.Name)" }
+          $lines | Set-Content dist\SHA256SUMS.txt -Encoding ascii
+          $lines
+          "### SHA-256 bộ cài`n``````n$($lines -join "`n")`n``````" | Add-Content $env:GITHUB_STEP_SUMMARY
+
+      - name: Nghiệm thu bộ cài (cài mới, nâng cấp, thư mục dữ liệu, Portable)
+        if: github.event_name == 'workflow_dispatch' && inputs.installers
+        shell: pwsh
+        run: ./scripts/accept-windows.ps1 -DistDir dist
+
       - name: Đính kèm bộ cài
         if: github.event_name == 'workflow_dispatch' && inputs.installers
         uses: actions/upload-artifact@v4
@@ -79,4 +93,13 @@ jobs:
           path: |
             dist/VC-Cost-*-Setup.exe
             dist/VC-Cost-*-Portable.exe
+            dist/SHA256SUMS.txt
           retention-days: 14
+
+      - name: Đính kèm kết quả nghiệm thu
+        if: always() && github.event_name == 'workflow_dispatch' && inputs.installers
+        uses: actions/upload-artifact@v4
+        with:
+          name: acceptance-results
+          path: ${{ runner.temp }}/smoke-*.json
+          if-no-files-found: ignore

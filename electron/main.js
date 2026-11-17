@@ -66,6 +66,7 @@ function runSmoke() {
   const finish = (ok, data) => { if (done) return; done = true; smokeFinish(ok, data); };
   win.webContents.once('did-finish-load', async () => {
     try {
+      const initial = { migration: rt.app.db.migration, backups: rt.backup.list().map((b) => b.kind) };   // trạng thái ngay sau khi mở (trước sao lưu/khôi phục thử)
       const probe = `(async () => {
         const info = await window.vcApi.invoke('app.info', {});
         for (let i = 0; i < 50 && !(document.getElementById('view') && document.getElementById('view').childElementCount); i++) await new Promise((r) => setTimeout(r, 200));
@@ -112,7 +113,37 @@ function runSmoke() {
           }
         }
       } catch (e) { problems.push('sao lưu/khôi phục ngoại lệ: ' + (e && e.message)); }
-      finish(problems.length === 0, { version: app.getVersion(), platform: process.platform, electron: process.versions.electron, title: r.title, driver: d && d.driver, schema: d && d.schema, counts: d && d.counts, viewChildren: r.viewChildren, pdf, backup, problems });
+      // Nghiệm thu trên bản đóng gói: xử lý trùng (nhập lại file mẫu), xuất Excel, chốt kỳ, toàn vẹn, nâng cấp từ bản cũ
+      const acc = {};
+      try {
+        const upFrom = process.env.VCCOST_EXPECT_UPGRADE_FROM ? Number(process.env.VCCOST_EXPECT_UPGRADE_FROM) : null;
+        acc.dataDir = rt.dirs.dataDir; acc.dbFile = rt.dirs.db; acc.migration = initial.migration; acc.backups = initial.backups;
+        if (upFrom !== null) {
+          if (initial.migration.from !== upFrom) problems.push(`nâng cấp: DB phải khởi đầu ở v${upFrom}, thực tế v${initial.migration.from}`);
+          if (!acc.backups.includes('PRE_MIGRATION')) problems.push('nâng cấp: thiếu bản sao PRE_MIGRATION');
+          const exp = Number(process.env.VCCOST_EXPECT_PHIEU || 0);
+          if (rt.app.db.get('SELECT COUNT(*) n FROM phieu_can').n !== exp) problems.push(`nâng cấp: số phiếu sau nâng cấp khác ${exp}`);
+          if (rt.app.db.get(`SELECT COUNT(*) n FROM audit_log WHERE action='BAN_CU'`).n !== 1) problems.push('nâng cấp: mất dòng audit của bản cũ');
+        } else {
+          const seed = path.join(__dirname, '..', 'data', 'seed', 'Tong-hop-chi-phi-VC-V47.xlsx');
+          const o = await rt.dispatch('import.open', { filePath: seed }); const si = await rt.dispatch('import.sheetInfo', { token: o.data.token, sheetName: o.data.suggestedSheet });
+          const dot = rt.app.db.get('SELECT id FROM dot_van_chuyen LIMIT 1');
+          const pv = await rt.dispatch('import.preview', { token: o.data.token, sheetName: si.data.sheetName, headerRow: si.data.headerRow, mapping: si.data.mapping, dotId: dot ? dot.id : null });
+          const cm = await rt.dispatch('import.commit', { token: o.data.token });
+          acc.reimport = { exact: pv.data.counts.exact, new: pv.data.counts.new, inserted: cm.data && cm.data.inserted };
+          if (!cm.ok || cm.data.inserted !== 0 || pv.data.counts.exact !== 2035) problems.push('nhập lại file mẫu phải ra 2035 phiếu trùng hoàn toàn và 0 phiếu mới: ' + JSON.stringify(acc.reimport));
+          const dv = rt.app.db.get('SELECT id FROM don_vi_van_chuyen ORDER BY id LIMIT 1');
+          const x = await rt.dispatch('export.statement', { filter: { don_vi_id: dv.id, da_tinh_gia: true } });
+          if (!x.ok) problems.push('xuất Excel lỗi: ' + x.error);
+          else { const b = fs.readFileSync(x.data.path); acc.xlsx = { bytes: b.length, header: b.subarray(0, 2).toString('latin1') }; if (acc.xlsx.header !== 'PK' || b.length < 3000) problems.push('Excel không hợp lệ: ' + JSON.stringify(acc.xlsx)); }
+          const lk = await rt.dispatch('lock.create', { loai: 'KY', tu_ngay: '2026-09-28', den_ngay: '2026-10-01' });
+          if (!lk.ok) problems.push('chốt kỳ lỗi: ' + lk.error); else acc.chot = { so_phieu: lk.data.so_phieu };
+          const lst = await rt.dispatch('lock.list', {}); if (!lst.ok || !lst.data.length) problems.push('danh sách kỳ chốt rỗng sau khi chốt');
+        }
+        const ig = await rt.dispatch('system.integrity', {}); acc.integrity = ig.ok ? { ok: ig.data.ok, loi: ig.data.loi } : null;
+        if (!ig.ok || (upFrom === null && !ig.data.ok)) problems.push('kiểm tra toàn vẹn: ' + (ig.ok ? JSON.stringify(ig.data.checks.filter((c) => c.severity === 'LOI' && c.count).map((c) => c.id)) : ig.error));
+      } catch (e) { problems.push('nghiệm thu ngoại lệ: ' + (e && e.message)); }
+      finish(problems.length === 0, { version: app.getVersion(), platform: process.platform, electron: process.versions.electron, title: r.title, driver: d && d.driver, schema: d && d.schema, counts: d && d.counts, viewChildren: r.viewChildren, pdf, backup, acc, problems });
     } catch (e) { finish(false, { error: String(e && e.stack || e) }); }
   });
   win.webContents.once('did-fail-load', (_e, code, desc) => finish(false, { error: `did-fail-load ${code} ${desc}` }));
