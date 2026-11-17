@@ -2,7 +2,22 @@
 
 Chạy: `npm test` (node:test). Kiểm chứng Excel: `npm run validate -- "<file.xlsx>"`.
 
-## 1. Đã có (24 test PASS)
+## 0. Bộ kiểm thử hiện hành (v0.7.0 — 145 test, chạy cả node:sqlite và better-sqlite3)
+| Nhóm | File |
+|---|---|
+| Engine tính cước, làm tròn, giá dầu, xe theo ngày | engine.test.js, integration.test.js |
+| Nhập liệu, kiểm tra ghép cột, dòng cần xử lý, KL = \|Cân 1 − Cân 2\| | entry-validation.test.js, import-weight.test.js, workbook-reader.test.js |
+| Toàn vẹn số liệu: hoàn tác không ghi đè, chống trùng alias lúc commit, khóa kỳ/đợt, hàng loạt có kết quả từng phiếu | integrity-fixes.test.js |
+| Đối chiếu chéo V.47 (Dashboard/Bảng kê/báo cáo/Excel/in/snapshot), xóa hàng loạt nhiều trang | consistency.test.js |
+| Định dạng số chuẩn HAK, MANIFEST thư viện nhúng | number-format.test.js, vendor.test.js |
+| Sao lưu PRE_MIGRATION (WAL), khôi phục an toàn/quay lui, xuất bản sao | storage-safety.test.js |
+| Phân quyền tùy chọn, ma trận quyền, bảng quyền đủ kênh | auth.test.js |
+| Kiểm tra toàn vẹn dữ liệu (chỉ đọc) | integrity.test.js |
+| Migration, cài đặt, an toàn, đối chiếu, thư mục dữ liệu | migration.test.js, settings.test.js, hardening.test.js, reconciliation.test.js, storage.test.js |
+| Giao diện thật (Chromium): bộ lọc, nhập, xung đột hàng loạt, Sáng/Tối, cửa sổ nhỏ, phân quyền, toàn vẹn | `npm run test:ui` (tests/ui-smoke.mjs) |
+| Bộ cài Windows (CI): cài mới, thư mục dữ liệu mặc định/tùy chỉnh, nâng từ v4, Portable, SHA-256 | `scripts/accept-windows.ps1` qua workflow Windows (installers) |
+
+## 1. Ban đầu (24 test)
 | Nhóm (MASTER_PROMPT XXXV) | Test | File |
 |---|---|---|
 | kg → tấn, tính tiền, VAT (không hard-code 8%) | `kg → tấn, thành tiền, VAT lấy từ bảng giá` | engine.test.js |

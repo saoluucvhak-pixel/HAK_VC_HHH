@@ -194,6 +194,7 @@ function createHandlers(app, env = {}) {
     },
 
     // ---------------- backup
+    'system.integrity': () => app.integrity.check(),
     'backup.list': () => (backup ? backup.list() : []),
     'backup.now': () => (backup ? backup.backupNow('MANUAL') : null),
     'backup.restore': ({ file }) => (backup ? backup.restore(file) : null),

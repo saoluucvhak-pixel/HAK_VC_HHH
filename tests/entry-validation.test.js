@@ -161,7 +161,7 @@ test('import.check: thiếu cột bắt buộc → chặn, cột gán trùng →
   assert.equal(bad.sample.length, 0);
   // cột bị gán cho 2 trường
   const dup = app.imports.check(o.token, { ...args, mapping: { ...args.mapping, ngay_gio_can_2: args.mapping.ngay_gio_can_1 } });
-  assert.ok(dup.problems.some((p) => p.level === 'warning' && /nhiều trường/.test(p.text)));
+  assert.ok(dup.problems.some((p) => p.level === 'error' && /nhiều trường/.test(p.text)));
   // chỉ đọc: chưa ghi gì, phiên vẫn dùng được để xem trước
   assert.equal(app.db.get(`SELECT COUNT(*) n FROM phieu_can WHERE so_phieu LIKE '91%'`).n, 0);
   assert.doesNotThrow(() => app.imports.preview(o.token, { ...args, dotId: null }));

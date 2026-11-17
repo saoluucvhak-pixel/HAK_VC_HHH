@@ -74,7 +74,7 @@ class TicketImportService {
     if (!has('ngay_gio_can_2')) problems.push({ level: 'warning', field: 'ngay_gio_can_2', text: 'Chưa ghép "Ngày giờ cân 2": không kiểm tra được thời gian cân' });
     const byCol = new Map();
     for (const [k, idx] of Object.entries(m)) if (idx !== undefined && idx !== null) { if (!byCol.has(idx)) byCol.set(idx, []); byCol.get(idx).push(k); }
-    for (const [idx, ks] of byCol) if (ks.length > 1) problems.push({ level: 'warning', field: ks[0], text: `Cột ${Number(idx) + 1} đang được gán cho nhiều trường: ${ks.join(', ')}` });
+    for (const [idx, ks] of byCol) if (ks.length > 1) problems.push({ level: 'error', field: ks[0], text: `Cột ${Number(idx) + 1} đang được gán cho nhiều trường: ${ks.join(', ')} — mỗi cột chỉ ghép cho một trường` });
 
     let rows = [];
     if (!problems.some((x) => x.level === 'error')) {

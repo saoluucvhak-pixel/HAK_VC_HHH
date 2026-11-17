@@ -7,7 +7,7 @@ import fs from 'fs'; import path from 'path';
 const out = path.resolve('docs/screenshots'); fs.mkdirSync(out, { recursive: true });
 const srv = await start({ port: 5191 });
 const errors = [];
-const browser = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium', args: ['--no-sandbox'] });
+const browser = await chromium.launch({ executablePath: process.env.CHROMIUM_PATH || '/opt/pw-browsers/chromium', args: ['--no-sandbox'] });
 const page = await browser.newPage({ viewport: { width: 1440, height: 900 } });
 page.on('pageerror', (e) => errors.push('pageerror: ' + e.message));
 page.on('console', (m) => { if (m.type() === 'error') errors.push('console: ' + m.text()); });
@@ -208,6 +208,30 @@ console.log('app.info', JSON.stringify(info.data.counts));
   ck((await page.locator('[data-review]').count()) === 0, 'cập nhật tất cả → danh sách biến mất');
   const after = (await api('tickets.list', { filter: { search: rows[0].so_phieu } })).rows.find((r) => r.so_phieu === rows[0].so_phieu);
   ck(after && after.kl_hang_kg === rows[0].kl_hang_kg + 100, 'cập nhật tất cả: KL phải đổi sang ' + (rows[0].kl_hang_kg + 100) + ', thực tế ' + (after && after.kl_hang_kg));
+}
+
+// ---- Cửa sổ nhỏ (820×600): các màn chính không làm trang cuộn ngang; focus bàn phím nhìn thấy được; chế độ Tối vẫn đạt
+{
+  await page.setViewportSize({ width: 820, height: 600 });
+  for (const id of ['dashboard', 'import', 'review', 'tickets', 'lock', 'backup', 'statements']) {
+    await page.evaluate((v) => App.go(v), id); await page.waitForTimeout(500);
+    const w = await page.evaluate(() => ({ sw: document.documentElement.scrollWidth, iw: window.innerWidth }));
+    if (w.sw > w.iw + 2) errors.push(`cửa sổ nhỏ: màn ${id} cuộn ngang (${w.sw} > ${w.iw})`);
+  }
+  await page.evaluate(() => App.go('backup')); await page.waitForTimeout(400);
+  await page.keyboard.press('Tab'); await page.keyboard.press('Tab');
+  const focus = await page.evaluate(() => { const e = document.activeElement; if (!e || e === document.body) return null; const c = getComputedStyle(e); return { tag: e.tagName, outline: c.outlineStyle, ow: c.outlineWidth, shadow: c.boxShadow }; });
+  if (!focus || (focus.outline === 'none' && (!focus.shadow || focus.shadow === 'none'))) errors.push('focus bàn phím không nhìn thấy: ' + JSON.stringify(focus));
+  await page.setViewportSize({ width: 1440, height: 900 });
+}
+
+// ---- Kiểm tra toàn vẹn dữ liệu (chỉ đọc) từ màn Backup
+{
+  await page.evaluate(() => App.go('backup')); await page.waitForSelector('[data-act=integrity]');
+  await page.click('[data-act=integrity]'); await page.waitForSelector('.modal h2');
+  const title = await page.textContent('.modal h2');
+  if (!/toàn vẹn|nhóm lỗi/.test(title)) errors.push('toàn vẹn: tiêu đề hộp thoại lạ: ' + title);
+  await page.click('.modal .btn');
 }
 
 // ---- Phân quyền tùy chọn: bật → đăng xuất → màn đăng nhập → đăng nhập → ẩn mục theo quyền → tắt

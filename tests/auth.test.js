@@ -15,6 +15,29 @@ const login = (rt, ten) => call(rt, 'auth.login', { ten_dang_nhap: ten, mat_khau
 /** true nếu bị chặn vì quyền (Forbidden/AuthRequired), false nếu đã qua cửa quyền (lỗi nghiệp vụ khác vẫn tính là qua) */
 const blocked = async (rt, ch, a) => { const r = await call(rt, ch, a); return !r.ok && (r.type === 'Forbidden' || r.type === 'AuthRequired'); };
 
+test('khôi phục dữ liệu yêu cầu đăng nhập lại, kể cả khi hai DB dùng cùng ID quản trị', async () => {
+  const source = mk();
+  const target = mk();
+  try {
+    const sourceAdmin = await call(source, 'auth.enable', { ten_dang_nhap: 'other-admin', ho_ten: 'Quản trị bộ dữ liệu khác', mat_khau: PW });
+    assert.equal(sourceAdmin.ok, true, sourceAdmin.error);
+    const snapshot = await call(source, 'backup.now');
+    assert.equal(snapshot.ok, true, snapshot.error);
+    await withAdmin(target);
+    const localBackup = path.join(target.dirs.backups, 'other-data.db');
+    fs.copyFileSync(snapshot.data.file, localBackup);
+    const restored = await call(target, 'backup.restore', { file: localBackup });
+    assert.equal(restored.ok, true, restored.error);
+    assert.equal((await call(target, 'auth.status')).data.user, null);
+    assert.equal((await call(target, 'app.info')).type, 'AuthRequired');
+    assert.equal((await call(target, 'auth.login', { ten_dang_nhap: 'other-admin', mat_khau: PW })).ok, true);
+    assert.equal((await call(target, 'app.info')).ok, true);
+  } finally {
+    source.close();
+    target.close();
+  }
+});
+
 test('mọi kênh API đều có khai báo quyền tường minh (không rơi vào mặc định admin)', () => {
   const rt = mk();
   try {

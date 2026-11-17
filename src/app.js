@@ -7,6 +7,7 @@ const path = require('path');
 const { openDatabase } = require('./database/connection');
 const { AuditService } = require('./services/AuditService');
 const { AuthService } = require('./services/AuthService');
+const { IntegrityService } = require('./services/IntegrityService');
 const { SettingsService } = require('./services/SettingsService');
 const { AlertService } = require('./services/AlertService');
 const { CatalogService } = require('./services/CatalogService');
@@ -25,6 +26,7 @@ function createApp({ dbFile = ':memory:', driver = null, backupFn = null, user =
   const audit = new AuditService(db, { user });
   const settings = new SettingsService(db, audit);
   const auth = new AuthService(db, audit);
+  const integrity = new IntegrityService(db);
   const alerts = new AlertService(db);
   const cost = new CostService(db, alerts, settings);
   const catalog = new CatalogService(db, audit, {
@@ -45,7 +47,7 @@ function createApp({ dbFile = ':memory:', driver = null, backupFn = null, user =
   const recon = new ReconciliationService(db, { audit, alerts, reports });
   const lock = new ChotKyService(db, { audit, reports });
   const seed = new SeedService(db, { catalog, price, settings, audit });
-  return { db, audit, auth, settings, alerts, cost, catalog, price, imports, vehicleImport, fuelImport, tickets, reports, recon, lock, seed, close: () => db.close() };
+  return { db, audit, auth, integrity, settings, alerts, cost, catalog, price, imports, vehicleImport, fuelImport, tickets, reports, recon, lock, seed, close: () => db.close() };
 }
 
 const SEED_DIR = path.join(__dirname, '..', 'data', 'seed');

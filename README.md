@@ -1,6 +1,6 @@
 # VC Cost — Quản lý · Tính toán · Đối chiếu chi phí vận chuyển (offline)
 
-Phiên bản **0.6.17** — ứng dụng desktop (Electron, chạy offline, dữ liệu SQLite cục bộ) cho HAK Group: import phiếu cân, tính cước vận chuyển, lập Bảng kê, chốt kỳ, đối chiếu với đối tác. Engine tính giá được kiểm chứng khớp với file Excel mẫu PRINCE OF NATURE V.47 (`docs/EXCEL_VS_APP_VALIDATION.md`).
+Phiên bản **0.7.0** (schema 6) — ứng dụng desktop (Electron, chạy offline, dữ liệu SQLite cục bộ) cho HAK Group: import phiếu cân, tính cước vận chuyển, lập Bảng kê, chốt kỳ, đối chiếu với đối tác. Engine tính giá được kiểm chứng khớp với file Excel mẫu PRINCE OF NATURE V.47 (`docs/EXCEL_VS_APP_VALIDATION.md`).
 
 Lịch sử thay đổi: `CHANGELOG.md`.
 
@@ -23,7 +23,7 @@ Lịch sử thay đổi: `CHANGELOG.md`.
 ## Chạy thử (cần Node.js ≥ 22.5)
 ```bash
 npm install
-npm test                                           # unit + integration test (139); VCCOST_DRIVER=better-sqlite3 npm test để chạy bằng driver của bản đóng gói
+npm test                                           # unit + integration test (145); VCCOST_DRIVER=better-sqlite3 npm test để chạy bằng driver của bản đóng gói
 npm run test:ui                                    # smoke test giao diện (cần Chromium cho Playwright)
 npm run validate -- tests/fixtures/sample-v47.xlsx # so engine với Excel → docs/EXCEL_VS_APP_VALIDATION.md
 npm run dev                                        # chạy giao diện trong trình duyệt (dev server, không cần Electron)
@@ -55,4 +55,4 @@ Không hard-code biển số, đơn vị, nơi xuất, đơn giá, VAT, giá d�
 ## Lưu ý
 - Import đọc được `.xlsx` và `.csv`. File `.xls` cũ (Excel 97-2003) không còn được hỗ trợ — mở bằng Excel rồi "Lưu thành" `.xlsx`.
 - Bộ cài `.exe` chưa ký số nên Windows SmartScreen có thể cảnh báo.
-- `npm audit` còn cảnh báo mức vừa của `minimatch` trong `electron-builder` (chỉ công cụ build, không đóng gói vào app); chờ bản sửa từ upstream.
+- `npm audit`: 0 cảnh báo (đã nâng `electron-builder` 26.18.1 và ép `minimatch` bản vá cho cây công cụ build bằng `overrides`; cây chạy thật của `exceljs` giữ nguyên). Ký số bộ cài: xem `docs/KY_SO_BO_CAI.md`.

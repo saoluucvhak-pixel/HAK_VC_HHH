@@ -43,7 +43,13 @@
   App.register('backup', {
     async render(v) {
       const rows = await api('backup.list');
-      v.append(App.pageHead('Backup & khôi phục', 'Tự backup hằng ngày và trước mỗi lần import/khôi phục', h('button', { class: 'btn', 'data-act': 'backup', onclick: async () => { if (await call('backup.now', {}, 'Đã tạo backup')) App.reload(); } }, '💾 Backup ngay')),
+      v.append(App.pageHead('Backup & khôi phục', 'Tự backup hằng ngày và trước mỗi lần import/khôi phục', h('span', { class: 'row gap-s' }, h('button', { class: 'btn ghost', 'data-act': 'integrity', onclick: async () => {
+          const r = await call('system.integrity'); if (!r) return;
+          App.modal({ title: r.ok ? 'Dữ liệu toàn vẹn' : `${r.loi} nhóm lỗi cần xử lý`, wide: true, actions: [{ label: 'Đóng', primary: false }],
+            body: h('div', {}, h('p', { class: 'muted' }, 'Chỉ kiểm tra, không tự sửa/xóa/gộp dữ liệu. Phiếu nghi trùng: kiểm tra rồi xóa mềm bản thừa tại màn Phiếu cân.'),
+              table({ columns: [{ key: 'title', label: 'Mục kiểm tra' }, { key: 'count', label: 'Số bản ghi', num: true }, { key: 'severity', label: 'Mức', render: (c) => (c.count ? tag(c.severity === 'LOI' ? 'ERROR' : 'NHAP', c.severity === 'LOI' ? 'Lỗi' : 'Cảnh báo') : tag('OK', 'Đạt')) }], rows: r.checks }),
+              ...r.checks.filter((c) => c.count).map((c) => h('details', {}, h('summary', {}, `${c.title} — ${c.count}`), c.hint ? h('p', { class: 'muted' }, c.hint) : null, h('pre', { class: 'json' }, JSON.stringify(c.sample, null, 1))))) });
+        } }, '🩺 Kiểm tra toàn vẹn'), h('button', { class: 'btn', 'data-act': 'backup', onclick: async () => { if (await call('backup.now', {}, 'Đã tạo backup')) App.reload(); } }, '💾 Backup ngay'))),
         h('div', { class: 'card' }, table({ columns: [{ key: 'name', label: 'File', mono: true }, { key: 'kind', label: 'Loại' }, { key: 'time', label: 'Thời gian', fmt: 'dt' }, { key: 'size', label: 'Dung lượng (KB)', fmt: (x) => fmt.int(x / 1024), num: true },
           { key: '_a', label: '', render: (b) => h('span', { class: 'row gap-s' }, h('button', { class: 'btn ghost sm', 'data-act': 'export-backup', onclick: async () => { const dir = window.vcApi && window.vcApi.pickFolder ? await window.vcApi.pickFolder() : await App.promptBox('Xuất bản sao lưu', 'Đường dẫn thư mục đích'); if (!dir) return; const r = await call('backup.export', { file: b.file, dir }); if (r) App.toast(`Đã xuất ra ${r.path}`); } }, 'Xuất ra…'), h('button', { class: 'btn danger sm', onclick: async () => { if (await App.confirmBox('Khôi phục', `Khôi phục dữ liệu từ ${b.name}? Dữ liệu hiện tại được backup lại trước.`, 'Khôi phục', 'danger')) { if (await call('backup.restore', { file: b.file }, 'Đã khôi phục')) App.reload(); } } }, 'Khôi phục')) }], rows, empty: 'Chưa có backup' })));
     },
