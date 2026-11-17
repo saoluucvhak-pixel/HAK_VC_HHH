@@ -14,12 +14,12 @@ function setup() {
   app.seed.load(seed);
   return app;
 }
-function importVehicles(app) {
-  const pv = app.vehicleImport.preview({ filePath: SAMPLE });
+async function importVehicles(app) {
+  const pv = await app.vehicleImport.preview({ filePath: SAMPLE });
   return { pv, res: app.vehicleImport.commit(pv.token) };
 }
-function importTickets(app, opts = {}) {
-  const o = app.imports.open({ filePath: SAMPLE });
+async function importTickets(app, opts = {}) {
+  const o = await app.imports.open({ filePath: SAMPLE });
   const si = app.imports.sheetInfo(o.token, o.suggestedSheet);
   const dot = app.db.get(`SELECT id FROM dot_van_chuyen WHERE ma_dot='PON-V47'`);
   const pv = app.imports.preview(o.token, { sheetName: si.sheetName, headerRow: si.headerRow, mapping: si.mapping, dotId: dot.id });
@@ -38,21 +38,21 @@ test('seed: bảng giá điều chỉnh dầu sinh đúng qua kỳ điều chỉ
   assert.equal(m['QS-TIENSA-2025-11'].gia, 173000);
 });
 
-test('import danh mục xe từ sheet "Số xe"', () => {
+test('import danh mục xe từ sheet "Số xe"', async () => {
   const app = setup();
-  const { pv, res } = importVehicles(app);
+  const { pv, res } = await importVehicles(app);
   assert.equal(pv.sheet, 'Số xe');
   assert.equal(pv.counts.NEW, 220);
   assert.equal(res.created, 220);
   assert.equal(app.db.get('SELECT COUNT(*) n FROM xe_don_vi_lich_su').n, 220);
   // import lại: không tạo trùng
-  const pv2 = app.vehicleImport.preview({ filePath: SAMPLE });
+  const pv2 = await app.vehicleImport.preview({ filePath: SAMPLE });
   assert.equal(pv2.counts.SAME, 220);
 });
 
-test('import phiếu cân end-to-end: preview không ghi DB, commit, bảng kê khớp Excel', () => {
-  const app = setup(); importVehicles(app);
-  const { o, si, pv, commit } = importTickets(app);
+test('import phiếu cân end-to-end: preview không ghi DB, commit, bảng kê khớp Excel', async () => {
+  const app = setup(); await importVehicles(app);
+  const { o, si, pv, commit } = await importTickets(app);
   assert.equal(o.suggestedSheet, 'File tổng');
   assert.equal(si.headerRow, 3);
   assert.equal(pv.counts.total, 2035);
@@ -81,10 +81,10 @@ test('import phiếu cân end-to-end: preview không ghi DB, commit, bảng kê 
   assert.ok(open.summary.some((s) => s.loai === 'TIME_ANOMALY'));
 });
 
-test('import lại cùng file: 0 phiếu mới; có cảnh báo file đã import', () => {
-  const app = setup(); importVehicles(app);
-  importTickets(app).commit();
-  const second = importTickets(app);
+test('import lại cùng file: 0 phiếu mới; có cảnh báo file đã import', async () => {
+  const app = setup(); await importVehicles(app);
+  (await importTickets(app)).commit();
+  const second = await importTickets(app);
   assert.ok(second.o.previouslyImported);
   assert.equal(second.pv.counts.new, 0);
   assert.equal(second.pv.counts.exact, 2035);
@@ -93,14 +93,14 @@ test('import lại cùng file: 0 phiếu mới; có cảnh báo file đã import
   assert.equal(app.db.get(`SELECT COUNT(*) n FROM phieu_can WHERE trang_thai='ACTIVE'`).n, 2035);
 });
 
-test('trùng khóa khác dữ liệu → Cần kiểm tra; Cập nhật dữ liệu mới; hoàn tác batch', () => {
-  const app = setup(); importVehicles(app);
-  importTickets(app).commit();
+test('trùng khóa khác dữ liệu → Cần kiểm tra; Cập nhật dữ liệu mới; hoàn tác batch', async () => {
+  const app = setup(); await importVehicles(app);
+  (await importTickets(app)).commit();
   // sửa 1 dòng trong file (KL) bằng CSV
   const csv = 'Số phiếu;Ngày giờ cân 1;Ngày giờ cân 2;Biển số;Cân lần 1;Cân lần 2;KL hàng (KG);Nơi xuất\n' +
               '1387;28/09/2026 13:16:04;28/09/2026 14:21:08;92C-07938;14510;34610;20100;Quế Sơn\n' +
               '99999;05/10/2026 08:00:00;05/10/2026 08:30:00;99Z-99999;14000;33000;19000;Quế Sơn\n';
-  const o = app.imports.open({ buffer: Buffer.from(csv, 'utf8'), fileName: 'sua.csv' });
+  const o = await app.imports.open({ buffer: Buffer.from(csv, 'utf8'), fileName: 'sua.csv' });
   const si = app.imports.sheetInfo(o.token, o.sheets[0].name);
   const pv = app.imports.preview(o.token, { sheetName: si.sheetName, headerRow: si.headerRow, mapping: si.mapping });
   assert.equal(pv.counts.conflict, 1);
@@ -130,14 +130,14 @@ test('trùng khóa khác dữ liệu → Cần kiểm tra; Cập nhật dữ li�
   assert.ok(app.audit.list({ action: 'UNDO_IMPORT' }).total === 1);
 });
 
-test('preview lỗi: thiếu mapping bắt buộc', () => {
+test('preview lỗi: thiếu mapping bắt buộc', async () => {
   const app = setup();
-  const o = app.imports.open({ filePath: SAMPLE });
+  const o = await app.imports.open({ filePath: SAMPLE });
   assert.throws(() => app.imports.preview(o.token, { sheetName: 'File tổng', headerRow: 3, mapping: { so_phieu: 1 } }), /Mapping/);
 });
 
-test('danh mục: không xóa đơn vị đang dùng; lịch sử xe tự đóng phiên bản; bảng giá đã dùng không sửa được', () => {
-  const app = setup(); importVehicles(app); importTickets(app).commit();
+test('danh mục: không xóa đơn vị đang dùng; lịch sử xe tự đóng phiên bản; bảng giá đã dùng không sửa được', async () => {
+  const app = setup(); await importVehicles(app); (await importTickets(app)).commit();
   const hhh = app.db.get(`SELECT id FROM don_vi_van_chuyen WHERE ma='HHH'`);
   assert.throws(() => app.catalog.remove('don_vi_van_chuyen', hhh.id), /INACTIVE/);
   const xe = app.db.get(`SELECT id FROM xe WHERE bien_so_chuan='43H01021'`);
@@ -154,8 +154,8 @@ test('danh mục: không xóa đơn vị đang dùng; lịch sử xe tự đóng
   assert.throws(() => app.catalog.update('bang_gia_van_chuyen', bg.id, { don_gia_goc: 120000 }), /tạo bảng giá mới/);
 });
 
-test('giá thay đổi giữa đợt: bảng giá mới từ 02/10 → phiếu từ 02/10 tính giá mới', () => {
-  const app = setup(); importVehicles(app); importTickets(app).commit();
+test('giá thay đổi giữa đợt: bảng giá mới từ 02/10 → phiếu từ 02/10 tính giá mới', async () => {
+  const app = setup(); await importVehicles(app); (await importTickets(app)).commit();
   const t = app.db.get(`SELECT id FROM tuyen_van_chuyen WHERE ma_tuyen='DH-TIENSA'`);
   app.price.createVersion({ tuyen_id: t.id, tu_ngay: '2026-10-02', don_gia: 120000, phuong_thuc: 'CO_DINH' });
   const g = app.db.all(`SELECT DISTINCT ngay_can >= '2026-10-02' sau, don_gia/1000 gia FROM phieu_can WHERE tuyen_id=?`, [t.id]);
@@ -183,7 +183,7 @@ test('bảng giá: chỉ nhập thông số, đơn giá áp dụng TỰ TÍNH th
 });
 
 test('bảng tính đơn giá: từng bước khớp Excel, giả định giá dầu, xuất Excel, áp dụng thành bảng giá mới', async () => {
-  const app = setup(); importVehicles(app); importTickets(app).commit();
+  const app = setup(); await importVehicles(app); (await importTickets(app)).commit();
   const sh = app.price.priceSheet({ ngay: '2026-10-01' });
   const r = sh.rows.find((x) => x.ma_tuyen === 'DH-TIENSA');
   assert.equal(r.gia_moi, 116700); assert.equal(r.lit_chuyen, r.km * 35 / 100);
@@ -196,8 +196,8 @@ test('bảng tính đơn giá: từng bước khớp Excel, giả định giá d
   assert.equal(app.price.activeRule(r.tuyen_id, '2026-10-08').don_gia_ap_dung, sim.gia_moi);
 });
 
-test('xóa bảng giá: có phiếu dùng → CHẶN + cảnh báo; chưa có phiếu → xóa được và mở lại bảng trước', () => {
-  const app = setup(); importVehicles(app); importTickets(app).commit();
+test('xóa bảng giá: có phiếu dùng → CHẶN + cảnh báo; chưa có phiếu → xóa được và mở lại bảng trước', async () => {
+  const app = setup(); await importVehicles(app); (await importTickets(app)).commit();
   const t = app.db.get(`SELECT id FROM tuyen_van_chuyen WHERE ma_tuyen='DH-TIENSA'`);
   const used = app.price.activeRule(t.id, '2026-10-01');
   assert.throws(() => app.price.removeRule(used.id), /đang có \d+ phiếu sử dụng/);
@@ -207,21 +207,21 @@ test('xóa bảng giá: có phiếu dùng → CHẶN + cảnh báo; chưa có ph
   assert.equal(app.price.activeRule(t.id, '2027-06-01').den_ngay, null);
 });
 
-test('giá dầu: import từ file (mới/giữ/ghi đè), xóa & sửa giá dầu, xóa kỳ nháp', () => {
+test('giá dầu: import từ file (mới/giữ/ghi đè), xóa & sửa giá dầu, xóa kỳ nháp', async () => {
   const app = setup();
   app.db.run('DELETE FROM gia_dau');
-  const pv = app.fuelImport.preview({ filePath: require('path').join(__dirname, 'fixtures/sample-v47.xlsx') });
+  const pv = await app.fuelImport.preview({ filePath: require('path').join(__dirname, 'fixtures/sample-v47.xlsx') });
   assert.equal(pv.counts.NEW, 6);
   const r1 = app.fuelImport.commit(pv.token);
   assert.equal(r1.created, 6);
-  const pv2 = app.fuelImport.preview({ filePath: require('path').join(__dirname, 'fixtures/sample-v47.xlsx') });
+  const pv2 = await app.fuelImport.preview({ filePath: require('path').join(__dirname, 'fixtures/sample-v47.xlsx') });
   assert.equal(pv2.counts.SAME, 6); assert.equal(pv2.counts.NEW, undefined);
   const row = app.catalog.list('gia_dau')[0];
   app.catalog.update('gia_dau', row.id, { gia: 99999 });
-  const pv3 = app.fuelImport.preview({ filePath: require('path').join(__dirname, 'fixtures/sample-v47.xlsx') });
+  const pv3 = await app.fuelImport.preview({ filePath: require('path').join(__dirname, 'fixtures/sample-v47.xlsx') });
   assert.equal(pv3.counts.CHANGED, 1);
   assert.equal(app.fuelImport.commit(pv3.token, { overwrite: false }).updated, 0);
-  const pv4 = app.fuelImport.preview({ filePath: require('path').join(__dirname, 'fixtures/sample-v47.xlsx') });
+  const pv4 = await app.fuelImport.preview({ filePath: require('path').join(__dirname, 'fixtures/sample-v47.xlsx') });
   assert.equal(app.fuelImport.commit(pv4.token, { overwrite: true }).updated, 1);
   assert.equal(app.catalog.get('gia_dau', row.id).gia, 31640);
   app.catalog.remove('gia_dau', row.id);
@@ -232,7 +232,7 @@ test('giá dầu: import từ file (mới/giữ/ghi đè), xóa & sửa giá d�
 
 test('chứng từ in: bảng kê Excel/PDF có Bên A/Bên B, bằng chữ, chữ ký; báo cáo có KG + tấn, không có cột chưa tính giá', async () => {
   const ExcelJS = require('exceljs');
-  const app = setup(); importVehicles(app); importTickets(app).commit();
+  const app = setup(); await importVehicles(app); (await importTickets(app)).commit();
   app.settings.set('company', { ten: 'CÔNG TY TEST A', ma_so_thue: '123', dai_dien: 'Nguyễn Văn A' });
   const hak = app.db.get(`SELECT id FROM don_vi_van_chuyen WHERE ma='HAK'`);
   const documents = require('../src/print/documents'), tpl = require('../src/print/htmlTemplates'), ex = require('../src/excel/exporters');
@@ -257,8 +257,8 @@ test('chứng từ in: bảng kê Excel/PDF có Bên A/Bên B, bằng chữ, ch�
   }
 });
 
-test('KL giám định: hiển thị chênh (giám định − cân), KHÔNG ảnh hưởng cước', () => {
-  const app = setup(); importVehicles(app); importTickets(app).commit();
+test('KL giám định: hiển thị chênh (giám định − cân), KHÔNG ảnh hưởng cước', async () => {
+  const app = setup(); await importVehicles(app); (await importTickets(app)).commit();
   const before = app.reports.statement({ don_vi_id: app.db.get(`SELECT id FROM don_vi_van_chuyen WHERE ma='HAK'`).id }).tong_tien;
   const [dot] = app.reports.byDot({});
   assert.equal(dot.kl_giam_dinh_tan, 38453.23);
@@ -270,24 +270,24 @@ test('KL giám định: hiển thị chênh (giám định − cân), KHÔNG ả
   assert.equal(app.reports.dashboard({ dot_id: dot.k }).giamDinh.kl_giam_dinh_tan, 30000);
 });
 
-test('dữ liệu ban đầu từ Excel: DB trống → đủ danh mục + xe + 2.035 phiếu, bảng kê khớp; chạy lại không trùng', () => {
+test('dữ liệu ban đầu từ Excel: DB trống → đủ danh mục + xe + 2.035 phiếu, bảng kê khớp; chạy lại không trùng', async () => {
   const { loadInitialData, isFreshDb } = require('../src/services/InitialDataService');
   const app = createApp({ dbFile: ':memory:', driver: 'node:sqlite' });
   assert.equal(isFreshDb(app), true);
-  const r = loadInitialData(app, SEED_DIR);
+  const r = await loadInitialData(app, SEED_DIR);
   assert.equal(r.phieu.inserted, 2035);
   assert.equal(isFreshDb(app), false);
   assert.equal(app.db.get(`SELECT COUNT(*) n FROM phieu_can WHERE trang_thai_tinh_gia='OK'`).n, 2035);
   assert.equal(app.db.get('SELECT COUNT(*) n FROM don_vi_van_chuyen').n, 4);
   assert.equal(app.reports.statement({ don_vi_id: app.db.get(`SELECT id FROM don_vi_van_chuyen WHERE ma='HAK'`).id }).tong_tien, 416454167);
-  const again = loadInitialData(app, SEED_DIR);
+  const again = await loadInitialData(app, SEED_DIR);
   assert.equal(again.phieu.inserted, 0); assert.equal(again.phieu.duplicate, 2035);
   assert.equal(app.db.get('SELECT COUNT(*) n FROM phieu_can').n, 2035);
 });
 
 test('3 biểu mẫu in ký 2 bên: tổng hợp tàu, chi tiết từng xe, bảng tính đơn giá (Excel + HTML)', async () => {
   const ExcelJS = require('exceljs');
-  const app = setup(); importVehicles(app); importTickets(app).commit();
+  const app = setup(); await importVehicles(app); (await importTickets(app)).commit();
   app.settings.set('company', { ten: 'CÔNG TY A', dai_dien: 'Nguyễn Văn A', nguoi_lap: 'Kế Toán A' });
   const hak = app.db.get(`SELECT id FROM don_vi_van_chuyen WHERE ma='HAK'`).id;
   app.catalog.update('don_vi_van_chuyen', hak, { dai_dien: 'Trần Văn B', ke_toan: 'Lê Thị C' });
@@ -318,8 +318,8 @@ test('3 biểu mẫu in ký 2 bên: tổng hợp tàu, chi tiết từng xe, b�
   assert.ok(fh.priceHtml(p).includes('BẢNG TÍNH ĐƠN GIÁ VẬN CHUYỂN') && fh.priceHtml(p).includes('Diễn giải'));
 });
 
-test('xóa kỳ điều chỉnh đã duyệt: được khi chưa phiếu dùng (gỡ bảng giá, mở lại giá cũ); chặn khi có phiếu dùng', () => {
-  const app = setup(); importVehicles(app); importTickets(app).commit();
+test('xóa kỳ điều chỉnh đã duyệt: được khi chưa phiếu dùng (gỡ bảng giá, mở lại giá cũ); chặn khi có phiếu dùng', async () => {
+  const app = setup(); await importVehicles(app); (await importTickets(app)).commit();
   const ky = app.db.get('SELECT id FROM ky_dieu_chinh_gia_dau ORDER BY id DESC LIMIT 1');
   if (!ky) return;
   const used = app.db.get('SELECT COUNT(*) n FROM phieu_can p JOIN bang_gia_van_chuyen b ON b.id=p.bang_gia_id WHERE b.ky_dieu_chinh_id=?', [ky.id]).n;
@@ -328,7 +328,7 @@ test('xóa kỳ điều chỉnh đã duyệt: được khi chưa phiếu dùng (
 });
 
 test('danh mục Hợp đồng vận chuyển: chọn theo ngày, ghi vào Bảng kê', async () => {
-  const app = setup(); importVehicles(app); importTickets(app).commit();
+  const app = setup(); await importVehicles(app); (await importTickets(app)).commit();
   const hak = app.db.get(`SELECT id FROM don_vi_van_chuyen WHERE ma='HAK'`);
   app.catalog.create('hop_dong', { ma: 'HD-OLD', so_hop_dong: '01/2025', ngay_ky: '2025-01-05', don_vi_van_chuyen_id: hak.id, tu_ngay: '2025-01-01', den_ngay: '2025-12-31', noi_ky: 'Quảng Ngãi' });
   app.catalog.create('hop_dong', { ma: 'HD-NEW', so_hop_dong: '09/2026', ngay_ky: '2026-01-02', don_vi_van_chuyen_id: hak.id, tu_ngay: '2026-01-01', tieu_de_bao_cao: 'BẢNG KÊ TEST' });
@@ -339,8 +339,8 @@ test('danh mục Hợp đồng vận chuyển: chọn theo ngày, ghi vào Bản
   assert.ok(d.contract.includes('09/2026') && d.tieu_de === 'BẢNG KÊ TEST');
 });
 
-test('xóa bảng giá đã dùng với recalc: phiếu được gỡ giá và tính lại, nhập giá đúng thì tính lại được', () => {
-  const app = setup(); importVehicles(app); importTickets(app).commit();
+test('xóa bảng giá đã dùng với recalc: phiếu được gỡ giá và tính lại, nhập giá đúng thì tính lại được', async () => {
+  const app = setup(); await importVehicles(app); (await importTickets(app)).commit();
   const t = app.db.get(`SELECT id FROM tuyen_van_chuyen WHERE ma_tuyen='DH-TIENSA'`);
   const used = app.price.activeRule(t.id, '2026-10-01');
   const n = app.db.get(`SELECT COUNT(*) n FROM phieu_can WHERE bang_gia_id=?`, [used.id]).n;
@@ -354,8 +354,8 @@ test('xóa bảng giá đã dùng với recalc: phiếu được gỡ giá và t
   assert.ok(app.db.get(`SELECT COUNT(*) n FROM phieu_can WHERE tuyen_id=? AND don_gia IS NOT NULL`, [t.id]).n > 0);
 });
 
-test('rà soát: giá mới không chồng giá sau nó; ngày sai bị từ chối; dung sai đối chiếu được đọc đúng', () => {
-  const app = setup(); importVehicles(app); importTickets(app).commit();
+test('rà soát: giá mới không chồng giá sau nó; ngày sai bị từ chối; dung sai đối chiếu được đọc đúng', async () => {
+  const app = setup(); await importVehicles(app); (await importTickets(app)).commit();
   const t = app.db.get(`SELECT id FROM tuyen_van_chuyen WHERE ma_tuyen='DH-TIENSA'`);
   const add = (d, n) => { const x = new Date(d + 'T00:00:00Z'); x.setUTCDate(x.getUTCDate() + n); return x.toISOString().slice(0, 10); };
   const open = app.db.get(`SELECT * FROM bang_gia_van_chuyen WHERE tuyen_id=? AND don_vi_van_chuyen_id IS NULL AND loai_hang IS NULL AND den_ngay IS NULL AND trang_thai='ACTIVE'`, [t.id]);
@@ -375,8 +375,8 @@ test('rà soát: giá mới không chồng giá sau nó; ngày sai bị từ ch�
   assert.equal(app.recon.weightByVehicle(bid).tolKg, 50);
 });
 
-test('rà soát: Tổng hợp tàu cộng đúng Bảng kê (dòng cộng ra tổng, tổng = tiền + VAT)', () => {
-  const app = setup(); importVehicles(app); importTickets(app).commit();
+test('rà soát: Tổng hợp tàu cộng đúng Bảng kê (dòng cộng ra tổng, tổng = tiền + VAT)', async () => {
+  const app = setup(); await importVehicles(app); (await importTickets(app)).commit();
   const forms = require('../src/print/forms');
   const doc = forms.tauSummaryDoc(app, {});
   for (const s of doc.sections) {
@@ -392,8 +392,8 @@ test('rà soát: Tổng hợp tàu cộng đúng Bảng kê (dòng cộng ra t�
   }
 });
 
-test('chốt kỳ: xem trước, chốt (snapshot), khóa sửa, mở khóa có lý do', () => {
-  const app = setup(); importVehicles(app); importTickets(app).commit();
+test('chốt kỳ: xem trước, chốt (snapshot), khóa sửa, mở khóa có lý do', async () => {
+  const app = setup(); await importVehicles(app); (await importTickets(app)).commit();
   const dates = app.db.get(`SELECT MIN(ngay_can) a, MAX(ngay_can) b FROM phieu_can WHERE trang_thai='ACTIVE'`);
   const hak = app.db.get(`SELECT id FROM don_vi_van_chuyen WHERE ma='HAK'`);
   const pv = app.lock.preview({ loai: 'KY', tu_ngay: dates.a, den_ngay: dates.b, don_vi_id: hak.id });
@@ -418,8 +418,8 @@ test('chốt kỳ: xem trước, chốt (snapshot), khóa sửa, mở khóa có 
   assert.ok(app.tickets.update(t.id, { ghi_chu: 'ok' }, 'x'));
 });
 
-test('dashboard: chỉ đếm phiếu đã tính giá, phiếu chưa tính giá hiện riêng', () => {
-  const app = setup(); importVehicles(app); importTickets(app).commit();
+test('dashboard: chỉ đếm phiếu đã tính giá, phiếu chưa tính giá hiện riêng', async () => {
+  const app = setup(); await importVehicles(app); (await importTickets(app)).commit();
   const d = app.reports.dashboard({});
   const all = app.db.get(`SELECT COUNT(*) n FROM phieu_can WHERE trang_thai='ACTIVE'`).n;
   assert.equal(d.kpi.so_chuyen + d.kpi.chua_tinh.so_chuyen, all);
@@ -480,8 +480,8 @@ test('backup tự động theo định kỳ ngày khi mở phần mềm', () => 
   assert.equal(bk.autoDaily(), null);              // 0 = tắt
 });
 
-test('xóa phiếu cân: gồm phiếu đã áp giá, cần lý do, chặn phiếu đã chốt kỳ, import lại được', () => {
-  const app = setup(); importVehicles(app); importTickets(app).commit();
+test('xóa phiếu cân: gồm phiếu đã áp giá, cần lý do, chặn phiếu đã chốt kỳ, import lại được', async () => {
+  const app = setup(); await importVehicles(app); (await importTickets(app)).commit();
   const rows = app.db.all(`SELECT id, so_phieu, trang_thai_tinh_gia FROM phieu_can WHERE trang_thai='ACTIVE' ORDER BY id LIMIT 5`);
   const priced = rows.find((r) => r.trang_thai_tinh_gia === 'OK'); assert.ok(priced);
   const total0 = app.reports.dashboard({}).kpi.so_chuyen;
@@ -523,7 +523,7 @@ test('file mẫu import: điền dữ liệu vào mẫu rồi import được (t
   assert.equal(wb.worksheets[0].name, 'Danh sách xe');
   let ws = wb.worksheets[0]; ws.getCell(6, 2).value = '43H-77777'; ws.getCell(6, 3).value = carriers[0]; ws.getCell(7, 2).value = '43H-88888'; ws.getCell(7, 3).value = carriers[0];
   const vbuf = Buffer.from(await wb.xlsx.writeBuffer());
-  const vp = app.vehicleImport.preview({ buffer: vbuf, fileName: 'mau-xe.xlsx' });
+  const vp = await app.vehicleImport.preview({ buffer: vbuf, fileName: 'mau-xe.xlsx' });
   assert.equal(vp.sheet, 'Danh sách xe'); assert.equal(vp.counts.NEW, 2);
   app.vehicleImport.commit(vp.token);
   assert.ok(app.db.get(`SELECT id FROM xe WHERE bien_so_chuan='43H77777'`));
@@ -534,7 +534,7 @@ test('file mẫu import: điền dữ liệu vào mẫu rồi import được (t
   const put = (r, v) => v.forEach((x, i) => { ws.getCell(r, i + 1).value = x; });
   put(6, [1, 'T0001', new Date(Date.UTC(2026, 8, 29, 13, 16)), new Date(Date.UTC(2026, 8, 29, 13, 52)), '43H-77777', 45500, 27700, 17800, locs[0]]);
   const tbuf = Buffer.from(await wb.xlsx.writeBuffer());
-  const o = app.imports.open({ buffer: tbuf, fileName: 'mau-pc.xlsx' });
+  const o = await app.imports.open({ buffer: tbuf, fileName: 'mau-pc.xlsx' });
   const si = app.imports.sheetInfo(o.token, o.suggestedSheet);
   assert.equal(o.suggestedSheet, 'Phiếu cân');
   for (const k of ['so_phieu', 'ngay_gio_can_1', 'bien_so', 'kl_hang_kg', 'noi_xuat']) assert.notEqual(si.mapping[k], undefined, k);

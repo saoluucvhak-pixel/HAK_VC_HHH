@@ -3,7 +3,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('fs');
 const path = require('path');
-const XLSX = require('xlsx');
+const { xlsxBuffer } = require('./helpers/xlsx');
 const { matchRows } = require('../src/services/ReconciliationService');
 const { createApp, SEED_DIR } = require('../src/app');
 
@@ -42,8 +42,8 @@ test('đối chiếu end-to-end: bảng kê đối tác tạo từ hệ thống 
   const app = createApp({ dbFile: ':memory:', driver: 'node:sqlite' });
   app.seed.load(seed);
   const SAMPLE = path.join(__dirname, 'fixtures', 'sample-v47.xlsx');
-  const pv = app.vehicleImport.preview({ filePath: SAMPLE }); app.vehicleImport.commit(pv.token);
-  const o = app.imports.open({ filePath: SAMPLE }); const si = app.imports.sheetInfo(o.token, o.suggestedSheet);
+  const pv = await app.vehicleImport.preview({ filePath: SAMPLE }); app.vehicleImport.commit(pv.token);
+  const o = await app.imports.open({ filePath: SAMPLE }); const si = app.imports.sheetInfo(o.token, o.suggestedSheet);
   app.imports.preview(o.token, { sheetName: si.sheetName, headerRow: si.headerRow, mapping: si.mapping }); app.imports.commit(o.token, {});
   const hak = app.db.get(`SELECT id FROM don_vi_van_chuyen WHERE ma='HAK'`).id;
   const t = app.reports.tickets({ don_vi_id: hak }, { offset: 0, limit: 1000 }).rows;
@@ -55,9 +55,8 @@ test('đối chiếu end-to-end: bảng kê đối tác tạo từ hệ thống 
   rows[3][5] = 200000;               // lệch đơn giá
   rows.splice(4, 1);                 // thiếu bên B
   rows.push([200, '999999', '43H-99999', '2026-10-01', 15000, 206500, 3097500]);  // thiếu bên A
-  const ws = XLSX.utils.aoa_to_sheet(rows); const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, 'BangKe');
-  const buffer = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' });
-  const op = app.recon.open({ buffer, fileName: 'hak.xlsx' });
+  const buffer = await xlsxBuffer(rows, 'BangKe');
+  const op = await app.recon.open({ buffer, fileName: 'hak.xlsx' });
   const info = app.recon.sheetInfo(op.token, op.suggestedSheet);
   assert.ok(['so_phieu', 'bien_so', 'ngay', 'kl_hang_kg', 'don_gia', 'tien_truoc_vat'].every((k) => info.mapping[k] !== undefined), JSON.stringify(info.mapping));
   const r = app.recon.run(op.token, { ten: 'HAK V47', don_vi_id: hak, sheetName: info.sheetName, headerRow: info.headerRow, mapping: info.mapping, tolMoney: 1 });

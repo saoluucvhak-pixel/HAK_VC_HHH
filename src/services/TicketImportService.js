@@ -21,8 +21,8 @@ class TicketImportService {
   }
 
   /** Bước 1: đọc file, liệt kê sheet, gợi ý sheet có header tốt nhất. */
-  open({ filePath, buffer, fileName }) {
-    const wb = readWorkbook({ filePath, buffer, fileName });
+  async open({ filePath, buffer, fileName }) {
+    const wb = await readWorkbook({ filePath, buffer, fileName });
     const scored = wb.sheets.map((s) => ({ ...s, header: detectHeader(wb.aoa(s.name)) }));
     const best = scored.reduce((a, b) => (b.header.score > (a ? a.header.score : -1) ? b : a), null);
     const prev = this.db.get(`SELECT id, import_time FROM import_batch WHERE file_hash=? AND trang_thai='COMMITTED' ORDER BY id DESC LIMIT 1`, [wb.hash]);

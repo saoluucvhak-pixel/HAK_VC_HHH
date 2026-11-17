@@ -9,13 +9,13 @@ const { dayBefore, dmy, dmyHm } = require('../src/utils/datetime');
 const { fmtVN, noNegZero } = require('../src/utils/numfmt');
 
 const SAMPLE = path.join(__dirname, 'fixtures', 'sample-v47.xlsx');
-function setup(withTickets = false) {
+async function setup(withTickets = false) {
   const app = createApp({ dbFile: ':memory:', driver: 'node:sqlite' });
   app.seed.load(JSON.parse(fs.readFileSync(path.join(SEED_DIR, 'sample-v47.json'), 'utf8')));
   if (withTickets) {
-    app.vehicleImport.commit(app.vehicleImport.preview({ filePath: SAMPLE }).token);
+    app.vehicleImport.commit((await app.vehicleImport.preview({ filePath: SAMPLE })).token);
     const dot = app.db.get('SELECT id FROM dot_van_chuyen LIMIT 1');
-    const o = app.imports.open({ filePath: SAMPLE });
+    const o = await app.imports.open({ filePath: SAMPLE });
     const si = app.imports.sheetInfo(o.token, o.suggestedSheet);
     app.imports.preview(o.token, { sheetName: si.sheetName, headerRow: si.headerRow, mapping: si.mapping, dotId: dot.id });
     app.imports.commit(o.token, {});
@@ -24,8 +24,8 @@ function setup(withTickets = false) {
 }
 const rej = (fn, re) => assert.throws(fn, (e) => e.name === 'ValidationError' && re.test(e.message), String(re));
 
-test('đơn vị vận chuyển: không trùng Mã/Tên (hoa-thường, dấu), MST và email đúng dạng; sửa chính mình không bị coi là trùng', () => {
-  const app = setup(); const C = app.catalog;
+test('đơn vị vận chuyển: không trùng Mã/Tên (hoa-thường, dấu), MST và email đúng dạng; sửa chính mình không bị coi là trùng', async () => {
+  const app = await setup(); const C = app.catalog;
   const dv = app.db.get('SELECT * FROM don_vi_van_chuyen ORDER BY id LIMIT 1');
   rej(() => C.create('don_vi_van_chuyen', { ma: dv.ma.toLowerCase(), ten: 'Khác' }), /Mã .* trùng/);
   rej(() => C.create('don_vi_van_chuyen', { ma: 'NEW1', ten: dv.ten.toUpperCase() }), /Tên .* trùng/);
@@ -37,8 +37,8 @@ test('đơn vị vận chuyển: không trùng Mã/Tên (hoa-thường, dấu), 
   assert.equal(C.update('don_vi_van_chuyen', dv.id, { ten: dv.ten, dien_thoai: '0905' }).dien_thoai, '0905');   // tự mình không phải trùng
 });
 
-test('địa điểm: không trùng Tên địa điểm khác, không trùng tên gọi (alias) của địa điểm khác', () => {
-  const app = setup(); const C = app.catalog;
+test('địa điểm: không trùng Tên địa điểm khác, không trùng tên gọi (alias) của địa điểm khác', async () => {
+  const app = await setup(); const C = app.catalog;
   const [a, b] = app.db.all('SELECT * FROM dia_diem ORDER BY id LIMIT 2');
   rej(() => C.create('dia_diem', { ma: 'L1', ten: a.ten }), /trùng/);
   rej(() => C.create('dia_diem', { ma: 'L2', ten: a.ten.toUpperCase() }), /trùng/);
@@ -49,15 +49,15 @@ test('địa điểm: không trùng Tên địa điểm khác, không trùng tê
   assert.equal(C.create('dia_diem', { ma: 'L4', ten: 'Nơi hoàn toàn mới' }).ten, 'Nơi hoàn toàn mới');
 });
 
-test('giá dầu phải > 0', () => {
-  const C = setup().catalog;
+test('giá dầu phải > 0', async () => {
+  const C = (await setup()).catalog;
   rej(() => C.create('gia_dau', { ngay: '2030-02-01', loai_dau: 'DO', gia: -100 }), /> 0/);
   rej(() => C.create('gia_dau', { ngay: '2030-02-02', loai_dau: 'DO', gia: 0 }), /> 0/);
   assert.equal(C.create('gia_dau', { ngay: '2030-02-03', loai_dau: 'DO', gia: 20000 }).gia, 20000);
 });
 
-test('bảng giá nhập trực tiếp: đơn giá > 0, VAT 0–100, không chồng hiệu lực; sửa không tự va chạm', () => {
-  const app = setup(); const C = app.catalog;
+test('bảng giá nhập trực tiếp: đơn giá > 0, VAT 0–100, không chồng hiệu lực; sửa không tự va chạm', async () => {
+  const app = await setup(); const C = app.catalog;
   const bg = app.db.get(`SELECT * FROM bang_gia_van_chuyen WHERE trang_thai='ACTIVE' ORDER BY id LIMIT 1`);
   const base = { tuyen_id: bg.tuyen_id, don_vi_van_chuyen_id: bg.don_vi_van_chuyen_id, loai_hang: bg.loai_hang, don_vi_tinh: 'DONG_TAN', phuong_thuc: 'CO_DINH', trang_thai: 'ACTIVE', vat_percent: 8 };
   rej(() => C.create('bang_gia_van_chuyen', { ...base, ma_bang_gia: 'OV', tu_ngay: bg.tu_ngay, don_gia_goc: 1000 }), /chồng lấn/);
@@ -85,8 +85,8 @@ test('helper dùng chung: dayBefore, dmy, dmyHm, fmtVN, noNegZero', () => {
   assert.equal(Object.is(noNegZero(-0.2, 0), 0), true);
 });
 
-test('một định nghĩa "đã tính giá": số chuyến đã tính trong bảng kê = số phiếu "da_tinh_gia" trong báo cáo, từng đơn vị', () => {
-  const app = setup(true);
+test('một định nghĩa "đã tính giá": số chuyến đã tính trong bảng kê = số phiếu "da_tinh_gia" trong báo cáo, từng đơn vị', async () => {
+  const app = await setup(true);
   for (const d of app.db.all('SELECT id FROM don_vi_van_chuyen')) {
     const st = app.reports.statement({ don_vi_id: d.id });
     const sql = app.reports.where({ don_vi_id: d.id, da_tinh_gia: true });

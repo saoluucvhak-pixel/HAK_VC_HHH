@@ -12,18 +12,18 @@ const path = require('path');
 
 const EXCEL_NAME = 'Tong-hop-chi-phi-VC-V47.xlsx';
 
-function loadInitialData(app, seedDir) {
+async function loadInitialData(app, seedDir) {
   const excel = path.join(seedDir, EXCEL_NAME);
   if (!fs.existsSync(excel)) throw new Error(`Thiếu file dữ liệu ban đầu: ${EXCEL_NAME}`);
   const seed = JSON.parse(fs.readFileSync(path.join(seedDir, 'sample-v47.json'), 'utf8'));
   const out = { seed: app.seed.load(seed) };
 
-  const pv = app.vehicleImport.preview({ filePath: excel, fileName: EXCEL_NAME });
+  const pv = await app.vehicleImport.preview({ filePath: excel, fileName: EXCEL_NAME });
   const vr = app.vehicleImport.commit(pv.token, { createMissingCarriers: true });
   out.xe = { trongFile: pv.rows.length, ...vr };
 
   const dot = app.db.get('SELECT id FROM dot_van_chuyen WHERE ma_dot=?', [seed.dot_van_chuyen.ma_dot]);
-  const o = app.imports.open({ filePath: excel });
+  const o = await app.imports.open({ filePath: excel });
   const si = app.imports.sheetInfo(o.token, o.suggestedSheet);
   const prev = app.imports.preview(o.token, { sheetName: si.sheetName, headerRow: si.headerRow, mapping: si.mapping, dotId: dot ? dot.id : null });
   const cm = app.imports.commit(o.token, { note: 'Dữ liệu ban đầu từ file Excel V.47' });

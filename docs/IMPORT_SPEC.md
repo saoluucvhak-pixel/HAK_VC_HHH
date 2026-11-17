@@ -1,7 +1,7 @@
 # IMPORT SPEC — Import phiếu cân
 
 ## 1. Định dạng hỗ trợ
-.xlsx, .xls (SheetJS), .csv (UTF-8 / UTF-8 BOM; dấu phân cách `,` hoặc `;` tự nhận). File được copy vào `imports/` kèm SHA-256 để truy vết.
+.xlsx (exceljs) và .csv (UTF-8 / UTF-8 BOM; dấu phân cách `,` hoặc `;` tự nhận; ngoặc kép kiểu RFC 4180). **Không đọc .xls (Excel 97-2003)**: báo lỗi rõ và hướng dẫn "Lưu thành" .xlsx. Giá trị ô được chuẩn hóa: ngày → số seri Excel (không phụ thuộc múi giờ máy), công thức → kết quả đã lưu, ô lỗi/ô gộp không phải ô gốc → rỗng. File được copy vào `imports/` kèm SHA-256 để truy vết.
 
 ## 2. Quy trình (không ghi DB trước khi người dùng xác nhận)
 1. **Chọn file** → đọc workbook, liệt kê sheet (kèm số dòng). Cảnh báo nếu `file_hash` đã từng import ("File này đã import ngày …, batch #…").

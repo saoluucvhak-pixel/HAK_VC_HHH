@@ -10,12 +10,12 @@ const { resolvePrice } = require('../src/services/PriceResolver');
 
 const SAMPLE = path.join(__dirname, 'fixtures', 'sample-v47.xlsx');
 
-function lockedApp() {
+async function lockedApp() {
   const app = createApp({ dbFile: ':memory:', driver: 'node:sqlite' });
   app.seed.load(JSON.parse(fs.readFileSync(path.join(SEED_DIR, 'sample-v47.json'), 'utf8')));
-  app.vehicleImport.commit(app.vehicleImport.preview({ filePath: SAMPLE }).token);
+  app.vehicleImport.commit((await app.vehicleImport.preview({ filePath: SAMPLE })).token);
   const dot = app.db.get('SELECT id FROM dot_van_chuyen LIMIT 1');
-  const o = app.imports.open({ filePath: SAMPLE });
+  const o = await app.imports.open({ filePath: SAMPLE });
   const si = app.imports.sheetInfo(o.token, o.suggestedSheet);
   app.imports.preview(o.token, { sheetName: si.sheetName, headerRow: si.headerRow, mapping: si.mapping, dotId: dot.id });
   app.imports.commit(o.token, {});
@@ -23,8 +23,8 @@ function lockedApp() {
   return app;
 }
 
-test('chot_ky_snapshot và audit_log bất biến ở mức CSDL', () => {
-  const app = lockedApp();
+test('chot_ky_snapshot và audit_log bất biến ở mức CSDL', async () => {
+  const app = await lockedApp();
   const sid = app.db.get('SELECT phieu_can_id id FROM chot_ky_snapshot LIMIT 1').id;
   assert.throws(() => app.db.run('UPDATE chot_ky_snapshot SET tong_tien=1 WHERE phieu_can_id=?', [sid]), /bất biến/);
   assert.throws(() => app.db.run('DELETE FROM chot_ky_snapshot WHERE phieu_can_id=?', [sid]), /bất biến/);

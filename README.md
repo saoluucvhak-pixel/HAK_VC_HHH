@@ -22,7 +22,7 @@ Lịch sử thay đổi: `CHANGELOG.md`.
 ## Chạy thử (cần Node.js ≥ 22.5)
 ```bash
 npm install
-npm test                                           # unit + integration test (76); VCCOST_DRIVER=better-sqlite3 npm test để chạy bằng driver của bản đóng gói
+npm test                                           # unit + integration test (88); VCCOST_DRIVER=better-sqlite3 npm test để chạy bằng driver của bản đóng gói
 npm run test:ui                                    # smoke test giao diện (cần Chromium cho Playwright)
 npm run validate -- tests/fixtures/sample-v47.xlsx # so engine với Excel → docs/EXCEL_VS_APP_VALIDATION.md
 npm run dev                                        # chạy giao diện trong trình duyệt (dev server, không cần Electron)
@@ -52,5 +52,6 @@ setup/          bộ cài Windows chia phần + hướng dẫn
 Không hard-code biển số, đơn vị, nơi xuất, đơn giá, VAT, giá dầu, km, 19 tấn, 35 L/100km · không sửa dữ liệu nguồn âm thầm · không tự xóa trùng · không tự gán xe · không tự chọn bảng giá khi xung đột · không tính lại chứng từ đã chốt khi chưa mở khóa.
 
 ## Lưu ý
-- Thư viện `xlsx` (SheetJS 0.18.5) có cảnh báo bảo mật (ReDoS, prototype pollution) và chưa có bản vá trên npm — chỉ import file Excel từ nguồn tin cậy.
+- Import đọc được `.xlsx` và `.csv`. File `.xls` cũ (Excel 97-2003) không còn được hỗ trợ — mở bằng Excel rồi "Lưu thành" `.xlsx`.
 - Bộ cài `.exe` chưa ký số nên Windows SmartScreen có thể cảnh báo.
+- `npm audit` còn cảnh báo mức vừa của `minimatch` trong `electron-builder` (chỉ công cụ build, không đóng gói vào app); chờ bản sửa từ upstream.

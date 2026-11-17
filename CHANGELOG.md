@@ -1,6 +1,13 @@
 # CHANGELOG
 
 ## Chưa phát hành
+- Thay thư viện đọc Excel **SheetJS `xlsx` → `exceljs`** (xóa hẳn `xlsx`, hết cảnh báo mức cao Prototype Pollution/ReDoS). `npm audit`: còn 6 cảnh báo mức vừa của `minimatch` trong `electron-builder` (chỉ công cụ build).
+  - Đọc `.xlsx` bằng exceljs, `.csv` bằng bộ đọc riêng (BOM, `,`/`;`, ngoặc kép RFC 4180). Đối chiếu trên file mẫu V.47: 29.702/29.751 ô giống hệt; 49 ô còn lại chỉ là ô công thức ở các dòng tổng cuối sheet (cache 0), ngoài vùng phiếu. Số liệu vẫn khớp Excel (`npm run validate`).
+  - **Thay đổi hành vi: không còn đọc `.xls` (Excel 97-2003)** — báo lỗi rõ (cả khi đổi đuôi thành .xlsx) và hướng dẫn "Lưu thành" .xlsx. Hộp chọn file chỉ còn .xlsx/.csv.
+  - Giá trị ô chuẩn hóa: ngày → số seri (không phụ thuộc múi giờ máy, có test TZ Việt Nam/Mỹ/UTC), công thức → kết quả, ô lỗi/ô gộp phụ → rỗng.
+  - Đọc file thành bất đồng bộ: `open`/`preview` của các import và `loadInitialData` là `async`; `createRuntime` có `rt.ready` và `dispatch` tự đợi nạp dữ liệu ban đầu xong.
+  - Hiệu năng: mở file 20.000 dòng ≈ 0,7 s.
+  - Test: `tests/workbook-reader.test.js` (5 test) + `tests/helpers/xlsx.js` (thay SheetJS trong test).
 - Nhập liệu danh mục — chống trùng/chồng lấn/giá trị vô lý (trước đây các trường hợp này được nhận, gây tách bảng kê hoặc MULTIPLE_PRICE):
   - Đơn vị vận chuyển: không trùng Mã/Tên (không phân biệt hoa-thường, dấu, khoảng trắng); Mã số thuế 10 số (hoặc 10-3 số), tự chuẩn hóa; email đúng dạng.
   - Địa điểm: không trùng Tên địa điểm khác, không trùng tên gọi (alias) của địa điểm khác.
