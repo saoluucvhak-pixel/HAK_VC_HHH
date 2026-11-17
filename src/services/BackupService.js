@@ -90,6 +90,28 @@ class BackupService {
   }
 
   /**
+   * Xuất MỘT bản sao lưu ra thư mục khác (ổ rời, ổ mạng…): chỉ nhận file nằm trong thư mục sao lưu, kiểm tra hợp lệ trước,
+   * không ghi đè file có sẵn, chép xong đối chiếu SHA-256 với bản gốc. Bản trong thư mục sao lưu giữ nguyên.
+   */
+  exportTo(file, destDir) {
+    const full = path.resolve(file);
+    if (path.dirname(full) !== path.resolve(this.backupsDir) || !fs.existsSync(full)) throw new Error('File backup không hợp lệ');
+    const dest = path.resolve(String(destDir || ''));
+    if (!destDir || !fs.existsSync(dest) || !fs.statSync(dest).isDirectory()) throw new Error('Thư mục đích không tồn tại');
+    if (dest === path.resolve(this.backupsDir)) throw new Error('Hãy chọn thư mục khác thư mục sao lưu hiện tại');
+    const chk = inspect(full, this.getDb().driver);
+    if (!chk.ok) throw new Error(`Bản sao lưu không hợp lệ, không xuất: ${chk.reason}`);
+    const base = path.basename(full, '.db');
+    let out = path.join(dest, `${base}.db`);
+    for (let i = 2; fs.existsSync(out); i++) out = path.join(dest, `${base}-${i}.db`);
+    fs.copyFileSync(full, out, fs.constants.COPYFILE_EXCL);
+    const h = (f) => crypto.createHash('sha256').update(fs.readFileSync(f)).digest('hex');
+    const sha = h(out);
+    if (sha !== h(full)) { try { fs.unlinkSync(out); } catch { /* bỏ qua */ } throw new Error('Chép ra thư mục đích không khớp bản gốc (SHA-256) — đã hủy, hãy thử ổ khác'); }
+    return { path: out, size: fs.statSync(out).size, sha256: sha };
+  }
+
+  /**
    * Khôi phục an toàn:
    *  1) chép file chọn vào tệp tạm cạnh DB, kiểm tra (SQLite hợp lệ, integrity_check, đúng DB VC Cost, phiên bản không mới hơn app);
    *  2) PRE_RESTORE nhất quán (file đang chọn được bảo vệ khỏi quy tắc lưu giữ);
