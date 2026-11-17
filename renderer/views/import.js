@@ -32,7 +32,7 @@
         // Kiểm tra NGAY khi ghép cột: thiếu cột bắt buộc, lỗi theo lý do, và đọc thử các dòng đầu để thấy máy hiểu gì
         const checkBox = h('div', { class: 'card', 'data-check': '1' }, h('h3', {}, 'Kiểm tra ngay…'));
         const previewBtn = h('button', { class: 'btn', 'data-act': 'preview', disabled: true, onclick: async () => {
-          const r = await call('import.preview', { token: S.open.token, sheetName: S.sheet, headerRow: S.headerRow, mapping: S.mapping, dotId: S.dotId || null, noiDenId: S.noiDenId || null });
+          const r = await call('import.preview', { token: S.open.token, sheetName: S.sheet, headerRow: S.headerRow, mapping: S.mapping, dotId: S.dotId || null, noiDenId: S.noiDenId || null, readAfterTotal: !!S.readAfterTotal });
           if (!r) return; S.prev = r; S.filter = null; S.step = 3; draw();
         } }, 'Xem trước ›');
         const verdict = h('div', { class: 'chk-verdict', 'data-verdict': '1' }, 'Đang kiểm tra…');   // kết luận 1 dòng ngay cạnh các ô ghép cột
@@ -62,7 +62,7 @@
         };
         let tm = null;
         const runCheck = () => { clearTimeout(tm); tm = setTimeout(async () => {
-          const r = await call('import.check', { token: S.open.token, sheetName: S.sheet, headerRow: S.headerRow, mapping: S.mapping });
+          const r = await call('import.check', { token: S.open.token, sheetName: S.sheet, headerRow: S.headerRow, mapping: S.mapping, readAfterTotal: !!S.readAfterTotal });
           if (r && S.step === 2) drawCheck(r);
         }, 120); };
         root.append(
@@ -76,6 +76,8 @@
             h('div', { class: 'form-grid' }, FIELDS.map(([k, lbl]) => h('label', { class: 'field' }, lbl, h('select', { 'data-map': k, onchange: (e) => { if (e.target.value === '') delete S.mapping[k]; else S.mapping[k] = Number(e.target.value); runCheck(); } },
               h('option', { value: '' }, '— bỏ qua —'), S.info.headers.map((c) => h('option', { value: c.index, selected: S.mapping[k] === c.index }, `${c.index + 1}. ${c.text}`)))))),
             h('h3', { style: { marginTop: '14px' } }, 'Dữ liệu mẫu'), table({ columns: S.info.headers.map((c) => ({ key: String(c.index), label: c.text || `Cột ${c.index + 1}` })), rows: S.info.sample.map((r) => Object.fromEntries(r.map((x, i) => [String(i), x == null ? '' : String(x)]))) })),
+          h('div', { class: 'card' }, h('label', { class: 'row gap-s', style: { alignItems: 'center' } }, h('input', { type: 'checkbox', 'data-f': 'multi-block', checked: !!S.readAfterTotal, onchange: (e) => { S.readAfterTotal = e.target.checked; runCheck(); } }),
+            h('span', {}, h('b', {}, 'File có nhiều khối (mỗi khối một dòng "Tổng cộng"): đọc tất cả các khối'), h('small', { class: 'muted', style: { display: 'block' } }, 'Mặc định chỉ đọc đến dòng "Tổng cộng" đầu tiên (dữ liệu bên dưới được báo là chưa đọc). Bật tùy chọn này để đọc tiếp các khối sau; tổng đối chiếu = tổng các dòng "Tổng cộng".')))),
           checkBox,
           h('div', { class: 'row end' }, h('button', { class: 'btn ghost', onclick: () => { S.step = 1; draw(); } }, '‹ Quay lại'), previewBtn));
         runCheck();

@@ -8,6 +8,7 @@ const crypto = require('crypto');
 const { readWorkbook } = require('../excel/workbookReader');
 const { detectHeader, fold } = require('../excel/columnMapping');
 const { parseTickets } = require('../excel/ticketParser');
+const { limitsFrom } = require('../utils/weight');
 const { classify, businessKey, strongKey, fingerprint } = require('./DuplicateDetector');
 const { computeTicket } = require('./TransportCostEngine');
 const { ValidationError } = require('./CatalogService');
@@ -62,7 +63,7 @@ class TicketImportService {
    * tóm tắt lỗi cả sheet theo lý do, và đọc thử vài dòng đầu (ngày giờ, biển số chuẩn hóa, KL, nơi xuất nhận ra) để người dùng thấy ngay máy hiểu gì.
    * Chỉ đọc — không ghi DB, không đổi trạng thái phiên.
    */
-  check(token, { sheetName, headerRow, mapping, sampleSize = 8 }) {
+  check(token, { sheetName, headerRow, mapping, sampleSize = 8, readAfterTotal = false }) {
     const p = this._p(token);
     const m = mapping || {};
     const has = (k) => m[k] !== undefined && m[k] !== null;
@@ -78,7 +79,7 @@ class TicketImportService {
 
     let rows = [];
     if (!problems.some((x) => x.level === 'error')) {
-      try { rows = parseTickets(p.wb.aoa(sheetName), Number(headerRow), m); } catch (e) { problems.push({ level: 'error', field: null, text: `Không đọc được dữ liệu: ${e.message}` }); }
+      try { rows = parseTickets(p.wb.aoa(sheetName), Number(headerRow), m, { weightLimits: limitsFrom(this.settings), readAfterTotal: !!readAfterTotal }); } catch (e) { problems.push({ level: 'error', field: null, text: `Không đọc được dữ liệu: ${e.message}` }); }
     }
     if (rows.ignoredBelowTotal && rows.ignoredBelowTotal.count) problems.push({ level: 'warning', field: null, text: `Còn ${rows.ignoredBelowTotal.count} dòng giống phiếu cân nằm DƯỚI dòng "Tổng cộng" (từ dòng ${rows.ignoredBelowTotal.first_row}) — hệ thống dừng đọc ở dòng Tổng cộng nên các dòng này CHƯA được nhập. File có nhiều khối? Tách/sửa file rồi nhập lại` });
     const reasons = new Map();
@@ -109,14 +110,14 @@ class TicketImportService {
   }
 
   /** Bước 3: preview đầy đủ (parse, validate, phân loại trùng, tính thử). KHÔNG ghi DB. */
-  preview(token, { sheetName, headerRow, mapping, dotId = null, noiDenId = null }) {
+  preview(token, { sheetName, headerRow, mapping, dotId = null, noiDenId = null, readAfterTotal = false }) {
     const p = this._p(token);
     if (!mapping || mapping.so_phieu === undefined || mapping.bien_so === undefined || (mapping.kl_hang_kg === undefined && (mapping.can_lan_1 === undefined || mapping.can_lan_2 === undefined))) {
       throw new ValidationError('Mapping phải có: Số phiếu, Biển số, và KL hàng (hoặc Cân lần 1 + Cân lần 2)');
     }
     if (mapping.ngay_gio_can_1 === undefined) throw new ValidationError('Mapping phải có Ngày giờ cân 1');
     const aoa = p.wb.aoa(sheetName);
-    const rows = parseTickets(aoa, Number(headerRow), mapping);
+    const rows = parseTickets(aoa, Number(headerRow), mapping, { weightLimits: limitsFrom(this.settings), readAfterTotal: !!readAfterTotal });
     const nd = noiDenId || this._defaultNoiDen(dotId);
 
     // trùng với DB
@@ -278,7 +279,7 @@ class TicketImportService {
 
   _parseRaw(raw) {
     const [t] = parseTickets([['so_phieu', 't1', 't2', 'bs', 'c1', 'c2', 'kg', 'nx'], [raw.so_phieu, raw.ngay_gio_can_1, raw.ngay_gio_can_2, raw.bien_so, raw.can_lan_1, raw.can_lan_2, raw.kl_hang_kg, raw.noi_xuat]],
-      0, { so_phieu: 0, ngay_gio_can_1: 1, ngay_gio_can_2: 2, bien_so: 3, can_lan_1: 4, can_lan_2: 5, kl_hang_kg: 6, noi_xuat: 7 });
+      0, { so_phieu: 0, ngay_gio_can_1: 1, ngay_gio_can_2: 2, bien_so: 3, can_lan_1: 4, can_lan_2: 5, kl_hang_kg: 6, noi_xuat: 7 }, { weightLimits: limitsFrom(this.settings) });
     return t;
   }
 

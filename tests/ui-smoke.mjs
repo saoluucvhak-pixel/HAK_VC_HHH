@@ -251,6 +251,21 @@ console.log('app.info', JSON.stringify(info.data.counts));
   await page.evaluate(() => { Object.keys(App.state.filter).forEach((k) => delete App.state.filter[k]); });
 }
 
+// ---- Ngưỡng KL cấu hình được + tùy chọn đọc nhiều khối
+{
+  const ck = (ok, msg) => { if (!ok) errors.push('tùy chọn nhập liệu: ' + msg); };
+  await page.evaluate(() => App.go('settings')); await page.waitForSelector('[data-act=save-kl]');
+  await page.fill('[data-f=kl-min]', '50'); await page.click('[data-act=save-kl]'); await page.waitForTimeout(600);
+  const set1 = await page.evaluate(async () => (await App.api('settings.all')).kl_hop_ly);
+  ck(set1 && set1.min_kg === 50 && set1.max_kg === 100000, 'lưu ngưỡng KL: ' + JSON.stringify(set1));
+  await page.fill('[data-f=kl-min]', '100'); await page.click('[data-act=save-kl]'); await page.waitForTimeout(600);   // trả về mặc định
+  await page.evaluate(() => App.go('import'));
+  const [fcm] = await Promise.all([page.waitForEvent('filechooser'), page.click('[data-act=pick]')]); await fcm.setFiles(path.resolve('tests/fixtures/sample-v47.xlsx'));
+  await page.waitForSelector('[data-f=multi-block]');
+  ck((await page.locator('[data-f=multi-block]').isChecked()) === false, 'tùy chọn nhiều khối phải mặc định tắt');
+  await page.evaluate(() => App.go('dashboard'));
+}
+
 // ---- Kiểm tra toàn vẹn dữ liệu (chỉ đọc) từ màn Backup
 {
   await page.evaluate(() => App.go('backup')); await page.waitForSelector('[data-act=integrity]');

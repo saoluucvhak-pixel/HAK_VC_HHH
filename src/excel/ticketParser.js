@@ -6,7 +6,7 @@
 const { parseDateTime } = require('../utils/datetime');
 const { normalizePlate, displayPlate, isValidPlate } = require('../utils/plate');
 const { fold } = require('./columnMapping');
-const { weightProblem } = require('../utils/weight');
+const { weightProblem, DEFAULT_LIMITS } = require('../utils/weight');
 
 const num = (v) => {
   if (v === null || v === undefined || v === '') return null;
@@ -16,13 +16,17 @@ const num = (v) => {
   return isFinite(n) ? n : NaN;
 };
 
-function parseTickets(aoa, headerRow, mapping, { maxBlankRun = 50 } = {}) {
+/**
+ * readAfterTotal: false (mặc định) → dừng ở dòng "Tổng cộng" đầu tiên (đúng IMPORT_SPEC) và cảnh báo dữ liệu bị bỏ lại;
+ *                true → coi mỗi dòng "Tổng cộng" là ngăn cách khối và đọc tiếp các khối sau (chỉ nhận dòng trông như phiếu cân; tổng đối chiếu = tổng các dòng Tổng cộng).
+ */
+function parseTickets(aoa, headerRow, mapping, { maxBlankRun = 50, weightLimits = DEFAULT_LIMITS, readAfterTotal = false } = {}) {
   // Cột KL ghi "(tấn)" / "(t)" → đổi sang kg
   const klHead = mapping.kl_hang_kg === undefined ? '' : fold((aoa[headerRow] || [])[mapping.kl_hang_kg]);
   const klIsTon = /\((tan|t)\)|\btan\b/.test(klHead) && !/\bkg\b/.test(klHead);
   const get = (row, f) => (mapping[f] === undefined ? undefined : row[mapping[f]]);
   const out = [];
-  let totalRow = null, totalAt = -1;
+  let totalRow = null, totalAt = -1, afterTotal = false;
   let blank = 0;
   for (let r = headerRow + 1; r < aoa.length; r++) {
     const row = aoa[r] || [];
@@ -31,10 +35,14 @@ function parseTickets(aoa, headerRow, mapping, { maxBlankRun = 50 } = {}) {
       // dòng tổng của chính file: lấy KL tổng (nếu có) để đối chiếu với tổng các dòng đã đọc — phát hiện mất dòng / sai đơn vị
       const t = num(get(row, 'kl_hang_kg'));
       // ô tổng là công thức chưa có giá trị lưu sẵn (file chưa được Excel tính/lưu) → không đối chiếu được, nhưng vẫn ghi nhận có dòng tổng
-      totalRow = { source_row: r + 1, kl_hang_kg: t !== null && !Number.isNaN(t) ? (klIsTon ? Math.round(t * 1000 * 1000) / 1000 : t) : null };
-      totalAt = r;
-      break;
+      const tkg = t !== null && !Number.isNaN(t) ? (klIsTon ? Math.round(t * 1000 * 1000) / 1000 : t) : null;
+      if (!readAfterTotal) { totalRow = { source_row: r + 1, kl_hang_kg: tkg }; totalAt = r; break; }
+      // nhiều khối: cộng dồn các dòng tổng; một ô tổng không có giá trị làm tổng đối chiếu không xác định
+      totalRow = totalRow ? { source_row: totalRow.source_row, kl_hang_kg: totalRow.kl_hang_kg === null || tkg === null ? null : totalRow.kl_hang_kg + tkg, blocks: (totalRow.blocks || 1) + 1 } : { source_row: r + 1, kl_hang_kg: tkg, blocks: 1 };
+      afterTotal = true;
+      continue;
     }
+    if (afterTotal) { const bs0 = get(row, 'bien_so'), t10 = get(row, 'ngay_gio_can_1'); if (!(bs0 && isValidPlate(bs0) && parseDateTime(t10))) continue; }   // dưới dòng tổng chỉ nhận dòng trông như phiếu cân (bỏ bảng tóm tắt)
     const soPhieu = get(row, 'so_phieu');
     const hasData = ['bien_so', 'kl_hang_kg', 'ngay_gio_can_1', 'can_lan_1', 'can_lan_2'].some((f) => { const v = get(row, f); return v !== null && v !== undefined && v !== ''; });
     const noSoPhieu = soPhieu === null || soPhieu === undefined || soPhieu === '';
@@ -59,7 +67,7 @@ function parseTickets(aoa, headerRow, mapping, { maxBlankRun = 50 } = {}) {
     if (kg === null && c1 !== null && c2 !== null) kg = Math.abs(c2 - c1);
     if (kg === null || isNaN(kg) || kg <= 0) errors.push('INVALID_WEIGHT: KL hàng không hợp lệ');
     if ((c1 !== null && c1 < 0) || (c2 !== null && c2 < 0)) errors.push('INVALID_WEIGHT: số cân không được âm');
-    const wp = weightProblem(kg); if (wp) errors.push('INVALID_WEIGHT: ' + wp);
+    const wp = weightProblem(kg, weightLimits); if (wp) errors.push('INVALID_WEIGHT: ' + wp);
     if (c1 !== null && c2 !== null && !isNaN(c1) && !isNaN(c2) && kg !== null && Math.abs(Math.abs(c2 - c1) - kg) > 0.5) {
       errors.push(`INVALID_WEIGHT: |cân2 - cân1| = ${Math.abs(c2 - c1)} ≠ KL hàng ${kg}`);
     }

@@ -7,7 +7,7 @@ const { normalizePlate, displayPlate, isValidPlate } = require('../utils/plate')
 const EDITABLE = ['ngay_gio_can_1', 'ngay_gio_can_2', 'bien_so', 'can_lan_1', 'can_lan_2', 'kl_hang_kg', 'noi_den_id', 'dot_van_chuyen_id', 'xe_tra_ve', 'ghi_chu', 'loai_hang'];
 const FINANCIAL = EDITABLE.filter((k) => k !== 'ghi_chu'); // phiếu đã chốt: chỉ còn sửa được ghi chú
 const { parseDateTime } = require('../utils/datetime');
-const { weightProblem } = require('../utils/weight');
+const { weightProblem, limitsFrom } = require('../utils/weight');
 
 class TicketService {
   constructor(db, { audit, cost }) { Object.assign(this, { db, audit, cost }); }
@@ -51,7 +51,7 @@ class TicketService {
         ch.bien_so_chuan = normalizePlate(ch.bien_so); ch.bien_so = displayPlate(ch.bien_so);
       }
       if ('kl_hang_kg' in ch && !(Number(ch.kl_hang_kg) > 0)) throw new ValidationError('KL phải > 0');
-      if ('kl_hang_kg' in ch) { const wp = weightProblem(ch.kl_hang_kg); if (wp) throw new ValidationError(wp); }
+      if ('kl_hang_kg' in ch) { const wp = weightProblem(ch.kl_hang_kg, limitsFrom(this.cost && this.cost.settings)); if (wp) throw new ValidationError(wp); }
       if ('xe_tra_ve' in ch) ch.xe_tra_ve = ch.xe_tra_ve ? 1 : 0;
       const merged = { ...old, ...ch, noi_xuat: old.noi_xuat_goc, bien_so: ch.bien_so || old.bien_so_goc };
       ch.business_key = businessKey(merged); ch.strong_key = strongKey(merged); ch.fingerprint = fingerprint(merged);

@@ -13,7 +13,7 @@ const driver = process.env.VCCOST_DRIVER || 'node:sqlite';
 const chk = inspect(path.resolve(file), driver);
 if (!chk.ok) { console.error('Không kiểm tra được:', chk.reason); process.exit(2); }
 const raw = openFile(path.resolve(file), driver);
-const db = { all: (sql, p = []) => raw.prepare(sql).all(...p).map((r) => ({ ...r })) };
+const db = { all: (sql, p = []) => raw.prepare(sql).all(...p).map((r) => ({ ...r })), get: (sql, p = []) => { const r = raw.prepare(sql).get(...p); return r ? { ...r } : undefined; } };
 const r = new IntegrityService(db).check();
 console.log(`Schema v${chk.version} — ${chk.counts.phieu} phiếu, ${chk.counts.batch} lô import, ${chk.counts.chot} kỳ chốt`);
 for (const c of r.checks) console.log(`${c.count ? (c.severity === 'LOI' ? '✗' : '!') : '✓'} ${c.title}: ${c.count}`);

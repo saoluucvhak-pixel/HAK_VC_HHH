@@ -60,8 +60,8 @@ Giữ nguyên các hồi quy đã có (`integrity-fixes`, `storage-safety`, `aut
 - Dependency tại thời điểm nghiệm thu: `npm audit` = 9 mức cao, **cùng một nguyên nhân** `picomatch` (ReDoS, advisory áp dụng mọi phiên bản, chưa có bản vá) qua `electron-builder → … → tinyglobby`. Chỉ nằm trong công cụ build (`npm ls --omit=dev` rỗng), không đóng gói vào ứng dụng. Cảnh báo `minimatch` trước đó đã hết.
 
 ## 7. Câu hỏi nghiệp vụ còn mở
-1. Ngưỡng KL hợp lệ mỗi chuyến: giữ 100–100.000 kg, hay đặt khác (hoặc cấu hình được)?
-2. File nhiều khối/nhiều tháng (mỗi khối một dòng "Tổng cộng"): giữ quy tắc "dừng ở dòng Tổng cộng đầu tiên và cảnh báo" hay đọc tiếp các khối sau?
+1. Ngưỡng KL hợp lệ mỗi chuyến: mặc định 100–100.000 kg (giả định). **Sau 0.7.0 đã chỉnh được ở Cài đặt** — chủ nghiệp vụ đặt giá trị thực tế.
+2. File nhiều khối/nhiều tháng: mặc định vẫn dừng ở dòng Tổng cộng đầu và cảnh báo; **sau 0.7.0 có ô tùy chọn "File có nhiều khối"** để đọc tiếp. Cần chủ nghiệp vụ cho biết quy tắc nào nên là mặc định.
 3. Logo/icon thương hiệu để đưa vào EXE/Setup và cửa sổ.
 4. Chứng thư ký số (để bỏ cảnh báo SmartScreen).
 5. Có bản sao dữ liệu thật (đã ẩn thông tin nhạy cảm) để chạy `npm run integrity` trước khi phát hành?

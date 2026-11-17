@@ -91,3 +91,49 @@ test('dòng Tổng cộng: công thức chưa có giá trị, nhiều khối d�
   const ton = await open((ws) => { ws.addRow(['1', plate, 'Quế Sơn', '01/10/2026 10:00', '01/10/2026 10:30', null, null, 17.5]); ws.addRow(['Tổng cộng', null, null, null, null, null, null, 17.5]); }, [...H.slice(0, 7), 'KL hàng (tấn)']);
   assert.equal(ton.totals.read_kg, 17500); assert.equal(ton.totals.file_kg, 17500); assert.equal(ton.totals.lech_kg, 0);
 });
+
+test('ngưỡng KL cấu hình được (Cài đặt kl_hop_ly) áp dụng thống nhất: import, sửa trực tiếp, kiểm tra toàn vẹn; giá trị sai bị từ chối; mặc định không đổi', async () => {
+  const { limitsFrom } = require('../src/utils/weight');
+  const app = createApp({ dbFile: ':memory:', driver: 'node:sqlite' });
+  await loadInitialData(app, SEED_DIR);
+  assert.deepEqual(limitsFrom(app.settings), { min_kg: 100, max_kg: 100000 });
+  assert.throws(() => app.settings.set('kl_hop_ly', { min_kg: 500, max_kg: 100 }), /nhỏ hơn/);
+  assert.throws(() => app.settings.set('kl_hop_ly', { min_kg: 'a', max_kg: 100 }), /Ngưỡng KL/);
+  const t = app.db.get(`SELECT id, kl_hang_kg FROM phieu_can WHERE trang_thai='ACTIVE' ORDER BY id LIMIT 1`);
+  assert.throws(() => app.tickets.update(t.id, { kl_hang_kg: 60 }, 'thử'), /quá nhỏ/);                 // mặc định: 60 kg < 100
+  app.settings.set('kl_hop_ly', { min_kg: 50, max_kg: 100000 });                                        // chủ nghiệp vụ hạ ngưỡng
+  app.tickets.update(t.id, { kl_hang_kg: 60, can_lan_2: null, can_lan_1: null }, 'chuyến nhỏ hợp lệ');
+  assert.equal(app.db.get('SELECT kl_hang_kg k FROM phieu_can WHERE id=?', [t.id]).k, 60);
+  assert.equal(app.integrity.check().checks.find((c) => c.id === 'KL_BAT_THUONG').count, 0, 'toàn vẹn dùng cùng ngưỡng');
+  app.settings.set('kl_hop_ly', { min_kg: 100, max_kg: 100000 });
+  assert.equal(app.integrity.check().checks.find((c) => c.id === 'KL_BAT_THUONG').count, 1);
+  const mk = parse1(['9', '92H-00903', 'QS', '02/10/2026 10:00', null, null, null, 75]);               // parser mặc định
+  assert.ok(mk.errors.some((e) => /quá nhỏ/.test(e)));
+  const rows = [H, ['9', '92H-00903', 'QS', '02/10/2026 10:00', null, null, null, 75]];
+  const lenient = parseTickets(rows, 0, detectHeader(rows).mapping, { weightLimits: { min_kg: 50, max_kg: 100000 } })[0];
+  assert.deepEqual(lenient.errors, []);
+});
+
+test('đọc nhiều khối (tùy chọn): mỗi dòng Tổng cộng là ngăn cách, đọc cả các khối sau, bỏ bảng tóm tắt; tổng đối chiếu = tổng các dòng Tổng cộng; mặc định vẫn dừng và cảnh báo', async () => {
+  const ExcelJS = require('exceljs');
+  const app = createApp({ dbFile: ':memory:', driver: 'node:sqlite' });
+  app.seed.load(JSON.parse(fs.readFileSync(path.join(SEED_DIR, 'sample-v47.json'), 'utf8')));
+  app.vehicleImport.commit((await app.vehicleImport.preview({ filePath: path.join(__dirname, 'fixtures', 'sample-v47.xlsx') })).token);
+  const plate = app.db.get('SELECT bien_so_chuan b FROM xe LIMIT 1').b;
+  const mk = (ws, n, kl) => ws.addRow([String(n), plate, 'Quế Sơn', `0${n}/10/2026 10:00`, `0${n}/10/2026 10:30`, 30000, 30000 - kl, kl]);
+  const wb = new ExcelJS.Workbook(); const ws = wb.addWorksheet('S'); ws.addRow(H);
+  mk(ws, 1, 17000); mk(ws, 2, 18000); ws.addRow(['Tổng cộng', null, null, null, null, null, null, 35000]);
+  mk(ws, 3, 19000); ws.addRow(['Tổng cộng', null, null, null, null, null, null, 19000]);
+  ws.addRow([null, null, 'Xe xuống Cảng', null, 'Xe trả về']); ws.addRow(['Nơi xuất', null, 'Số lượng xe', 'Khối lượng']);       // bảng tóm tắt cuối file
+  const buffer = Buffer.from(await wb.xlsx.writeBuffer());
+  const go = async (readAfterTotal) => {
+    const o = await app.imports.open({ buffer, fileName: 'm.xlsx' }); const si = app.imports.sheetInfo(o.token, o.suggestedSheet);
+    const args = { sheetName: si.sheetName, headerRow: si.headerRow, mapping: si.mapping, readAfterTotal };
+    return { chk: app.imports.check(o.token, args), totals: app.imports.preview(o.token, { ...args, dotId: null }).totals };
+  };
+  const def = await go(false);
+  assert.equal(def.totals.so_dong, 2); assert.equal(def.totals.ignored_below_total, 1);
+  const all = await go(true);
+  assert.equal(all.totals.so_dong, 3); assert.equal(all.totals.read_kg, 54000); assert.equal(all.totals.file_kg, 54000); assert.equal(all.totals.lech_kg, 0); assert.equal(all.totals.ignored_below_total, 0);
+  assert.ok(!all.chk.problems.some((p) => /DƯỚI dòng/.test(p.text)));
+});
