@@ -83,3 +83,22 @@ test('workflow.todo: đếm đúng từng bước theo dữ liệu (trước/sau
   t = app.reports.todo();
   assert.deepEqual([t.chua_chot, t.da_chot], [0, 2035]);
 });
+
+// ---- chế độ tối: token luxe tối + phần bổ sung của VC Cost, giải biến var(--x), cặp chữ/nền đạt AA
+function resolveAll(vars) { const out = {}; for (const [k, v0] of Object.entries(vars)) { let v = v0, n = 0; while (/^var\(--[\w-]+\)$/.test(v) && n++ < 8) v = vars[v.slice(6, -1)]; out[k] = v; } return out; }
+const darkExtra = (() => { const m = styles.match(/\[data-theme="dark"\]\{(--warnBg[^}]*)\}/); assert.ok(m, 'thiếu khối bổ sung token tối trong styles.css'); const v = {}; for (const x of m[1].matchAll(/--([\w-]+)\s*:\s*([^;]+)/g)) v[x[1]] = x[2].trim(); return v; })();
+const D = resolveAll({ ...block(':root'), ...block('[data-theme="dark"]'), ...block('[data-skin="luxe"]'), ...block('[data-skin="luxe"][data-theme="dark"]'), ...darkExtra });
+
+test('chế độ tối: cặp chữ/nền chính đạt WCAG AA ≥ 4,5:1 (kể cả cảnh báo/thông tin dùng làm chữ trên thẻ)', () => {
+  const PAIRS = [['ink', 'card'], ['ink', 'bg'], ['mut-aa', 'card'], ['mut-aa', 'bg'], ['brand', 'card'], ['onBrand', 'brand'], ['red', 'card'], ['warnFg', 'card'], ['infoFg', 'card'], ['okFg', 'card'], ['warnFg', 'warnBg'], ['infoFg', 'infoBg'], ['sbText', 'deep']];
+  for (const [f, b] of PAIRS) {
+    assert.ok(isHex(D[f]) && isHex(D[b]), `không phải màu hex (tối): ${f}=${D[f]} / ${b}=${D[b]}`);
+    assert.ok(ratio(D[f], D[b]) >= 4.5, `tối: ${f} (${D[f]}) trên ${b} (${D[b]}) = ${ratio(D[f], D[b]).toFixed(2)}:1`);
+  }
+});
+
+test('không còn nền trắng cứng trong styles.css (mọi nền đi qua token để đổi được sáng/tối); có nút đổi giao diện', () => {
+  assert.equal((styles.match(/background:\s*#fff\b/gi) || []).length, 0);
+  const app = fs.readFileSync(path.join(R, 'app.js'), 'utf8');
+  assert.match(app, /vc\.theme/); assert.match(app, /data-act': 'theme'/); assert.match(app, /prefers-color-scheme: dark/);
+});

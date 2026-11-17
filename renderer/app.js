@@ -201,6 +201,15 @@ const App = (() => {
 
   // ---------------------------------------------------------------- điều hướng
   // Menu theo LUỒNG CÔNG VIỆC: nhập & kiểm tra → giá & tính cước → đối chiếu & chốt kỳ → bảng kê & báo cáo
+  // ---------------------------------------------------------------- giao diện sáng / tối / theo hệ thống (lưu trên máy)
+  const THEME_KEY = 'vc.theme', THEMES = { auto: '🌓 Theo hệ thống', light: '☀ Sáng', dark: '🌙 Tối' };
+  const themePref = () => { try { const v = localStorage.getItem(THEME_KEY); return THEMES[v] ? v : 'auto'; } catch (e) { return 'auto'; } };
+  const prefersDark = () => !!(window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches);
+  function applyTheme() { document.documentElement.setAttribute('data-theme', themePref() === 'dark' || (themePref() === 'auto' && prefersDark()) ? 'dark' : 'light'); }
+  function cycleTheme() { const order = ['auto', 'light', 'dark']; const next = order[(order.indexOf(themePref()) + 1) % 3]; try { localStorage.setItem(THEME_KEY, next); } catch (e) { /* không lưu được: vẫn đổi cho phiên này */ document.documentElement.setAttribute('data-theme', next === 'dark' ? 'dark' : 'light'); } applyTheme(); renderNav(); }
+  applyTheme();
+  if (window.matchMedia) { try { window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => { if (themePref() === 'auto') applyTheme(); }); } catch (e) { /* trình duyệt cũ */ } }
+
   const NAV = [
     ['TỔNG QUAN', [['dashboard', '📊', 'Dashboard · việc cần làm']]],
     ['① NHẬP & KIỂM TRA', [['import', '📥', 'Import phiếu cân'], ['review', '🔍', 'Cần kiểm tra', 'pending'], ['tickets', '🧾', 'Phiếu cân'], ['vehicle', '🚛', 'Chi tiết theo xe']]],
@@ -221,6 +230,7 @@ const App = (() => {
           h('span', { class: 'ic' }, ic), label, n ? h('span', { class: 'badge' + (bk === 'alerts' ? ' red' : '') }, n) : null));
       }
     }
+    sb.append(h('button', { class: 'theme-toggle', 'data-act': 'theme', title: 'Đổi giao diện: theo hệ thống → sáng → tối', onclick: cycleTheme }, 'Giao diện: ' + THEMES[themePref()]));
     sb.append(h('div', { class: 'foot' }, info ? `v${info.version} · ${info.counts.phieu} phiếu · ${info.counts.xe} xe` : ''));
   }
   async function refreshInfo() { try { info = await api('app.info'); } catch (e) { /* bỏ qua */ } renderNav(); }

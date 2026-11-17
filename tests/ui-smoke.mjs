@@ -84,6 +84,27 @@ await nav('statements'); await page.click('[data-fkey="sf:statements:don_vi_id"]
     date: ['05/10/2026', ''], dt: ['05/10/2026 07:08', '05/10/2026 07:08:09'], min: ['2g 5p', '−5p'] };
   if (JSON.stringify(got) !== JSON.stringify(want)) errors.push('định dạng chuẩn: ' + JSON.stringify(got) + ' ≠ ' + JSON.stringify(want));
 }
+// ---- Chế độ tối: bật bằng nút ở thanh bên, nhớ lựa chọn sau khi tải lại, đúng màu nền luxe tối
+{
+  const ck = (ok, msg) => { if (!ok) errors.push('chế độ tối: ' + msg); };
+  await nav('dashboard');
+  const theme = () => page.getAttribute('html', 'data-theme');
+  const toDark = async () => { for (let i = 0; i < 3 && (await page.evaluate(() => localStorage.getItem('vc.theme'))) !== 'dark'; i++) { await page.click('[data-act=theme]'); await page.waitForTimeout(150); } };
+  await page.evaluate(() => localStorage.removeItem('vc.theme'));
+  await toDark();
+  ck((await theme()) === 'dark', 'data-theme phải là dark: ' + (await theme()));
+  const bg = await page.evaluate(() => getComputedStyle(document.body).backgroundColor); ck(bg === 'rgb(11, 16, 26)', 'nền tối luxe: ' + bg);
+  const inputBg = await page.evaluate(() => { const i = document.querySelector('[data-sf-q]'); return i ? getComputedStyle(i).backgroundColor : null; }); ck(inputBg === 'rgb(14, 20, 32)', 'ô nhập theo token tối: ' + inputBg);
+  const cardBg = await page.evaluate(() => getComputedStyle(document.querySelector('.card')).backgroundColor); ck(cardBg === 'rgb(18, 25, 38)', 'thẻ theo token tối: ' + cardBg);
+  await shot('34-dashboard-dark'); await nav('tickets'); await shot('35-tickets-dark'); await nav('import'); await shot('36-import-dark');
+  await page.reload(); await page.waitForSelector('#sidebar .nav-item');
+  ck((await theme()) === 'dark', 'sau khi tải lại vẫn tối');
+  for (let i = 0; i < 3 && (await theme()) !== 'light'; i++) { await page.click('[data-act=theme]'); await page.waitForTimeout(150); }
+  ck((await theme()) === 'light', 'chuyển lại sáng');
+  const bgL = await page.evaluate(() => getComputedStyle(document.body).backgroundColor); ck(bgL === 'rgb(245, 242, 236)', 'nền sáng ivory: ' + bgL);
+  await page.evaluate(() => localStorage.removeItem('vc.theme')); await page.reload(); await page.waitForSelector('#sidebar .nav-item');
+}
+
 // ---- Việc cần làm theo quy trình + menu theo luồng công việc + skin luxe
 await nav('dashboard'); await page.waitForSelector('[data-todo]');
 {
@@ -160,6 +181,35 @@ await page.click('[data-act=run]'); await page.waitForSelector('text=Kết quả
 const kq = await page.locator('.kpi small').allInnerTexts(); console.log('recon kpis', kq.join(' | '));
 const info = await (await fetch('http://127.0.0.1:5191/api/app.info', { method: 'POST', body: '{}' })).json();
 console.log('app.info', JSON.stringify(info.data.counts));
+// ---- "Cần kiểm tra" ngay trong bước Kết quả của import: xử lý từng dòng / hàng loạt (giữ cũ, cập nhật có lý do)
+{
+  const ck = (ok, msg) => { if (!ok) errors.push('cần kiểm tra: ' + msg); };
+  const api = async (c, a) => (await (await fetch('http://127.0.0.1:5191/api/' + c, { method: 'POST', body: JSON.stringify(a || {}) })).json()).data;
+  const rows = (await api('tickets.list', { filter: {}, limit: 3 })).rows;
+  const csv = ['Số phiếu,Biển số,Nơi xuất,Ngày giờ cân 1,KL hàng (kg)', ...rows.map((r) => `${r.so_phieu},${r.bien_so},${r.noi_xuat_goc || r.noi_xuat},${r.ngay_gio_can_1.slice(8, 10)}/${r.ngay_gio_can_1.slice(5, 7)}/${r.ngay_gio_can_1.slice(0, 4)} ${r.ngay_gio_can_1.slice(11, 19)},${r.kl_hang_kg + 100}`)].join('\n');
+  const csvFile = path.join(out, 'xung-dot.csv'); fs.writeFileSync(csvFile, '\uFEFF' + csv);
+  const runImport = async () => {
+    await nav('import');
+    const [fcx] = await Promise.all([page.waitForEvent('filechooser'), page.click('[data-act=pick]')]);
+    await fcx.setFiles(csvFile); await page.waitForSelector('[data-act=preview]');
+    await page.waitForFunction(() => !document.querySelector('[data-act=preview]').disabled, null, { timeout: 8000 });
+    await page.click('[data-act=preview]'); await page.waitForSelector('[data-act=commit]');
+    await page.click('[data-act=commit]'); await page.click('.modal .btn:has-text("Import")'); await page.waitForSelector('[data-result]', { timeout: 30000 });
+  };
+  await runImport();
+  await page.waitForSelector('[data-review]'); await shot('37-import-can-kiem-tra');
+  ck(/3 phiếu cần kiểm tra/.test(await page.textContent('[data-review]')), 'danh sách phải có 3 phiếu: ' + (await page.textContent('[data-review]')).slice(0, 120));
+  await page.click('[data-act=bulk-keep]'); await page.click('.modal .btn:not(.ghost)'); await page.waitForTimeout(1500);
+  ck((await page.locator('[data-review]').count()) === 0, 'giữ cũ tất cả → danh sách biến mất');
+  ck((await api('tickets.list', { filter: { search: rows[0].so_phieu } })).rows.every((r) => r.kl_hang_kg === rows[0].kl_hang_kg || r.so_phieu !== rows[0].so_phieu), 'giữ cũ: KL không đổi');
+  await runImport(); await page.waitForSelector('[data-review]');
+  await page.click('[data-act=bulk-update]'); await page.waitForSelector('.modal input'); await page.fill('.modal input', 'Đối chiếu lại với phiếu cân gốc'); await page.click('.modal .btn:has-text("Đồng ý")');
+  await page.waitForSelector('.modal .btn:not(.ghost)'); await page.click('.modal .btn:not(.ghost)'); await page.waitForTimeout(2000);
+  ck((await page.locator('[data-review]').count()) === 0, 'cập nhật tất cả → danh sách biến mất');
+  const after = (await api('tickets.list', { filter: { search: rows[0].so_phieu } })).rows.find((r) => r.so_phieu === rows[0].so_phieu);
+  ck(after && after.kl_hang_kg === rows[0].kl_hang_kg + 100, 'cập nhật tất cả: KL phải đổi sang ' + (rows[0].kl_hang_kg + 100) + ', thực tế ' + (after && after.kl_hang_kg));
+}
+
 console.log('errors:', errors.length ? errors : 'none');
 await browser.close(); srv.close();
 process.exit(errors.length ? 1 : 0);
