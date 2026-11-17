@@ -44,4 +44,10 @@ function diffMinutes(isoA, isoB) {
   return (Date.parse(isoB + 'Z') - Date.parse(isoA + 'Z')) / 60000;
 }
 
-module.exports = { parseDateTime, datePart, diffMinutes, fromExcelSerial };
+/** Ngày liền trước của 'YYYY-MM-DD' (dùng khi đóng phiên bản giá/lịch sử xe). */
+function dayBefore(d) { const t = new Date(d + 'T00:00:00Z'); t.setUTCDate(t.getUTCDate() - 1); return t.toISOString().slice(0, 10); }
+/** 'YYYY-MM-DD…' → 'dd/MM/yyyy' (không đúng dạng ISO thì trả nguyên văn). */
+const dmy = (iso) => (iso && /^\d{4}-\d{2}-\d{2}/.test(iso) ? `${iso.slice(8, 10)}/${iso.slice(5, 7)}/${iso.slice(0, 4)}` : iso || '');
+const dmyHm = (iso) => (iso && iso.length >= 16 ? `${dmy(iso)} ${iso.slice(11, 16)}` : dmy(iso));
+
+module.exports = { parseDateTime, datePart, diffMinutes, fromExcelSerial, dayBefore, dmy, dmyHm };

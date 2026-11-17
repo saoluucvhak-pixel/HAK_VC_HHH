@@ -5,7 +5,7 @@ const assert = require('node:assert/strict');
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
-const XLSX = require('xlsx');
+const { xlsxBuffer } = require('./helpers/xlsx');
 const { createApp, SEED_DIR } = require('../src/app');
 const { createRuntime } = require('../src/runtime');
 const { detectHeader } = require('../src/excel/columnMapping');
@@ -33,14 +33,13 @@ test('parseTickets: KL hàng lệch |cân2 − cân1| bị báo INVALID_WEIGHT; 
   assert.deepEqual(out[1].errors, []);
 });
 
-test('import end-to-end: phiếu KL lệch cân bị chặn, không vào DB', () => {
+test('import end-to-end: phiếu KL lệch cân bị chặn, không vào DB', async () => {
   const app = createApp({ dbFile: ':memory:', driver: 'node:sqlite' });
   app.seed.load(JSON.parse(fs.readFileSync(path.join(SEED_DIR, 'sample-v47.json'), 'utf8')));
-  app.vehicleImport.commit(app.vehicleImport.preview({ filePath: SAMPLE }).token);
+  app.vehicleImport.commit((await app.vehicleImport.preview({ filePath: SAMPLE })).token);
   const dot = app.db.get('SELECT id FROM dot_van_chuyen LIMIT 1');
-  const ws = XLSX.utils.aoa_to_sheet([H, ['9005', '92H-00903', 'Quế Sơn', '02/10/2026 10:00', '02/10/2026 10:30', 30000, 13000, 99999]]);
-  const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, 'S');
-  const o = app.imports.open({ buffer: XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' }), fileName: 'x.xlsx' });
+  const buffer = await xlsxBuffer([H, ['9005', '92H-00903', 'Quế Sơn', '02/10/2026 10:00', '02/10/2026 10:30', 30000, 13000, 99999]]);
+  const o = await app.imports.open({ buffer, fileName: 'x.xlsx' });
   const si = app.imports.sheetInfo(o.token, o.suggestedSheet);
   const pv = app.imports.preview(o.token, { sheetName: si.sheetName, headerRow: si.headerRow, mapping: si.mapping, dotId: dot.id });
   assert.equal(pv.counts.error, 1);

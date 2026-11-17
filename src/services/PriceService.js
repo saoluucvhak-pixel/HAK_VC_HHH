@@ -9,7 +9,7 @@ const { computeFuelAdjustment, derivePrice } = require('./FuelAdjustmentService'
 const { toDb, fromDb } = require('../utils/dbMoney');
 const { ValidationError } = require('./CatalogService');
 
-const dayBefore = (d) => { const t = new Date(d + 'T00:00:00Z'); t.setUTCDate(t.getUTCDate() - 1); return t.toISOString().slice(0, 10); };
+const { dayBefore } = require('../utils/datetime');
 
 class PriceService {
   constructor(db, audit, cost) { this.db = db; this.audit = audit; this.cost = cost; }

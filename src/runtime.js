@@ -39,14 +39,18 @@ function createRuntime({ dataDir, version = 'dev', driver = null, autoInit = fal
   };
   rt.backup = new BackupService({ getDb: () => rt.app.db, dbFile: dirs.db, backupsDir: dirs.backups, settings: { get: (k) => rt.app.settings.get(k) }, reopen: () => open() });
   open();
-  if (autoInit) {
-    try {
-      if (isFreshDb(rt.app)) { const r = loadInitialData(rt.app, SEED_DIR); log(`Nạp dữ liệu ban đầu: ${JSON.stringify(r.phieu)}`); }
-    } catch (e) { log(`Nạp dữ liệu ban đầu lỗi: ${e.stack}`); }
-  }
-  try { rt.backup.autoDaily(); } catch (e) { log(`Auto backup lỗi: ${e.message}`); }
+  // Nạp dữ liệu ban đầu (đọc Excel bất đồng bộ) rồi sao lưu tự động; dispatch đợi `rt.ready` xong mới xử lý yêu cầu đầu tiên.
+  rt.ready = (async () => {
+    if (autoInit) {
+      try {
+        if (isFreshDb(rt.app)) { const r = await loadInitialData(rt.app, SEED_DIR); log(`Nạp dữ liệu ban đầu: ${JSON.stringify(r.phieu)}`); }
+      } catch (e) { log(`Nạp dữ liệu ban đầu lỗi: ${e.stack}`); }
+    }
+    try { rt.backup.autoDaily(); } catch (e) { log(`Auto backup lỗi: ${e.message}`); }
+  })();
 
   rt.dispatch = async (channel, args) => {
+    await rt.ready;
     const h = Object.hasOwn(rt.handlers, channel) ? rt.handlers[channel] : null;
     if (typeof h !== 'function') return { ok: false, error: `Kênh không tồn tại: ${channel}` };
     try {

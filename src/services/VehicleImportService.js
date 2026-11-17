@@ -13,8 +13,8 @@ const { ValidationError } = require('./CatalogService');
 class VehicleImportService {
   constructor(db, { audit, catalog, cost }) { Object.assign(this, { db, audit, catalog, cost }); this.previews = new Map(); }
 
-  preview({ filePath, buffer, fileName, sheetName = null }) {
-    const wb = readWorkbook({ filePath, buffer, fileName });
+  async preview({ filePath, buffer, fileName, sheetName = null }) {
+    const wb = await readWorkbook({ filePath, buffer, fileName });
     let sheet = sheetName, det = null;
     for (const s of wb.sheets) {
       if (sheetName && s.name !== sheetName) continue;

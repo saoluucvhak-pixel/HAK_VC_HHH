@@ -55,14 +55,13 @@ await page.click('.modal .btn.ghost');
 await nav('tickets'); await page.click('table.t tbody tr >> nth=0'); await page.waitForSelector('.modal'); await shot('22-explain');
 
 // ---- Đối chiếu: file đối tác dựng từ phiếu HAK + lỗi cài sẵn
-const XLSX = require('xlsx');
+const { writeXlsx } = require('./helpers/xlsx.js');
 const hakId = (await (await fetch('http://127.0.0.1:5191/api/catalog.options', { method: 'POST', body: JSON.stringify({ table: 'don_vi_van_chuyen' }) })).json()).data.find((x) => x.label === 'HAK').id;
 const tk = (await (await fetch('http://127.0.0.1:5191/api/tickets.list', { method: 'POST', body: JSON.stringify({ filter: { don_vi_id: hakId }, limit: 1000 }) })).json()).data.rows;
 const aoa = [['STT', 'Số phiếu', 'Biển số', 'Ngày', 'KL (kg)', 'Đơn giá', 'Thành tiền']];
 tk.forEach((x, i) => aoa.push([i + 1, x.so_phieu, x.bien_so, x.ngay_can, x.kl_hang_kg, x.don_gia, x.tien_truoc_vat]));
 aoa[2][4] += 100; aoa[3][5] = 200000; aoa.splice(4, 1);
-const wbx = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wbx, XLSX.utils.aoa_to_sheet(aoa), 'BangKe');
-const partner = path.join(out, '..', '..', 'tests', 'fixtures', 'doitac-hak.xlsx'); XLSX.writeFile(wbx, partner);
+const partner = path.join(out, '..', '..', 'tests', 'fixtures', 'doitac-hak.xlsx'); await writeXlsx(partner, aoa, 'BangKe');
 await page.click('.modal .btn:has-text("Đóng")');
 await nav('reconcile'); await shot('23-recon-list');
 await page.click('[data-act=new]'); await page.fill('[data-f=ten]', 'HAK – V.47');

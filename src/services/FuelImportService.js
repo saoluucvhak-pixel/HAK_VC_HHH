@@ -20,8 +20,8 @@ const num = (v) => {
 class FuelImportService {
   constructor(db, { audit }) { Object.assign(this, { db, audit }); this.previews = new Map(); }
 
-  preview({ filePath, buffer, fileName, sheetName = null, loaiDau = 'DO 0,05S-II' }) {
-    const wb = readWorkbook({ filePath, buffer, fileName });
+  async preview({ filePath, buffer, fileName, sheetName = null, loaiDau = 'DO 0,05S-II' }) {
+    const wb = await readWorkbook({ filePath, buffer, fileName });
     let best = null;
     for (const s of wb.sheets) {
       if (sheetName && s.name !== sheetName) continue;

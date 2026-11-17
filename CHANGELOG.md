@@ -1,6 +1,20 @@
 # CHANGELOG
 
 ## Chưa phát hành
+- Thay thư viện đọc Excel **SheetJS `xlsx` → `exceljs`** (xóa hẳn `xlsx`, hết cảnh báo mức cao Prototype Pollution/ReDoS). `npm audit`: còn 6 cảnh báo mức vừa của `minimatch` trong `electron-builder` (chỉ công cụ build).
+  - Đọc `.xlsx` bằng exceljs, `.csv` bằng bộ đọc riêng (BOM, `,`/`;`, ngoặc kép RFC 4180). Đối chiếu trên file mẫu V.47: 29.702/29.751 ô giống hệt; 49 ô còn lại chỉ là ô công thức ở các dòng tổng cuối sheet (cache 0), ngoài vùng phiếu. Số liệu vẫn khớp Excel (`npm run validate`).
+  - **Thay đổi hành vi: không còn đọc `.xls` (Excel 97-2003)** — báo lỗi rõ (cả khi đổi đuôi thành .xlsx) và hướng dẫn "Lưu thành" .xlsx. Hộp chọn file chỉ còn .xlsx/.csv.
+  - Giá trị ô chuẩn hóa: ngày → số seri (không phụ thuộc múi giờ máy, có test TZ Việt Nam/Mỹ/UTC), công thức → kết quả, ô lỗi/ô gộp phụ → rỗng.
+  - Đọc file thành bất đồng bộ: `open`/`preview` của các import và `loadInitialData` là `async`; `createRuntime` có `rt.ready` và `dispatch` tự đợi nạp dữ liệu ban đầu xong.
+  - Hiệu năng: mở file 20.000 dòng ≈ 0,7 s.
+  - Test: `tests/workbook-reader.test.js` (5 test) + `tests/helpers/xlsx.js` (thay SheetJS trong test).
+- Nhập liệu danh mục — chống trùng/chồng lấn/giá trị vô lý (trước đây các trường hợp này được nhận, gây tách bảng kê hoặc MULTIPLE_PRICE):
+  - Đơn vị vận chuyển: không trùng Mã/Tên (không phân biệt hoa-thường, dấu, khoảng trắng); Mã số thuế 10 số (hoặc 10-3 số), tự chuẩn hóa; email đúng dạng.
+  - Địa điểm: không trùng Tên địa điểm khác, không trùng tên gọi (alias) của địa điểm khác.
+  - Bảng giá nhập trực tiếp ở danh mục: đơn giá > 0, VAT 0–100%, không chồng hiệu lực với bảng giá ACTIVE cùng tuyến/đơn vị/loại hàng (dùng "Tạo phiên bản giá mới" để tự đóng bảng cũ).
+  - Giá dầu phải > 0.
+- Gom xử lý trùng lặp về một chỗ: `dayBefore`, `dmy`, `dmyHm` (utils/datetime), định dạng số không "-0" cho PDF/in (utils/numfmt), `isInside` (utils/safePath; storageLocation dùng lại). Test khẳng định định nghĩa "đã tính giá" của báo cáo và bảng kê trùng nhau theo từng đơn vị.
+- Test: `tests/entry-validation.test.js` (7 test). Rà soát import (biển số viết khác, nơi xuất viết khác, KL sửa, số phiếu tái dùng, xe khác, đợt khác, dòng trùng trong file, xe chồng giờ cân) — hành vi hiện tại đúng, không đổi.
 - Bản vá: `electron` 45.3.1 → 45.3.3, `better-sqlite3` 13.1.1 → 13.2.0, `playwright-core` 1.65.0 → 1.65.1. Kiểm chứng: 76/76 test bằng cả hai driver, kiểm tra khởi động + PDF thật (Electron 45.3.3) và `test:ui` đạt.
 - Phụ thuộc: ép `uuid` ≥ 11.1.1 (qua `overrides`; `exceljs` chỉ dùng `uuid.v4`) để hết cảnh báo; nâng `chart.js` 4.5 → 4.6.1, `tabulator-tables` 6.6 → 6.7.1, `playwright-core` 1.63 → 1.65. `npm audit`: 9 → 7 cảnh báo, còn `xlsx` (high, chưa có bản vá trên npm) và chuỗi `minimatch` trong `electron-builder` (moderate, chỉ công cụ build, không đóng gói vào app).
 - Nâng Electron 33.4.11 → **45.3.1** (bản 33 hết hỗ trợ, `npm audit` mức cao đã hết) và `better-sqlite3` 11.10 → **13.1.1** (N-API prebuilt dùng chung Node/Electron: không còn build lại module native, bỏ bước `install-app-deps` trong CI). `electron-builder` → 26.18. Loại các prebuilt nền tảng khác và mã nguồn C của better-sqlite3 khỏi bản đóng gói.

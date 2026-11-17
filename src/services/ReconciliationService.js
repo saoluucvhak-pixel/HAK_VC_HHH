@@ -121,8 +121,8 @@ function matchRows(A, B, opt = {}) {
 class ReconciliationService {
   constructor(db, { audit, alerts, reports }) { Object.assign(this, { db, audit, alerts, reports }); this.previews = new Map(); }
 
-  open({ filePath, buffer, fileName }) {
-    const wb = readWorkbook({ filePath, buffer, fileName });
+  async open({ filePath, buffer, fileName }) {
+    const wb = await readWorkbook({ filePath, buffer, fileName });
     const sheets = wb.sheets.map((s) => ({ ...s, det: detectB(wb.aoa(s.name)) }));
     const best = sheets.reduce((a, s) => (!a || s.det.score > a.det.score ? s : a), null);
     const token = crypto.randomUUID(); this.previews.set(token, { wb });

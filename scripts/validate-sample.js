@@ -8,7 +8,8 @@
  */
 const fs = require('fs');
 const path = require('path');
-const XLSX = require('xlsx');
+const ExcelJS = require('exceljs');
+const { readWorkbook, normCell } = require('../src/excel/workbookReader');
 const { detectHeader, fold } = require('../src/excel/columnMapping');
 const { parseTickets } = require('../src/excel/ticketParser');
 const { computeFuelAdjustment } = require('../src/services/FuelAdjustmentService');
@@ -23,9 +24,13 @@ const file = process.argv[2];
 const outDir = process.argv[3] || path.join(__dirname, '..', 'docs');
 if (!file) { console.error('Usage: node scripts/validate-sample.js <file.xlsx> [outDir]'); process.exit(1); }
 const seed = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'data', 'seed', 'sample-v47.json'), 'utf8'));
-const wb = XLSX.readFile(file, { cellFormula: true });
-const aoa = (name) => XLSX.utils.sheet_to_json(wb.Sheets[name], { header: 1, raw: true, defval: null });
-const cellV = (sheet, addr) => (wb.Sheets[sheet][addr] || {}).v;
+const colLetter = (i) => { let s = ''; for (let n = i + 1; n > 0; n = Math.floor((n - 1) / 26)) s = String.fromCharCode(65 + ((n - 1) % 26)) + s; return s; };   // 0 → A, 26 → AA
+async function main() {
+const wbR = await readWorkbook({ filePath: file });
+const exw = new ExcelJS.Workbook(); await exw.xlsx.readFile(file);
+const aoa = (name) => wbR.aoa(name);
+// Giá trị ô theo địa chỉ; công thức chưa có kết quả lưu (exceljs bỏ qua cache 0) coi là 0 — chỉ dùng cho các ô tổng của file mẫu.
+const cellV = (sheet, addr) => { const v = exw.getWorksheet(sheet).getCell(addr).value; return v && typeof v === 'object' && 'formula' in v && !('result' in v) ? 0 : normCell(v); };
 
 const lines = [];
 const log = (s = '') => { lines.push(s); };
@@ -91,7 +96,7 @@ const hd = detectHeader(ftAoa);
 const tickets = parseTickets(ftAoa, hd.headerRow, hd.mapping);
 log('## 2. Import phiếu cân (sheet "File tổng")');
 log('');
-log(`- Dòng header tự dò được: **${hd.headerRow + 1}**; cột nhận dạng: ${Object.entries(hd.mapping).map(([k, v]) => `${k}→${XLSX.utils.encode_col(v)}`).join(', ')}`);
+log(`- Dòng header tự dò được: **${hd.headerRow + 1}**; cột nhận dạng: ${Object.entries(hd.mapping).map(([k, v]) => `${k}→${colLetter(v)}`).join(', ')}`);
 log(`- Số phiếu đọc được: **${tickets.length}**; dòng có lỗi validate: **${tickets.filter((t) => t.errors.length).length}**`);
 tickets.filter((t) => t.errors.length).slice(0, 20).forEach((t) => log(`  - Dòng ${t.source_row} (phiếu ${t.so_phieu}): ${t.errors.join('; ')}`));
 
@@ -239,3 +244,5 @@ fs.mkdirSync(outDir, { recursive: true });
 fs.writeFileSync(path.join(outDir, 'EXCEL_VS_APP_VALIDATION.md'), lines.join('\n') + '\n');
 console.log(lines.join('\n'));
 process.exitCode = allOk ? 0 : 2;
+}
+main().catch((e) => { console.error(e); process.exit(1); });

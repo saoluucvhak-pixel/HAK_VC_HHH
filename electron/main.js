@@ -142,7 +142,7 @@ app.whenReady().then(() => {
   });
   ipcMain.handle('api', (_e, channel, args) => rt.dispatch(channel, args));
   ipcMain.handle('dialog.openFile', async (_e, { filters } = {}) => {
-    const r = await dialog.showOpenDialog(win, { properties: ['openFile'], filters: filters || [{ name: 'Excel / CSV', extensions: ['xlsx', 'xls', 'csv'] }] });
+    const r = await dialog.showOpenDialog(win, { properties: ['openFile'], filters: filters || [{ name: 'Excel (.xlsx) / CSV', extensions: ['xlsx', 'csv'] }] });
     return r.canceled ? null : r.filePaths[0];
   });
   ipcMain.handle('dialog.saveExport', async (_e, { path: src, fileName }) => {

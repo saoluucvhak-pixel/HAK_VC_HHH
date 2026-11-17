@@ -41,7 +41,7 @@ function writeCustom(bootstrapDir, dataDir) {
 }
 
 const hasData = (dir) => fs.existsSync(path.join(dir, 'data', 'app.db'));
-const isInside = (child, parent) => { const r = path.relative(path.resolve(parent), path.resolve(child)); return !!r && !r.startsWith('..') && !path.isAbsolute(r); };
+const isInside = (child, parent) => require('./safePath').isInside(parent, child);   // một bản duy nhất (safePath.isInside(base, p))
 
 /**
  * Kiểm tra thư mục đích. mode: 'COPY' (chép dữ liệu hiện tại sang) | 'USE' (dùng dữ liệu đã có sẵn ở đích).
