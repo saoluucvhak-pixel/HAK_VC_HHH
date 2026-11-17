@@ -8,12 +8,14 @@ const crypto = require('crypto');
 
 const dir = path.join(__dirname, '..', 'renderer', 'vendor', 'hak-smart-filter');
 const manifest = JSON.parse(fs.readFileSync(path.join(dir, 'MANIFEST.json'), 'utf8'));
+// Băm theo nội dung đã chuẩn hóa xuống dòng (LF): Windows có thể checkout CRLF (core.autocrlf) mà nội dung vẫn là bản nguồn
+const sha = (file) => crypto.createHash('sha256').update(fs.readFileSync(file, 'utf8').replace(/\r\n/g, '\n')).digest('hex');
 
 test('hak-smart-filter nhúng: băm SHA-256 khớp MANIFEST, commit nguồn đầy đủ', () => {
   assert.match(manifest.commit, /^[0-9a-f]{40}$/);
   assert.ok(Object.keys(manifest.files).length >= 3);
   for (const [name, m] of Object.entries(manifest.files)) {
-    const got = crypto.createHash('sha256').update(fs.readFileSync(path.join(dir, name))).digest('hex');
+    const got = sha(path.join(dir, name));
     assert.equal(got, m.sha256, `${name} đã bị sửa so với bản nguồn (${m.upstream}); cập nhật bằng cách chép lại từ repo nguồn rồi chạy node scripts/vendor-manifest.js`);
   }
 });
@@ -24,4 +26,14 @@ test('index.html nạp lõi → popover → giao diện → bộ chuyển đổi
   const idx = order.map((s) => html.indexOf(`src="${s}"`));
   assert.ok(idx.every((i) => i >= 0), JSON.stringify(idx));
   assert.deepEqual([...idx].sort((a, b) => a - b), idx);
+});
+
+test('băm không đổi khi file được checkout với xuống dòng CRLF (Windows)', () => {
+  const f = path.join(dir, 'smart-filter.js');
+  const lf = fs.readFileSync(f, 'utf8');
+  const crlf = lf.replace(/\r?\n/g, '\r\n');
+  const h = (t) => crypto.createHash('sha256').update(t.replace(/\r\n/g, '\n')).digest('hex');
+  assert.notEqual(Buffer.from(crlf).length, Buffer.from(lf).length);
+  assert.equal(h(crlf), h(lf));
+  assert.equal(h(lf), manifest.files['smart-filter.js'].sha256);
 });

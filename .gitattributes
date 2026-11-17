@@ -1,0 +1,2 @@
+# Bản nhúng giữ nguyên xuống dòng như repo nguồn; không để Git đổi CRLF/LF
+renderer/vendor/** -text
