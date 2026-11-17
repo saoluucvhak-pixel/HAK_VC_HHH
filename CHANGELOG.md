@@ -1,6 +1,11 @@
 # CHANGELOG
 
 ## Chưa phát hành
+- **Bộ lọc thông minh (HAK Smart Filter) dùng chung mọi màn hình** thay thanh lọc cũ (Phiếu cân, Dashboard, Báo cáo, Biểu mẫu, Bảng kê): chọn nhiều đơn vị / đợt / nơi xuất / tuyến, tìm không dấu (số phiếu, biển số gõ kiểu nào cũng được, tên nơi xuất kể cả tên gọi khác), kỳ + Từ/Đến ngày `dd/mm/yyyy` (tự chèn `/`, chặn ngày không tồn tại), trạng thái tính giá, chip điều kiện, dòng "Hiển thị x / y dòng · Phạm vi", bộ lọc đã lưu theo màn hình. Điều kiện đi từ Dashboard sang Phiếu cân nay hiện thành chip (không còn lọc ngầm). Chứng từ Excel/PDF in tên các giá trị đã chọn và cụm tìm kiếm.
+  - Lõi nhúng nguyên văn từ `HAK_SMART_FILTER` (commit e99bb7e) ở `renderer/vendor/hak-smart-filter` + `MANIFEST.json` (test chặn sửa tay); bộ chuyển đổi `renderer/filters.js`.
+  - Backend: `ReportService.where` nhận mảng id (IN), tìm kiếm không dấu; thêm `tickets.count`, `tickets.periods`; `asIds`/`oneId`; bảng kê đòi đúng một đơn vị.
+  - Giao diện: popup/ngăn kéo/chip theo tokens hiện có; hộp thoại nổi trên ngăn kéo.
+  - Test: `tests/filter.test.js` (6), `tests/vendor.test.js` (2) và kịch bản giao diện thật (chọn nhiều → chip → phạm vi → tìm không dấu → ngày → ngăn nâng cao → bộ lọc đã lưu riêng từng màn).
 - **Sửa lỗi mất dữ liệu sao lưu**: cấu hình sao lưu sai (vd số bản giữ lại = "abc", âm, 0) làm `applyRetention` xóa SẠCH bản sao lưu tự động (đã tái hiện: 5 bản → 0, kể cả bản vừa tạo). Nay số bản giữ lại luôn được kiểm tra (giá trị lạ → mặc định 30/12) và bản vừa tạo không bao giờ bị xóa.
 - **Cấu hình hệ thống có kiểm tra**: `settings.set` chỉ nhận các khóa đã biết (backup, company, rounding, time_anomaly, default_noi_den, duplicate_key, initial_data, money_scale) và kiểm tra giá trị (khoảng/kiểu). Trước đây nhận mọi khóa/giá trị: làm tròn `NaN` bỏ làm tròn âm thầm, ngưỡng cảnh báo âm, khóa `__proto__`…
 - Tính lại hàng loạt chỉ ghi phiếu khi kết quả thật sự đổi (tính lại 20.000 phiếu không đổi: 1,37 s → 0,87 s; `updated_at` phản ánh lần đổi thật).

@@ -37,9 +37,11 @@
   App.register('tickets', {
     async render(v, params = {}) {
       Object.assign(App.state.filter, Object.fromEntries(Object.entries(params).filter(([k]) => ['tu_ngay', 'den_ngay', 'dot_id', 'noi_xuat_id', 'don_vi_id'].includes(k))));
-      const st = { offset: 0, limit: 100, sort: 'ngay_gio_can_1', dir: 'asc', search: '', chua: !!params.chua_tinh_gia, status: params.trang_thai_tinh_gia || '' };
+      // Đi từ Dashboard/báo cáo sang: gán điều kiện vào bộ lọc dùng chung (hiện thành chip, không lọc ngầm)
+      if (params.chua_tinh_gia) App.state.filter.trang_thai = params.trang_thai_tinh_gia || 'CHUA_TINH'; else if (params.trang_thai_tinh_gia) App.state.filter.trang_thai = params.trang_thai_tinh_gia;
+      const st = { offset: 0, limit: 100, sort: 'ngay_gio_can_1', dir: 'asc' };
       const body = h('div', {}); const sel = new Set();
-      const flt = () => ({ ...App.cleanFilter(App.state.filter), search: st.search || undefined, chua_tinh_gia: st.chua || undefined, trang_thai_tinh_gia: st.status || undefined });
+      const flt = () => App.cleanFilter(App.state.filter);
       const load = async () => {
         const d = await api('tickets.list', { filter: flt(), offset: st.offset, limit: st.limit, sort: st.sort, dir: st.dir });
         const pages = Math.max(1, Math.ceil(d.total / st.limit)); const page = Math.floor(st.offset / st.limit) + 1;
@@ -64,13 +66,9 @@
       const done = (r) => { sel.clear(); selBtn.textContent = '🗑 Xóa phiếu đã chọn (0)'; selBtn.disabled = true; App.refreshInfo(); load(); };
       const selBtn = h('button', { class: 'btn danger', disabled: true, 'data-act': 'del-selected', onclick: () => delTickets([...sel], done) }, '🗑 Xóa phiếu đã chọn (0)');
       const allBtn = h('button', { class: 'btn ghost', 'data-act': 'del-filtered', title: 'Xóa mọi phiếu khớp bộ lọc hiện tại (kể cả các trang khác)', onclick: async () => { const ids = await api('tickets.ids', { filter: flt() }); delTickets(ids, done); } }, '🗑 Xóa tất cả phiếu đang lọc');
-      const search = h('input', { placeholder: 'Tìm số phiếu / biển số / nơi xuất…', style: { width: '260px' }, onchange: (e) => { st.search = e.target.value.trim(); reset(); } });
       v.append(App.pageHead('Phiếu cân', 'Bấm một dòng để xem vì sao phiếu có đơn giá đó',
         h('span', { class: 'row gap-s' }, selBtn, allBtn, h('button', { class: 'btn ghost', onclick: () => App.exportXlsx('export.tickets', { filter: flt() }) }, '⬇ Xuất Excel'))),
       await App.filterBar(reset),
-      h('div', { class: 'card row' }, search,
-        h('label', { class: 'row gap-s' }, h('input', { type: 'checkbox', checked: st.chua, onchange: (e) => { st.chua = e.target.checked; reset(); } }), 'Chỉ phiếu chưa tính được giá'),
-        h('select', { onchange: (e) => { st.status = e.target.value; reset(); } }, h('option', { value: '' }, 'Mọi trạng thái'), ['OK', 'NO_PRICE', 'MULTIPLE_PRICE', 'UNKNOWN_VEHICLE', 'UNKNOWN_CARRIER', 'UNKNOWN_LOCATION', 'LOCKED'].map((s) => h('option', { value: s }, App.STATUS_TAG[s][1])))),
       body);
       await load();
     },
