@@ -14,6 +14,17 @@ const { ValidationError } = require('./CatalogService');
 
 const COUNT_KEYS = ['total', 'valid', 'new', 'exact', 'conflict', 'inFile', 'error', 'unknownVehicle', 'unknownLocation', 'noPrice', 'multiplePrice'];
 
+// Cảnh báo của phiếu MỚI cần người dùng xử lý trước khi phiếu vào được bảng kê: [vấn đề, cách xử lý]
+const ISSUE_WARN = {
+  UNKNOWN_VEHICLE: ['Xe chưa có trong danh mục', 'Thêm xe ở Danh mục → Xe (hoặc import danh sách xe)'],
+  UNKNOWN_CARRIER: ['Xe chưa gán đơn vị vận chuyển', 'Gán đơn vị cho xe ở Danh mục → Xe'],
+  AMBIGUOUS_VEHICLE: ['Xe thuộc nhiều đơn vị cùng thời điểm', 'Sửa lịch sử xe → đơn vị ở Danh mục → Xe'],
+  UNKNOWN_LOCATION: ['Chưa nhận ra nơi xuất / tuyến', 'Thêm địa điểm hoặc tên gọi khác ở Danh mục → Địa điểm, tạo tuyến ở Danh mục → Tuyến'],
+  NO_PRICE: ['Chưa có bảng giá cho tuyến/ngày này', 'Tạo bảng giá hiệu lực ở menu Bảng giá'],
+  MULTIPLE_PRICE: ['Nhiều bảng giá cùng hiệu lực', 'Đóng bớt bảng giá chồng lấn ở menu Bảng giá'],
+  NO_VAT_RATE: ['Bảng giá chưa có thuế suất VAT', 'Nhập VAT cho bảng giá'],
+};
+
 class TicketImportService {
   constructor(db, { audit, alerts, cost, settings }) {
     Object.assign(this, { db, audit, alerts, cost, settings });
@@ -44,6 +55,56 @@ class TicketImportService {
     const hr = headerRow === null || headerRow === undefined ? det.headerRow : Number(headerRow);
     const mapping = headerRow === null || headerRow === undefined ? det.mapping : detectHeader([aoa[hr] || []]).mapping;
     return { sheetName, headerRow: hr, headers: (aoa[hr] || []).map((h, i) => ({ index: i, text: h == null ? '' : String(h) })), mapping, sample: aoa.slice(hr + 1, hr + 6) };
+  }
+
+  /**
+   * Kiểm tra NGAY TẠI CHỖ khi đang ghép cột (bước 2), chưa cần xem trước đầy đủ: thiếu cột bắt buộc, cột bị gán trùng,
+   * tóm tắt lỗi cả sheet theo lý do, và đọc thử vài dòng đầu (ngày giờ, biển số chuẩn hóa, KL, nơi xuất nhận ra) để người dùng thấy ngay máy hiểu gì.
+   * Chỉ đọc — không ghi DB, không đổi trạng thái phiên.
+   */
+  check(token, { sheetName, headerRow, mapping, sampleSize = 8 }) {
+    const p = this._p(token);
+    const m = mapping || {};
+    const has = (k) => m[k] !== undefined && m[k] !== null;
+    const problems = [];
+    const need = [['so_phieu', 'Số phiếu'], ['bien_so', 'Biển số'], ['ngay_gio_can_1', 'Ngày giờ cân 1']];
+    for (const [k, label] of need) if (!has(k)) problems.push({ level: 'error', field: k, text: `Chưa ghép cột "${label}" (bắt buộc)` });
+    if (!has('kl_hang_kg') && !(has('can_lan_1') && has('can_lan_2'))) problems.push({ level: 'error', field: 'kl_hang_kg', text: 'Cần cột "KL hàng" — hoặc ghép cả "Cân lần 1" và "Cân lần 2" để tự tính KL' });
+    if (!has('noi_xuat')) problems.push({ level: 'warning', field: 'noi_xuat', text: 'Chưa ghép "Nơi xuất": không xác định được tuyến và đơn giá, phiếu sẽ ở trạng thái chưa tính giá' });
+    if (!has('ngay_gio_can_2')) problems.push({ level: 'warning', field: 'ngay_gio_can_2', text: 'Chưa ghép "Ngày giờ cân 2": không kiểm tra được thời gian cân' });
+    const byCol = new Map();
+    for (const [k, idx] of Object.entries(m)) if (idx !== undefined && idx !== null) { if (!byCol.has(idx)) byCol.set(idx, []); byCol.get(idx).push(k); }
+    for (const [idx, ks] of byCol) if (ks.length > 1) problems.push({ level: 'warning', field: ks[0], text: `Cột ${Number(idx) + 1} đang được gán cho nhiều trường: ${ks.join(', ')}` });
+
+    let rows = [];
+    if (!problems.some((x) => x.level === 'error')) {
+      try { rows = parseTickets(p.wb.aoa(sheetName), Number(headerRow), m); } catch (e) { problems.push({ level: 'error', field: null, text: `Không đọc được dữ liệu: ${e.message}` }); }
+    }
+    const reasons = new Map();
+    for (const r of rows) for (const e of r.errors) {
+      const key = String(e).replace(/\d+([.,]\d+)?/g, '#').replace(/\s+/g, ' ').slice(0, 120);
+      const cur = reasons.get(key) || { text: String(e), so_dong: 0, dong_dau: r.source_row };
+      cur.so_dong++; reasons.set(key, cur);
+    }
+    const locs = new Map(this.db.all('SELECT id, ten FROM dia_diem').map((d) => [d.id, d.ten]));
+    const alias = this.cost.loadContext().alias;
+    const sample = rows.slice(0, sampleSize).map((r) => {
+      const nx = alias.get(fold(r.noi_xuat)) || null;
+      return { source_row: r.source_row, so_phieu: r.so_phieu, ngay_gio_can_1: r.ngay_gio_can_1, ngay_gio_can_2: r.ngay_gio_can_2, bien_so: r.bien_so, bien_so_goc: r.bien_so_goc,
+        kl_hang_kg: r.kl_hang_kg, noi_xuat_goc: r.noi_xuat, noi_xuat_nhan_dang: nx ? locs.get(nx) || null : null, errors: r.errors };
+    });
+    return {
+      problems, blocking: problems.some((x) => x.level === 'error'),
+      summary: { tong_dong: rows.length, dong_loi: rows.filter((r) => r.errors.length).length, ly_do: [...reasons.values()].sort((a, b) => b.so_dong - a.so_dong).slice(0, 8) },
+      sample,
+    };
+  }
+
+  /** Dòng cần xử lý của bản xem trước (lỗi, trùng khóa khác nội dung, thiếu xe/nơi xuất/giá) — để xuất Excel sửa rồi import lại. */
+  issueRows(token) {
+    const p = this._p(token);
+    if (!p.rows) throw new ValidationError('Chưa xem trước');
+    return p.rows.filter((r) => r.phan_loai === 'ERROR' || r.phan_loai === 'KEY_CONFLICT' || (r.phan_loai === 'NEW' && r.warnings.some((w) => ISSUE_WARN[w])));
   }
 
   /** Bước 3: preview đầy đủ (parse, validate, phân loại trùng, tính thử). KHÔNG ghi DB. */
@@ -285,4 +346,4 @@ class TicketImportService {
   }
 }
 
-module.exports = { TicketImportService };
+module.exports = { TicketImportService, ISSUE_WARN };

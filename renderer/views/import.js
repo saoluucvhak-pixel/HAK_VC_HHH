@@ -13,8 +13,8 @@
       const draw = () => { App.clear(root).append(steps()); ({ 1: s1, 2: s2, 3: s3, 4: s4 })[S.step](); };
 
       function s1() {
-        root.append(h('div', { class: 'card' }, h('h3', {}, 'Chọn file phiếu cân (.xlsx / .xls / .csv)'),
-          h('p', { class: 'muted' }, 'Import lại cùng file không tạo phiếu trùng: phiếu giống hệt được bỏ qua, phiếu cùng số phiếu + nơi xuất nhưng khác dữ liệu vào "Cần kiểm tra".'),
+        root.append(h('div', { class: 'card' }, h('h3', {}, 'Chọn file phiếu cân (.xlsx / .csv)'),
+          h('p', { class: 'muted' }, 'File Excel cũ (.xls) cần mở bằng Excel rồi "Lưu thành" .xlsx. Import lại cùng file không tạo phiếu trùng: phiếu giống hệt được bỏ qua, phiếu cùng số phiếu + nơi xuất nhưng khác dữ liệu vào "Cần kiểm tra".'),
           h('div', { class: 'row' }, h('button', { class: 'btn', 'data-act': 'pick', onclick: async () => {
             const f = await App.pickFile(); if (!f) return;
             const o = await call('import.open', f); if (!o) return;
@@ -29,6 +29,42 @@
       async function s2() {
         const o = S.open;
         const dots = await api('catalog.options', { table: 'dot_van_chuyen' }); const dd = await api('catalog.options', { table: 'dia_diem' });
+        // Kiểm tra NGAY khi ghép cột: thiếu cột bắt buộc, lỗi theo lý do, và đọc thử các dòng đầu để thấy máy hiểu gì
+        const checkBox = h('div', { class: 'card', 'data-check': '1' }, h('h3', {}, 'Kiểm tra ngay…'));
+        const previewBtn = h('button', { class: 'btn', 'data-act': 'preview', disabled: true, onclick: async () => {
+          const r = await call('import.preview', { token: S.open.token, sheetName: S.sheet, headerRow: S.headerRow, mapping: S.mapping, dotId: S.dotId || null, noiDenId: S.noiDenId || null });
+          if (!r) return; S.prev = r; S.filter = null; S.step = 3; draw();
+        } }, 'Xem trước ›');
+        const verdict = h('div', { class: 'chk-verdict', 'data-verdict': '1' }, 'Đang kiểm tra…');   // kết luận 1 dòng ngay cạnh các ô ghép cột
+        const bad = (t) => h('span', { class: 'tag red' }, t), good = (t) => h('span', { class: 'tag green' }, t);
+        const drawCheck = (r) => {
+          previewBtn.disabled = r.blocking;
+          const errs = r.problems.filter((x) => x.level === 'error'), warns = r.problems.filter((x) => x.level !== 'error');
+          verdict.className = 'chk-verdict ' + (errs.length ? 'bad' : warns.length || r.summary.dong_loi ? 'warn' : 'ok');
+          verdict.textContent = errs.length ? `✗ ${errs[0].text}${errs.length > 1 ? ` (+${errs.length - 1} lỗi nữa)` : ''}` : warns.length || r.summary.dong_loi
+            ? `⚠ ${warns.length ? warns.length + ' cảnh báo' : ''}${warns.length && r.summary.dong_loi ? ' · ' : ''}${r.summary.dong_loi ? fmt.int(r.summary.dong_loi) + ' dòng có lỗi' : ''} — xem chi tiết bên dưới` : `✓ Đủ cột, đọc được ${fmt.int(r.summary.tong_dong)} dòng`;
+          const kids = [h('h3', {}, 'Kiểm tra ngay — máy đọc file theo cách ghép cột hiện tại')];
+          if (!r.problems.length) kids.push(h('p', { class: 'tag green' }, '✓ Đủ cột cần thiết'));
+          r.problems.forEach((p) => kids.push(h('p', { class: 'chk ' + (p.level === 'error' ? 'bad' : 'warn') }, (p.level === 'error' ? '✗ ' : '⚠ ') + p.text)));
+          const sm = r.summary;
+          if (sm.tong_dong) {
+            kids.push(h('p', { class: 'chk ' + (sm.dong_loi ? 'warn' : 'ok') }, `Đọc được ${fmt.int(sm.tong_dong)} dòng — ` + (sm.dong_loi ? `${fmt.int(sm.dong_loi)} dòng có lỗi (sẽ không được ghi)` : 'không có dòng lỗi')));
+            if (sm.ly_do.length) kids.push(h('ul', { class: 'chk-list' }, sm.ly_do.map((x) => h('li', {}, `${fmt.int(x.so_dong)} dòng: ${x.text} (ví dụ dòng ${x.dong_dau})`))));
+            kids.push(h('h3', { style: { marginTop: '12px' } }, `Đọc thử ${r.sample.length} dòng đầu`), table({ columns: [
+              { key: 'source_row', label: 'Dòng', num: true }, { key: 'so_phieu', label: 'Số phiếu', mono: true },
+              { key: 'ngay_gio_can_1', label: 'Cân 1', render: (x) => (x.ngay_gio_can_1 ? h('span', { class: 'mono' }, fmt.dt(x.ngay_gio_can_1)) : bad('không đọc được')) },
+              { key: 'bien_so', label: 'Biển số', render: (x) => (x.bien_so ? h('span', { class: 'mono' }, x.bien_so, x.bien_so_goc && x.bien_so_goc !== x.bien_so ? h('small', { class: 'muted' }, ` ← ${x.bien_so_goc}`) : null) : bad('thiếu')) },
+              { key: 'kl_hang_kg', label: 'KL (kg)', fmt: 'kg' },
+              { key: 'noi_xuat_goc', label: 'Nơi xuất', render: (x) => (x.noi_xuat_nhan_dang ? good('✓ ' + x.noi_xuat_nhan_dang) : x.noi_xuat_goc ? bad(`chưa nhận ra “${x.noi_xuat_goc}”`) : h('span', { class: 'muted' }, '—')) },
+              { key: 'errors', label: 'Lỗi', render: (x) => (x.errors.length ? h('span', { class: 'chk bad' }, x.errors.join('; ')) : h('span', { class: 'muted' }, '—')) }], rows: r.sample }));
+          }
+          App.clear(checkBox).append(...kids);
+        };
+        let tm = null;
+        const runCheck = () => { clearTimeout(tm); tm = setTimeout(async () => {
+          const r = await call('import.check', { token: S.open.token, sheetName: S.sheet, headerRow: S.headerRow, mapping: S.mapping });
+          if (r && S.step === 2) drawCheck(r);
+        }, 120); };
         root.append(
           h('div', { class: 'card' }, h('h3', {}, `${o.fileName}`), o.previouslyImported ? h('p', { class: 'tag amber' }, `File này đã import ở lô #${o.previouslyImported.batchId} (${fmt.dt(o.previouslyImported.at)}) — dòng trùng sẽ được bỏ qua`) : null,
             h('div', { class: 'form-grid' },
@@ -36,16 +72,13 @@
               h('label', { class: 'field' }, 'Dòng tiêu đề (bắt đầu từ 1)', h('input', { type: 'number', min: 1, value: S.headerRow + 1, onchange: async (e) => { S.info = await api('import.sheetInfo', { token: o.token, sheetName: S.sheet, headerRow: Number(e.target.value) - 1 }); S.mapping = { ...S.info.mapping }; S.headerRow = S.info.headerRow; draw(); } })),
               h('label', { class: 'field' }, 'Gán vào đợt / tàu', h('select', { 'data-f': 'dot', onchange: (e) => (S.dotId = e.target.value) }, h('option', { value: '' }, '— không gán —'), dots.map((d) => h('option', { value: d.id, selected: String(S.dotId) === String(d.id) }, d.label)))),
               h('label', { class: 'field' }, 'Nơi đến mặc định (nếu file không có cột)', h('select', { 'data-f': 'noiden', onchange: (e) => (S.noiDenId = e.target.value) }, h('option', { value: '' }, '— không —'), dd.map((d) => h('option', { value: d.id, selected: String(S.noiDenId) === String(d.id) }, d.label)))))),
-          h('div', { class: 'card' }, h('h3', {}, 'Ghép cột (tự nhận dạng — có thể sửa)'),
-            h('div', { class: 'form-grid' }, FIELDS.map(([k, lbl]) => h('label', { class: 'field' }, lbl, h('select', { 'data-map': k, onchange: (e) => { if (e.target.value === '') delete S.mapping[k]; else S.mapping[k] = Number(e.target.value); } },
+          h('div', { class: 'card' }, h('h3', {}, 'Ghép cột (tự nhận dạng — có thể sửa)'), verdict,
+            h('div', { class: 'form-grid' }, FIELDS.map(([k, lbl]) => h('label', { class: 'field' }, lbl, h('select', { 'data-map': k, onchange: (e) => { if (e.target.value === '') delete S.mapping[k]; else S.mapping[k] = Number(e.target.value); runCheck(); } },
               h('option', { value: '' }, '— bỏ qua —'), S.info.headers.map((c) => h('option', { value: c.index, selected: S.mapping[k] === c.index }, `${c.index + 1}. ${c.text}`)))))),
             h('h3', { style: { marginTop: '14px' } }, 'Dữ liệu mẫu'), table({ columns: S.info.headers.map((c) => ({ key: String(c.index), label: c.text || `Cột ${c.index + 1}` })), rows: S.info.sample.map((r) => Object.fromEntries(r.map((x, i) => [String(i), x == null ? '' : String(x)]))) })),
-          h('div', { class: 'row end' }, h('button', { class: 'btn ghost', onclick: () => { S.step = 1; draw(); } }, '‹ Quay lại'), h('button', { class: 'btn', 'data-act': 'preview', onclick: async () => {
-            const miss = ['so_phieu', 'ngay_gio_can_1', 'bien_so', 'kl_hang_kg', 'noi_xuat'].filter((k) => S.mapping[k] === undefined);
-            if (miss.length) return App.toast(`Thiếu cột bắt buộc: ${miss.join(', ')}`, true);
-            const r = await call('import.preview', { token: S.open.token, sheetName: S.sheet, headerRow: S.headerRow, mapping: S.mapping, dotId: S.dotId || null, noiDenId: S.noiDenId || null });
-            if (!r) return; S.prev = r; S.filter = null; S.step = 3; draw();
-          } }, 'Xem trước ›')));
+          checkBox,
+          h('div', { class: 'row end' }, h('button', { class: 'btn ghost', onclick: () => { S.step = 1; draw(); } }, '‹ Quay lại'), previewBtn));
+        runCheck();
       }
 
       async function s3() {
@@ -64,19 +97,32 @@
           rows: d.rows, rowClass: (r) => (r.phan_loai === 'ERROR' ? 'err' : r.phan_loai === 'KEY_CONFLICT' ? 'flag' : r.phan_loai.includes('DUPLICATE') ? 'dup' : ''), wrapClass: 'tall' }),
         h('p', { class: 'muted' }, `Hiển thị ${d.rows.length}/${d.total} dòng.`)),
         h('div', { class: 'row end' }, h('button', { class: 'btn ghost', onclick: () => { S.step = 2; draw(); } }, '‹ Quay lại'),
+          (c.error + c.conflict + c.unknownVehicle + c.unknownLocation + c.noPrice + c.multiplePrice) > 0 ? h('button', { class: 'btn ghost', 'data-act': 'issues', title: 'Excel liệt kê từng dòng cần xử lý kèm lý do và cách xử lý — sửa rồi import lại, dòng đã đúng không bị trùng', onclick: () => App.exportXlsx('import.issuesXlsx', { token: S.open.token }) }, '⬇ Tải các dòng cần xử lý (Excel)') : null,
           h('button', { class: 'btn', 'data-act': 'commit', disabled: c.new + c.conflict === 0, onclick: async () => {
             if (!(await App.confirmBox('Xác nhận import', `Ghi ${c.new} phiếu mới. ${c.conflict} dòng trùng khóa sẽ vào "Cần kiểm tra", ${c.exact + c.inFile} dòng trùng bị bỏ qua, ${c.error} dòng lỗi không được ghi. Hệ thống sẽ tự backup trước khi ghi.`, 'Import'))) return;
             const r = await call('import.commit', { token: S.open.token, dotId: S.dotId || null, noiDenId: S.noiDenId || null }); if (!r) return; S.result = r; S.step = 4; draw();
           } }, `Import ${c.new} phiếu mới`)));
       }
 
-      function s4() {
+      async function s4() {
         const r = S.result;
-        root.append(h('div', { class: 'card' }, h('h3', {}, '✅ Import hoàn tất'), h('div', { class: 'grid g4' },
+        const t = await api('workflow.todo').catch(() => null);
+        const next = (n, text, btn, go, urgent) => h('div', { class: 'todo-row ' + (urgent ? 'open' : 'info') }, h('span', { class: 'todo-n' }, n), h('div', { class: 'todo-t' }, h('b', {}, text)), h('span', {}), h('button', { class: 'btn sm' + (urgent ? '' : ' ghost'), onclick: go }, btn));
+        const steps = [];
+        if (r.conflict) steps.push(next('1', `${fmt.int(r.conflict)} dòng trùng khóa nhưng khác nội dung — chọn giữ cũ / cập nhật / bỏ qua`, 'Xử lý ngay', () => App.go('review'), true));
+        if (t && t.chua_tinh_gia) steps.push(next(String(steps.length + 1), `${fmt.int(t.chua_tinh_gia)} phiếu chưa tính được giá (thiếu xe, nơi xuất hoặc bảng giá)`, 'Xem phiếu cần hoàn thiện', () => App.go('tickets', { chua_tinh_gia: true }), true));
+        steps.push(next(String(steps.length + 1), 'Kiểm tra số liệu rồi đối chiếu với đối tác', 'Đối chiếu', () => App.go('reconcile'), false));
+        steps.push(next(String(steps.length + 1), 'Khi số liệu đã đúng: chốt kỳ để ký bảng kê', 'Chốt kỳ', () => App.go('lock'), false));
+        root.append(h('div', { class: 'card', 'data-result': '1' }, h('h3', {}, '✅ Import hoàn tất'), h('div', { class: 'grid g4' },
           h('div', { class: 'kpi' }, h('small', {}, 'Phiếu mới'), h('b', {}, fmt.int(r.inserted))), h('div', { class: 'kpi' }, h('small', {}, 'Trùng bỏ qua'), h('b', {}, fmt.int(r.duplicate))),
           h('div', { class: 'kpi' + (r.conflict ? ' warn' : '') }, h('small', {}, 'Cần kiểm tra'), h('b', {}, fmt.int(r.conflict))), h('div', { class: 'kpi' }, h('small', {}, 'Đã tính giá'), h('b', {}, fmt.int(r.calculated)))),
-          h('div', { class: 'row', style: { marginTop: '14px' } }, h('button', { class: 'btn', onclick: () => App.go('tickets') }, 'Xem phiếu cân'), r.conflict ? h('button', { class: 'btn amber', onclick: () => App.go('review') }, 'Xử lý "Cần kiểm tra"') : null,
-            h('button', { class: 'btn ghost', onclick: () => App.go('alerts') }, 'Xem cảnh báo'), h('button', { class: 'btn ghost', onclick: () => App.go('import') }, 'Import file khác'))));
+          h('h3', { style: { marginTop: '16px' } }, 'Việc tiếp theo'), h('div', { class: 'todo' }, steps),
+          h('div', { class: 'row', style: { marginTop: '14px' } }, h('button', { class: 'btn ghost', onclick: () => App.go('tickets') }, 'Xem phiếu cân'), h('button', { class: 'btn ghost', onclick: () => App.go('alerts') }, 'Xem cảnh báo'),
+            h('button', { class: 'btn ghost', onclick: () => App.go('import') }, 'Import file khác'), h('span', { class: 'grow' }),
+            r.inserted ? h('button', { class: 'btn ghost danger-t', 'data-act': 'undo', title: 'Gỡ toàn bộ phiếu của lần import này (ghi nhật ký, có thể import lại)', onclick: async () => {
+              const reason = await App.promptBox('Hoàn tác lần import này', 'Lý do hoàn tác (bắt buộc)'); if (!reason) return;
+              const u = await call('import.undo', { batchId: r.batchId, reason }, 'Đã hoàn tác lần import'); if (u) { App.refreshInfo(); App.go('import'); }
+            } }, '↩ Hoàn tác lần import này') : null)));
       }
       v.append(App.pageHead('Import phiếu cân', 'Không ghi DB cho tới khi bạn xác nhận ở bước 3'), root); draw();
     },

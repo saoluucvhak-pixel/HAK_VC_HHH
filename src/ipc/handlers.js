@@ -67,6 +67,7 @@ function createHandlers(app, env = {}) {
 
     // ---------------- import phiếu cân
     'import.open': ({ filePath, base64, fileName }) => app.imports.open(base64 ? { buffer: Buffer.from(base64, 'base64'), fileName } : { filePath }),
+    'import.check': ({ token, ...o }) => app.imports.check(token, o),
     'import.sheetInfo': ({ token, sheetName, headerRow }) => app.imports.sheetInfo(token, sheetName, headerRow),
     'import.preview': ({ token, ...o }) => app.imports.preview(token, o),
     'import.previewRows': ({ token, ...o }) => app.imports.previewRows(token, o),
@@ -76,6 +77,11 @@ function createHandlers(app, env = {}) {
       const copy = saveImportCopy(r.fileBuffer, r.fileName);
       delete r.fileBuffer;
       return { ...r, savedCopy: copy };
+    },
+    'import.issuesXlsx': async ({ token }) => {
+      const rows = app.imports.issueRows(token);
+      const { ISSUE_WARN } = require('../services/TicketImportService');
+      return writeExport(await exporters.importIssuesWorkbook(rows, { fileName: app.imports._p(token).wb.fileName }, ISSUE_WARN), `DongCanXuLy_${stamp()}.xlsx`);
     },
     'import.cancel': ({ token }) => app.imports.cancel(token),
     'import.pending': () => app.imports.pendingReviews(),
