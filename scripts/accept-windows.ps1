@@ -3,13 +3,15 @@
 param([string]$DistDir = 'dist', [string]$Work = $env:RUNNER_TEMP)
 $ErrorActionPreference = 'Stop'
 $results = @()
+$appdataDir = [IO.Path]::GetFullPath((Join-Path $env:APPDATA 'VCCost'))
+if (Test-Path -LiteralPath $appdataDir) { throw "Thu muc $appdataDir da ton tai. Dung nghiem thu de bao toan du lieu hien co." }
 
 function Invoke-Smoke([string]$Exe, [hashtable]$EnvVars, [string]$Name) {
   $out = Join-Path $Work "smoke-$Name.json"
   if (Test-Path $out) { Remove-Item $out -Force }
   $set = @{ VCCOST_SMOKE = '1'; VCCOST_SMOKE_OUT = $out } + $EnvVars
   foreach ($k in $set.Keys) { Set-Item -Path "Env:$k" -Value $set[$k] }
-  try { $p = Start-Process -FilePath $Exe -PassThru -Wait } finally { foreach ($k in $set.Keys) { Remove-Item -Path "Env:$k" -ErrorAction SilentlyContinue } }
+  try { $p = Start-Process -FilePath $Exe -WindowStyle Hidden -PassThru -Wait } finally { foreach ($k in $set.Keys) { Remove-Item -Path "Env:$k" -ErrorAction SilentlyContinue } }
   if (-not (Test-Path $out)) { throw "[$Name] không có file kết quả smoke (exit $($p.ExitCode))" }
   $raw = Get-Content $out -Raw; Write-Host "[$Name] $raw"
   $r = $raw | ConvertFrom-Json
@@ -25,13 +27,11 @@ Assert-True ($setup -and $portable) 'Thiếu bộ cài Setup hoặc Portable tro
 
 # Cài mới (silent, không quyền quản trị: perMachine=false)
 $inst = Join-Path $Work 'vc-install'
-Start-Process -FilePath $setup -ArgumentList '/S', "/D=$inst" -Wait
+Start-Process -FilePath $setup -ArgumentList '/S', "/D=$inst" -WindowStyle Hidden -Wait
 $exe = Join-Path $inst 'VC Cost.exe'
 Assert-True (Test-Path $exe) "Cài Setup xong nhưng không thấy $exe"
 Write-Host "Đã cài Setup vào $inst"
 
-$appdataDir = Join-Path $env:APPDATA 'VCCost'
-if (Test-Path $appdataDir) { Remove-Item $appdataDir -Recurse -Force }
 
 # Ca 1: cài mới → thư mục dữ liệu MẶC ĐỊNH của Setup (%APPDATA%\VCCost), nạp dữ liệu mẫu, nhập trùng, Excel/PDF, chốt kỳ, sao lưu/khôi phục, toàn vẹn
 $r = Invoke-Smoke $exe @{} 'cai-moi-mac-dinh'

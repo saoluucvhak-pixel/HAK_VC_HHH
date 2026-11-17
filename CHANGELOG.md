@@ -1,6 +1,8 @@
 # CHANGELOG
 
 ## 0.7.0 — chờ nghiệm thu (schema 6)
+- CI tự xây và nghiệm thu Setup/Portable trên PR `codex/release-*` và khi cập nhật `main`, đính kèm bộ cài, SHA-256 và JSON kết quả. Script nghiệm thu dừng trước khi cài nếu thư mục dữ liệu mặc định đã tồn tại, bảo toàn dữ liệu trên máy chạy kiểm thử.
+- Nghiệm thu cục bộ: 146/146 test đạt với cả `node:sqlite` và `better-sqlite3`; UI smoke Windows qua `CHROMIUM_PATH` hoàn tất không có lỗi; đối chiếu V.47 khớp các chỉ tiêu; `npm audit --omit=dev` có 0 cảnh báo.
 - Khôi phục DB xóa phiên đăng nhập cũ, yêu cầu xác thực lại trong bộ dữ liệu vừa khôi phục để tránh nhận nhầm người dùng khi ID trùng nhau giữa hai DB. Có test hồi quy tái hiện trước bản sửa.
 - Kiểm thử giao diện nhận `CHROMIUM_PATH` giống dev server, hỗ trợ chạy bằng trình duyệt trên Windows.
 - Kiểm tra dependency khi nghiệm thu: `npm audit` hiện báo 9 mục mức cao trong cây công cụ build do `picomatch` (GHSA-fc5q-39xc-vjpf); registry đang cung cấp bản mới nhất 4.0.7 vẫn thuộc phạm vi cảnh báo. Kết quả này thay thế mốc 0 cảnh báo của lần kiểm tra trước. Ghi riêng kết quả `npm audit --omit=dev` trong biên bản nghiệm thu.

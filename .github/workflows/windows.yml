@@ -24,6 +24,8 @@ jobs:
   windows:
     runs-on: windows-latest
     timeout-minutes: 40
+    env:
+      BUILD_INSTALLERS: ${{ github.event_name == 'push' || (github.event_name == 'pull_request' && startsWith(github.head_ref, 'codex/release-')) || (github.event_name == 'workflow_dispatch' && inputs.installers) }}
     steps:
       - uses: actions/checkout@v4
 
@@ -53,7 +55,7 @@ jobs:
           $env:VCCOST_SMOKE = '1'
           $env:VCCOST_SMOKE_OUT = $out
           $env:VCCOST_DATA_DIR = Join-Path $env:RUNNER_TEMP 'vccost-data'
-          $p = Start-Process -FilePath (Resolve-Path 'dist\win-unpacked\VC Cost.exe') -PassThru -Wait
+          $p = Start-Process -FilePath (Resolve-Path 'dist\win-unpacked\VC Cost.exe') -WindowStyle Hidden -PassThru -Wait
           if (Test-Path $out) { Get-Content $out -Raw } else { Write-Host 'Không có file kết quả smoke' }
           if ($p.ExitCode -ne 0) { throw "Khởi động bản đóng gói thất bại (exit $($p.ExitCode))" }
           $r = Get-Content $out -Raw | ConvertFrom-Json
@@ -68,11 +70,11 @@ jobs:
           if-no-files-found: ignore
 
       - name: Build bộ cài Portable + Setup
-        if: github.event_name == 'workflow_dispatch' && inputs.installers
+        if: env.BUILD_INSTALLERS == 'true'
         run: npx electron-builder --win --x64 --publish never
 
       - name: SHA-256 bộ cài
-        if: github.event_name == 'workflow_dispatch' && inputs.installers
+        if: env.BUILD_INSTALLERS == 'true'
         shell: pwsh
         run: |
           $lines = Get-ChildItem dist -Filter 'VC-Cost-*.exe' | Sort-Object Name | ForEach-Object { "$((Get-FileHash $_.FullName -Algorithm SHA256).Hash.ToLower())  $($_.Name)" }
@@ -81,12 +83,12 @@ jobs:
           "### SHA-256 bộ cài`n``````n$($lines -join "`n")`n``````" | Add-Content $env:GITHUB_STEP_SUMMARY
 
       - name: Nghiệm thu bộ cài (cài mới, nâng cấp, thư mục dữ liệu, Portable)
-        if: github.event_name == 'workflow_dispatch' && inputs.installers
+        if: env.BUILD_INSTALLERS == 'true'
         shell: pwsh
         run: ./scripts/accept-windows.ps1 -DistDir dist
 
       - name: Đính kèm bộ cài
-        if: github.event_name == 'workflow_dispatch' && inputs.installers
+        if: env.BUILD_INSTALLERS == 'true'
         uses: actions/upload-artifact@v4
         with:
           name: vc-cost-installers
@@ -97,7 +99,7 @@ jobs:
           retention-days: 14
 
       - name: Đính kèm kết quả nghiệm thu
-        if: always() && github.event_name == 'workflow_dispatch' && inputs.installers
+        if: always() && env.BUILD_INSTALLERS == 'true'
         uses: actions/upload-artifact@v4
         with:
           name: acceptance-results
