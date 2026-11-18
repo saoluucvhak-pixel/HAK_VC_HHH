@@ -15,6 +15,24 @@ const forms = require('../print/forms');
 const formHtml = require('../print/formHtml');
 const formXlsx = require('../excel/forms');
 
+/**
+ * Phạm vi phiếu Nháp do BACKEND quyết định, không do người gọi: `moi_trang_thai` là cờ nội bộ, còn `trang_thai_duyet`
+ * (lọc Nháp/Đã duyệt) chỉ có nghĩa ở các kênh liệt kê phiếu cân. Ở mọi kênh khác (Dashboard, báo cáo, bảng kê, biểu mẫu,
+ * xuất Excel/PDF, đối chiếu, chốt kỳ) hai khóa này bị loại trước khi vào service — kể cả trong bộ lọc lưu từ bản cũ.
+ */
+const DUYET_LIST_CHANNELS = new Set(['tickets.count', 'tickets.list', 'tickets.ids', 'export.tickets']);
+const stripScope = (channel, args) => {
+  if (!args || typeof args !== 'object' || Array.isArray(args)) return args;
+  const keep = DUYET_LIST_CHANNELS.has(channel);
+  const clean = (o) => {
+    if (!o || typeof o !== 'object' || Array.isArray(o)) return o;
+    const c = { ...o }; delete c.moi_trang_thai; if (!keep) delete c.trang_thai_duyet; return c;
+  };
+  const out = clean(args);
+  if (out.filter) out.filter = clean(out.filter);
+  return out;
+};
+
 function createHandlers(app, env = {}) {
   const { exportsDir = null, importsDir = null, seedDir = null, backup = null } = env;
   const { duyetBat } = require('../utils/duyet');
@@ -44,7 +62,7 @@ function createHandlers(app, env = {}) {
   };
   const stamp = () => new Date().toISOString().slice(0, 16).replace(/[-:T]/g, '');
 
-  return {
+  const handlers = {
     // ---------------- hệ thống
     'app.info': () => ({ version: env.version || 'dev', dataDir: env.dataDir || null, driver: app.db.driver, schema: app.db.get('SELECT MAX(version) v FROM schema_version').v,
       counts: { phieu: app.db.get(`SELECT COUNT(*) n FROM phieu_can WHERE trang_thai='ACTIVE'`).n, xe: app.db.get('SELECT COUNT(*) n FROM xe').n },
@@ -216,6 +234,7 @@ function createHandlers(app, env = {}) {
     'auth.changePassword': ({ cu, moi }) => { if (!actor()) throw new Error('Chưa bật phân quyền / chưa đăng nhập'); app.auth.changeOwnPassword(actor(), cu, moi); return { ok: true }; },
     'backup.export': ({ file, dir }) => (backup ? backup.exportTo(file, dir) : null),
   };
+  return Object.fromEntries(Object.entries(handlers).map(([ch, fn]) => [ch, (args, ...rest) => fn(stripScope(ch, args), ...rest)]));
 }
 
 module.exports = { createHandlers };
