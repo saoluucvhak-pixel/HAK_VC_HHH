@@ -122,3 +122,24 @@ test('phân quyền thực tế chặn người sửa tự duyệt; người duy
     assert.equal(rt.app.tickets.get(t.id).duyet_boi, 'reviewer');
   } finally { rt.close(); }
 });
+
+test('phụ lục đối chiếu cũ loại phiếu vừa về Nháp hoặc đã VOID khỏi tổng bên A', async () => {
+  const rt = await setup();
+  try {
+    const app = rt.app;
+    const t = app.db.get("SELECT * FROM phieu_can WHERE trang_thai='ACTIVE' LIMIT 1");
+    const batch = app.db.run("INSERT INTO doi_chieu_batch(ten) VALUES ('Hồi quy phụ lục')").id;
+    const b = app.db.run('INSERT INTO doi_chieu_dong_b(batch_id, bien_so_goc, bien_so_chuan, kl_hang_kg, raw_json) VALUES (?,?,?,?,?)', [batch, t.bien_so, t.bien_so_chuan, t.kl_hang_kg, '{}']).id;
+    app.db.run("INSERT INTO doi_chieu_ket_qua(batch_id, phieu_can_id, dong_b_id, ket_qua) VALUES (?,?,?,'KHOP')", [batch, t.id, b]);
+    assert.equal(app.recon.weightByVehicle(batch).tot.a_kg, t.kl_hang_kg);
+    app.settings.set('duyet_phieu', { bat: true });
+    app.tickets.update(t.id, { xe_tra_ve: t.xe_tra_ve ? 0 : 1 }, 'thay đổi sau đối chiếu');
+    const draft = app.recon.weightByVehicle(batch);
+    assert.equal(draft.tot.a_kg, 0);
+    assert.equal(draft.tot.b_kg, t.kl_hang_kg);
+    assert.equal(draft.rows[0].ket_luan, 'CHI_BEN_B');
+    assert.equal(app.tickets.approve([t.id]).ok, 1);
+    app.tickets.remove([t.id], 'xóa phiếu sau đối chiếu');
+    assert.equal(app.recon.weightByVehicle(batch).tot.a_kg, 0);
+  } finally { rt.close(); }
+});

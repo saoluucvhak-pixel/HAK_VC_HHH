@@ -203,7 +203,8 @@ class ReconciliationService {
     const batch = this.db.get(`SELECT b.*, d.ma don_vi FROM doi_chieu_batch b LEFT JOIN don_vi_van_chuyen d ON d.id=b.don_vi_van_chuyen_id WHERE b.id=?`, [batchId]);
     if (!batch) throw new ValidationError('Không tìm thấy lô đối chiếu');
     const raw = this.db.all(`SELECT k.ket_qua, pc.kl_hang_kg a_kl, b.kl_hang_kg b_kl, COALESCE(pc.bien_so_chuan, b.bien_so_chuan, b.bien_so_goc) bs, COALESCE(pc.bien_so, b.bien_so_goc, b.bien_so_chuan) bs_show
-      FROM doi_chieu_ket_qua k LEFT JOIN phieu_can pc ON pc.id=k.phieu_can_id LEFT JOIN doi_chieu_dong_b b ON b.id=k.dong_b_id WHERE k.batch_id=?`, [batchId]);
+      FROM doi_chieu_ket_qua k LEFT JOIN phieu_can pc ON pc.id=k.phieu_can_id AND pc.trang_thai='ACTIVE' AND pc.trang_thai_duyet='DA_DUYET'
+      LEFT JOIN doi_chieu_dong_b b ON b.id=k.dong_b_id WHERE k.batch_id=? AND (pc.id IS NOT NULL OR b.id IS NOT NULL)`, [batchId]);
     let tolKg = 0; try { tolKg = Number((() => { const j = JSON.parse(batch.tham_so_json || '{}') || {}; return j.tolKg ?? j.dungSaiKg ?? 0; })()); } catch (e) { /* mặc định 0 */ }
     const m = new Map();
     for (const r of raw) {
