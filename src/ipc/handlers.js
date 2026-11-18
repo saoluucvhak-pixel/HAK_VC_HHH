@@ -15,6 +15,24 @@ const forms = require('../print/forms');
 const formHtml = require('../print/formHtml');
 const formXlsx = require('../excel/forms');
 
+/**
+ * Phạm vi phiếu Nháp do BACKEND quyết định, không do người gọi: `moi_trang_thai` là cờ nội bộ, còn `trang_thai_duyet`
+ * (lọc Nháp/Đã duyệt) chỉ có nghĩa ở các kênh liệt kê phiếu cân. Ở mọi kênh khác (Dashboard, báo cáo, bảng kê, biểu mẫu,
+ * xuất Excel/PDF, đối chiếu, chốt kỳ) hai khóa này bị loại trước khi vào service — kể cả trong bộ lọc lưu từ bản cũ.
+ */
+const DUYET_LIST_CHANNELS = new Set(['tickets.count', 'tickets.list', 'tickets.ids', 'export.tickets']);
+const stripScope = (channel, args) => {
+  if (!args || typeof args !== 'object' || Array.isArray(args)) return args;
+  const keep = DUYET_LIST_CHANNELS.has(channel);
+  const clean = (o) => {
+    if (!o || typeof o !== 'object' || Array.isArray(o)) return o;
+    const c = { ...o }; delete c.moi_trang_thai; if (!keep) delete c.trang_thai_duyet; return c;
+  };
+  const out = clean(args);
+  if (out.filter) out.filter = clean(out.filter);
+  return out;
+};
+
 function createHandlers(app, env = {}) {
   const { exportsDir = null, importsDir = null, seedDir = null, backup = null } = env;
   const { duyetBat } = require('../utils/duyet');
@@ -44,7 +62,7 @@ function createHandlers(app, env = {}) {
   };
   const stamp = () => new Date().toISOString().slice(0, 16).replace(/[-:T]/g, '');
 
-  return {
+  const handlers = {
     // ---------------- hệ thống
     'app.info': () => ({ version: env.version || 'dev', dataDir: env.dataDir || null, driver: app.db.driver, schema: app.db.get('SELECT MAX(version) v FROM schema_version').v,
       counts: { phieu: app.db.get(`SELECT COUNT(*) n FROM phieu_can WHERE trang_thai='ACTIVE'`).n, xe: app.db.get('SELECT COUNT(*) n FROM xe').n },
@@ -110,7 +128,7 @@ function createHandlers(app, env = {}) {
     'tickets.periods': () => app.reports.periods(),
     'tickets.list': ({ filter, ...o }) => app.reports.tickets(allStates(filter), o),
     'tickets.ids': ({ filter }) => { const { sql, params } = app.reports.where(allStates(filter)); return app.db.all(`SELECT p.id FROM phieu_can p WHERE ${sql}`, params).map((r) => r.id); },
-    'tickets.approve': ({ ids, note }) => app.tickets.approve(ids, note),
+    'tickets.approve': ({ ids, note, vers }) => app.tickets.approve(ids, note, vers),
     'tickets.removePreview': ({ ids }) => app.tickets.removePreview(ids),
     'tickets.remove': ({ ids, reason }) => app.tickets.remove(ids, reason),
     'tickets.get': ({ id }) => app.tickets.get(id),
@@ -165,8 +183,11 @@ function createHandlers(app, env = {}) {
     'template.tickets': async () => writeExport(await require('../excel/templates').ticketTemplate({ locations: app.db.all(`SELECT ten FROM dia_diem WHERE trang_thai='ACTIVE' ORDER BY ten`).map((x) => x.ten) }), 'MAU_Import_Phieu_can.xlsx'),
     'template.vehicles': async () => writeExport(await require('../excel/templates').vehicleTemplate({ carriers: app.db.all(`SELECT ma FROM don_vi_van_chuyen WHERE trang_thai='ACTIVE' ORDER BY ma`).map((x) => x.ma) }), 'MAU_Import_Danh_sach_xe.xlsx'),
     'export.tickets': async ({ filter }) => {
-      const all = app.reports.tickets(allStates(filter), { offset: 0, limit: 10_000_000 });
-      return writeExport(await exporters.ticketsWorkbook(all, filter), `ChiTietVanChuyen_${stamp()}.xlsx`);
+      // Đầu ra số liệu: mặc định chỉ phiếu Đã duyệt; chỉ xuất Nháp khi người dùng lọc Nháp rõ ràng. Nêu số phiếu Nháp bị bỏ qua.
+      const f = filter || {}; const wantNhap = f.trang_thai_duyet === 'NHAP' || f.trang_thai_duyet === 'DA_DUYET';
+      const all = app.reports.tickets(wantNhap ? allStates(f) : { ...f }, { offset: 0, limit: 10_000_000 });
+      const nhapBoQua = wantNhap ? 0 : app.reports.count({ ...f, trang_thai_duyet: 'NHAP' }).kept;
+      return writeExport(await exporters.ticketsWorkbook(all, filter, { nhapBoQua }), `ChiTietVanChuyen_${stamp()}.xlsx`);
     },
     // Bảng kê (Excel in/ký + PDF) và báo cáo tổng hợp
     'export.statement': async ({ filter, reconBatchId }) => { const d = documents.statementDoc(app, filter || {}, { reconBatchId }); return writeExport(await exporters.statementWorkbook(d), `${d.file}_${stamp()}.xlsx`); },
@@ -216,6 +237,7 @@ function createHandlers(app, env = {}) {
     'auth.changePassword': ({ cu, moi }) => { if (!actor()) throw new Error('Chưa bật phân quyền / chưa đăng nhập'); app.auth.changeOwnPassword(actor(), cu, moi); return { ok: true }; },
     'backup.export': ({ file, dir }) => (backup ? backup.exportTo(file, dir) : null),
   };
+  return Object.fromEntries(Object.entries(handlers).map(([ch, fn]) => [ch, (args, ...rest) => fn(stripScope(ch, args), ...rest)]));
 }
 
 module.exports = { createHandlers };

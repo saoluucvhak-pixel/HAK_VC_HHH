@@ -1,6 +1,6 @@
 # VC Cost — Quản lý · Tính toán · Đối chiếu chi phí vận chuyển (offline)
 
-Phiên bản **0.7.1** (schema 6) — ứng dụng desktop (Electron, chạy offline, dữ liệu SQLite cục bộ) cho HAK Group: import phiếu cân, tính cước vận chuyển, lập Bảng kê, chốt kỳ, đối chiếu với đối tác. Engine tính giá được kiểm chứng khớp với file Excel mẫu PRINCE OF NATURE V.47 (`docs/EXCEL_VS_APP_VALIDATION.md`).
+Phiên bản **0.8.0** (schema 7) — ứng dụng desktop (Electron, chạy offline, dữ liệu SQLite cục bộ) cho HAK Group: import phiếu cân, tính cước vận chuyển, lập Bảng kê, chốt kỳ, đối chiếu với đối tác. Engine tính giá được kiểm chứng khớp với file Excel mẫu PRINCE OF NATURE V.47 (`docs/EXCEL_VS_APP_VALIDATION.md`).
 
 Lịch sử thay đổi: `CHANGELOG.md`.
 
@@ -17,6 +17,7 @@ Lịch sử thay đổi: `CHANGELOG.md`.
 - **Chốt kỳ**: khóa số liệu theo khoảng ngày hoặc đợt/tàu; mở khóa bắt buộc có lý do, có nhật ký.
 - **Đối chiếu** với file đối tác (khớp / lệch KL / lệch đơn giá / thiếu bên).
 - **Cảnh báo & nhật ký**: bất thường thời gian cân, thiếu xe/giá/địa điểm; audit log.
+- **Duyệt từng phiếu (tùy chọn, mặc định tắt)**: Cài đặt → bật; phiếu mới/vừa sửa là Nháp, chỉ vào Dashboard, Bảng kê, báo cáo, đối chiếu, chốt kỳ sau khi được duyệt (duyệt theo lô, kèm phiên bản phiếu; người nhập/sửa không tự duyệt khi bật phân quyền).
 - **Phân quyền (tùy chọn)**: mặc định 1 người dùng, không đăng nhập. Menu *Người dùng & phân quyền* để bật: Quản trị (toàn quyền, người dùng, cài đặt, khôi phục) · Người duyệt (duyệt xung đột/hoàn tác import, chốt/mở khóa kỳ, bảng giá, đối chiếu) · Người nhập liệu (import, sửa/xóa phiếu, danh mục, sao lưu) · Chỉ xem (xem + xuất báo cáo). Nhật ký ghi tên đăng nhập; phiên hết hạn sau 30 phút không hoạt động; sai mật khẩu 5 lần khóa 60 giây. Quên mật khẩu quản trị: chạy ứng dụng với biến môi trường `VCCOST_RESET_AUTH=1` một lần (cần quyền truy cập máy) để tắt phân quyền rồi bật lại.
 - **Sao lưu / khôi phục**, đổi thư mục lưu dữ liệu (Portable cạnh `.exe`, Setup ở `%APPDATA%/VCCost`).
 

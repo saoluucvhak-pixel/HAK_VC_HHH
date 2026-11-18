@@ -1,6 +1,7 @@
 # CHANGELOG
 
-## Chưa phát hành (schema 7)
+## 0.8.0 — 18/11/2026 (schema 7)
+- **Nghiệm thu 0.8.0** (`docs/NGHIEM_THU_0.8.0.md`): backend là nơi quyết định phạm vi phiếu Nháp (tham số `moi_trang_thai`/`trang_thai_duyet` từ người gọi bị loại ở mọi kênh ngoài liệt kê phiếu cân); hoàn tác batch đưa phiếu về Nháp khi khôi phục số liệu cũ; duyệt kèm phiên bản phiếu (phiếu đổi sau khi chọn thì không duyệt); import kiểm lại ngưỡng KL hiện hành lúc commit; duyệt chặn phiếu KL ngoài ngưỡng.
 - **Duyệt từng phiếu (tùy chọn, mặc định TẮT)**: Cài đặt → "Duyệt từng phiếu". Khi BẬT, phiếu mới nhập (hoặc vừa sửa số liệu / xử lý xung đột cập nhật) là **Nháp**; chỉ khi được duyệt mới vào Dashboard, Bảng kê, báo cáo, đối chiếu và chốt kỳ. Phiếu hiện có = Đã duyệt nên TẮT thì hành vi y như cũ. Duyệt theo lô (`tickets.approve`, quyền "duyệt"), kết quả từng phiếu, ghi nhật ký; khi bật phân quyền, người nhập/sửa không tự duyệt phiếu của mình. Không tắt được khi còn Nháp; chốt kỳ bị chặn khi còn Nháp trong phạm vi; kiểm tra toàn vẹn thêm `NHAP_KHI_TAT_DUYET`. Migration 007 (thêm cột, dữ liệu cũ giữ nguyên).
 
 ## 0.7.1 — 18/11/2026 (schema 6, không đổi)

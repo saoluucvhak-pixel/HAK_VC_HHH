@@ -1,6 +1,11 @@
-## VC Cost 0.7.1 (schema SQLite 6)
+## VC Cost 0.8.0 (schema SQLite 7)
 
 Ứng dụng Electron + SQLite chạy offline cho HAK. Bộ cài: **Setup** (cài theo người dùng, dữ liệu ở `%APPDATA%\VCCost`) và **Portable** (dữ liệu cạnh file `.exe`, thư mục `VCCost-data`). Bộ cài **chưa ký số** — Windows SmartScreen có thể cảnh báo; kiểm tra SHA-256 bên dưới trước khi cài.
+
+### Mới trong 0.8.0 (so với 0.7.1)
+- **Duyệt từng phiếu (tùy chọn, mặc định TẮT)**: bật ở Cài đặt. Phiếu mới nhập/vừa sửa là Nháp, chưa vào Dashboard, Bảng kê, báo cáo, đối chiếu, chốt kỳ cho tới khi được duyệt. Phiếu hiện có tính là Đã duyệt nên bật/tắt không làm đổi số liệu cũ.
+- Sửa lỗi nghiệm thu: phạm vi Nháp do backend quyết định; hoàn tác batch đưa phiếu về Nháp; duyệt kèm phiên bản; commit import kiểm lại ngưỡng KL.
+- **Nâng cấp**: migration 007 (schema 6 → 7) chỉ thêm cột, dữ liệu cũ giữ nguyên; tự tạo bản sao lưu `PRE_MIGRATION` trước khi nâng.
 
 ### Mới trong 0.7.1 (so với 0.7.0)
 - **Ngưỡng khối lượng hợp lý mỗi chuyến chỉnh được** ở Cài đặt (mặc định vẫn 100–100.000 kg); áp dụng thống nhất cho nhập, sửa trực tiếp, duyệt xung đột và kiểm tra toàn vẹn.
