@@ -9,6 +9,7 @@ const { readWorkbook } = require('../excel/workbookReader');
 const { detectHeader, fold } = require('../excel/columnMapping');
 const { parseTickets } = require('../excel/ticketParser');
 const { limitsFrom } = require('../utils/weight');
+const { duyetBat } = require('../utils/duyet');
 const { classify, businessKey, strongKey, fingerprint } = require('./DuplicateDetector');
 const { computeTicket } = require('./TransportCostEngine');
 const { ValidationError } = require('./CatalogService');
@@ -204,6 +205,7 @@ class TicketImportService {
     }
     const nd = noiDenId || p.noiDenId;
     require('./ChotKyService').ChotKyService.prototype.assertOpenForDates.call({ db: this.db }, (p.rows || []).filter((r) => r.phan_loai === 'NEW').map((r) => (r.ngay_gio_can_1 || '').slice(0, 10)));
+    const chuaDuyet = duyetBat(this.settings);    // bật duyệt phiếu → phiếu mới là Nháp cho tới khi được duyệt
     const result = this.db.tx(() => {
       const c = p.counts;
       const batchId = this.db.run(`INSERT INTO import_batch(loai, file_name, file_hash, sheet_name, header_row, mapping_json, total_rows, dot_van_chuyen_id, user_note)
@@ -221,10 +223,10 @@ class TicketImportService {
           const sameLoc = r.noi_xuat_id ? this.db.get(`SELECT id FROM phieu_can WHERE trang_thai='ACTIVE' AND so_phieu=? AND noi_xuat_id=?`, [String(r.so_phieu ?? '').trim(), r.noi_xuat_id]) : null;
           if (sameLoc) throw new ValidationError(`Phiếu ${r.so_phieu} đã có (ghi nơi xuất bằng tên gọi khác) — hãy preview lại`);
           const id = this.db.run(`INSERT INTO phieu_can(so_phieu, ngay_gio_can_1, ngay_gio_can_2, bien_so_goc, bien_so, bien_so_chuan, can_lan_1, can_lan_2, kl_hang_kg,
-                                    noi_xuat_goc, noi_xuat_id, noi_den_id, cong_ty_vc_nguon, dot_van_chuyen_id, business_key, strong_key, fingerprint, import_batch_id, source_row)
-                                  VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+                                    noi_xuat_goc, noi_xuat_id, noi_den_id, cong_ty_vc_nguon, dot_van_chuyen_id, business_key, strong_key, fingerprint, import_batch_id, source_row, trang_thai_duyet, nhap_boi)
+                                  VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
           [r.so_phieu, r.ngay_gio_can_1, r.ngay_gio_can_2, r.bien_so_goc, r.bien_so, r.bien_so_chuan, r.can_lan_1, r.can_lan_2, r.kl_hang_kg,
-            r.noi_xuat, r.noi_xuat_id, nd, r.cong_ty_vc_nguon == null ? null : String(r.cong_ty_vc_nguon), dot || null, r.key, strongKey(r), r.fp, batchId, r.source_row]).id;
+            r.noi_xuat, r.noi_xuat_id, nd, r.cong_ty_vc_nguon == null ? null : String(r.cong_ty_vc_nguon), dot || null, r.key, strongKey(r), r.fp, batchId, r.source_row, chuaDuyet ? 'NHAP' : 'DA_DUYET', this.audit.actor() || null]).id;
           this._row(batchId, r, 'NEW', 'INSERT', id, raw);
           inserted++;
         } else if (r.phan_loai === 'EXACT_DUPLICATE' || r.phan_loai === 'IN_FILE_DUPLICATE') {
@@ -330,6 +332,7 @@ class TicketImportService {
         [t.ngay_gio_can_1, t.ngay_gio_can_2, t.bien_so_goc, t.bien_so, t.bien_so_chuan, t.can_lan_1, t.can_lan_2, t.kl_hang_kg, t.noi_xuat,
           businessKey(t), strongKey(t), fingerprint(t), old.id]);
         this.db.run(`UPDATE import_batch SET updated_rows = updated_rows + 1 WHERE id=?`, [r.batch_id]);
+        if (duyetBat(this.settings)) this.db.run(`UPDATE phieu_can SET trang_thai_duyet='NHAP', duyet_boi=NULL, duyet_luc=NULL, nhap_boi=? WHERE id=?`, [this.audit.actor() || null, old.id]);   // dữ liệu đổi → cần duyệt lại
         this.cost.recalc({ ids: [old.id] });
       }
       this.db.run(`UPDATE import_batch_row SET hanh_dong=? WHERE id=?`, [action, rowId]);

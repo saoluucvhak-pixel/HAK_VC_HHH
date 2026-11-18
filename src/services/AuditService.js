@@ -4,6 +4,8 @@ const j = (v) => (v === undefined || v === null ? null : typeof v === 'string' ?
 
 class AuditService {
   constructor(db, { user = null } = {}) { this.db = db; this.user = user; }
+  /** Tên người thao tác hiện tại (tên đăng nhập khi bật phân quyền, không thì null). */
+  actor() { return typeof this.user === 'function' ? this.user() : this.user; }
   log(action, entity, entityId, oldValue, newValue, note) {
     this.db.run(
       'INSERT INTO audit_log(action, entity, entity_id, old_value, new_value, note, user_name) VALUES (?,?,?,?,?,?,?)',

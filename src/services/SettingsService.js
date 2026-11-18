@@ -11,6 +11,7 @@ const need = (cond, msg) => { if (!cond) throw new ValidationError(msg); };
  * (Trước đây nhận mọi khóa/giá trị: vd số bản sao lưu giữ lại = "abc" làm xóa sạch bản sao lưu tự động, làm tròn NaN → bỏ làm tròn âm thầm.)
  */
 const VALIDATORS = {
+  duyet_phieu(v) { need(isObj(v) && typeof v.bat === 'boolean', 'Duyệt phiếu: bat phải là true/false'); },
   kl_hop_ly(v) {
     need(isObj(v), 'Ngưỡng khối lượng phải là đối tượng');
     need(numIn(v.min_kg, 0, 1_000_000) && numIn(v.max_kg, 1, 10_000_000), 'Ngưỡng KL: tối thiểu 0–1.000.000 kg, tối đa 1–10.000.000 kg');
@@ -63,6 +64,10 @@ class SettingsService {
   set(key, value) {
     if (!Object.hasOwn(VALIDATORS, key)) throw new ValidationError(`Khóa cấu hình không hợp lệ: ${String(key).slice(0, 60)}`);
     VALIDATORS[key](value);
+    if (key === 'duyet_phieu' && !value.bat) {   // tắt khi còn phiếu Nháp → phiếu Nháp sẽ biến mất khỏi mọi số liệu: bắt buộc duyệt/xóa trước
+      const n = this.db.get(`SELECT COUNT(*) n FROM phieu_can WHERE trang_thai='ACTIVE' AND trang_thai_duyet='NHAP'`).n;
+      if (n) throw new ValidationError(`Còn ${n} phiếu Nháp chưa duyệt — hãy duyệt hoặc xóa chúng trước khi tắt duyệt phiếu`);
+    }
     const old = this.get(key);
     this.db.run(`INSERT INTO settings(key, value_json) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value_json = excluded.value_json,
                  updated_at = strftime('%Y-%m-%dT%H:%M:%S','now','localtime')`, [key, JSON.stringify(value)]);

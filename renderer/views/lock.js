@@ -32,6 +32,7 @@
 
       const preview = async () => {
         const d = await call('lock.preview', scope()); if (!d) return;
+        const nhap = d.chua_duyet ? h('div', { class: 'card', style: { borderColor: 'var(--red,#c0392b)' } }, h('b', {}, `⚠ Còn ${fmt.int(d.chua_duyet)} phiếu Nháp chưa duyệt trong phạm vi — duyệt xong mới chốt được`)) : null;
         const un = d.chua_tinh_gia
           ? h('div', { class: 'card', style: { borderColor: 'var(--red,#c0392b)' } }, h('b', {}, `⚠ Còn ${fmt.int(d.chua_tinh_gia)} phiếu chưa tính giá — phải xử lý xong mới chốt được`),
             table({ columns: [{ key: 'trang_thai', label: 'Lý do', tag: true }, { key: 'so_chuyen', label: 'Số chuyến', fmt: 'int' }], rows: d.chua_tinh_theo_ly_do }))
@@ -48,7 +49,7 @@
               if (!(await App.confirmBox('Chốt kỳ', `Chốt ${fmt.int(d.tong.so_chuyen)} phiếu, tổng ${fmt.money(d.tong.tong_tien)} đ? Phiếu chốt không sửa được cho đến khi mở khóa.`, 'Chốt kỳ'))) return;
               if (await call('lock.create', scope(), 'Đã chốt kỳ')) { App.clear(pv); loadHist(); App.refreshInfo(); }
             } }, '🔒 Chốt kỳ'))),
-          un);
+          nhap, un);
       };
 
       const sel = (key, label, opts) => h('label', { class: 'field' }, label, h('select', { onchange: (e) => { st[key] = e.target.value; } },

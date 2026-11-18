@@ -37,8 +37,9 @@ class ChotKyService {
       { so_chuyen: 0, tong_kg: 0, tien_truoc_vat: 0, tien_vat: 0, tong_tien: 0 });
     const da = this.reports.where({ ...f, chua_chot: false });
     const daChot = this.db.get(`SELECT COUNT(*) n FROM phieu_can p WHERE ${da.sql} AND p.chot_ky_id IS NOT NULL`, da.params).n;
-    return { loai, so_phieu: n, chua_tinh_gia: un.reduce((a, x) => a + x.so_chuyen, 0), chua_tinh_theo_ly_do: un, statements, tong: tot, da_chot_truoc_do: daChot,
-      chot_duoc: n > 0 && !un.length };
+    const chuaDuyet = this.db.get(`SELECT COUNT(*) n FROM phieu_can p WHERE ${this.reports.where({ ...f, trang_thai_duyet: 'NHAP' }).sql}`, this.reports.where({ ...f, trang_thai_duyet: 'NHAP' }).params).n;
+    return { loai, so_phieu: n, chua_duyet: chuaDuyet, chua_tinh_gia: un.reduce((a, x) => a + x.so_chuyen, 0), chua_tinh_theo_ly_do: un, statements, tong: tot, da_chot_truoc_do: daChot,
+      chot_duoc: n > 0 && !un.length && !chuaDuyet };
   }
 
   _ma() {
@@ -51,6 +52,7 @@ class ChotKyService {
     const { loai, f } = this._filter(o);
     return this.db.tx(() => {
       const pv = this.preview(o);
+      if (pv.chua_duyet) throw new ValidationError(`Còn ${pv.chua_duyet} phiếu Nháp chưa duyệt trong phạm vi — duyệt (hoặc xóa) xong mới chốt được, để số chốt không bỏ sót phiếu`);
       if (!pv.so_phieu) throw new ValidationError('Không có phiếu nào chưa chốt trong phạm vi này');
       if (pv.chua_tinh_gia) throw new ValidationError(`Còn ${pv.chua_tinh_gia} phiếu chưa tính giá trong phạm vi (${pv.chua_tinh_theo_ly_do.map((x) => `${x.trang_thai}: ${x.so_chuyen}`).join(', ')}). Xử lý xong mới chốt được.`);
       if (loai === 'DOT') {

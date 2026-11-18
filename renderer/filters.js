@@ -23,6 +23,7 @@
     { value: 'UNKNOWN_LOCATION', label: 'Chưa nhận ra nơi xuất' }, { value: 'INVALID_WEIGHT', label: 'Khối lượng không hợp lệ' },
     { value: 'OK', label: 'Tính giá OK' }, { value: 'LOCKED', label: 'Đã chốt kỳ' },
   ];
+  const DUYET_STATES = [{ value: 'NHAP', label: 'Nháp (chờ duyệt)' }, { value: 'DA_DUYET', label: 'Đã duyệt' }];
   const LIST_KEYS = Object.keys(DEFS);
   const list = (v) => (Array.isArray(v) ? v : v === '' || v == null ? [] : [v]).map(String);
 
@@ -44,7 +45,7 @@
     for (const [k, v] of Object.entries(f)) {
       if (k === 'ky') continue;
       if (k === 'trang_thai') {
-        if (v === 'DA_TINH') out.da_tinh_gia = true; else if (v === 'CHUA_TINH') out.chua_tinh_gia = true; else if (v) out.trang_thai_tinh_gia = v;
+        if (v === 'NHAP' || v === 'DA_DUYET') out.trang_thai_duyet = v; else if (v === 'DA_TINH') out.da_tinh_gia = true; else if (v === 'CHUA_TINH') out.chua_tinh_gia = true; else if (v) out.trang_thai_tinh_gia = v;
         continue;
       }
       if (Array.isArray(v)) { if (v.length) out[k] = v.map(Number); } else if (v !== '' && v !== null && v !== undefined) out[k] = v;
@@ -85,7 +86,7 @@
     if (fields.some((f) => f === 'tu_ngay' || f === 'den_ngay' || f === 'period')) quick.push('period');
     LIST_KEYS.forEach((k) => { if (fields.includes(k)) quick.push(k); });
     const fieldCfg = LIST_KEYS.map((k) => ({ key: k, type: 'multi', label: DEFS[k].label, options: () => opts[k], withNone: false, match: () => true }));
-    fieldCfg.push({ key: 'trang_thai', type: 'enum', label: 'Trạng thái tính giá', options: PRICE_STATES, match: () => true });
+    fieldCfg.push({ key: 'trang_thai', type: 'enum', label: 'Trạng thái tính giá', options: () => (App.info && App.info.duyetBat ? [...DUYET_STATES, ...PRICE_STATES] : PRICE_STATES), match: () => true });
     const refreshInfo = async () => { try { info = await api('tickets.count', { filter: cleanFilter(filter) }); } catch (e) { /* giữ số cũ */ } if (tb) tb.refresh(); };
     const cfg = {
       screenId, fields: fieldCfg, quickFields: quick, advancedFields: ['q', 'period', ...LIST_KEYS, 'trang_thai'],

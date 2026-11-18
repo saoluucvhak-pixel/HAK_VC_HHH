@@ -17,6 +17,8 @@ const formXlsx = require('../excel/forms');
 
 function createHandlers(app, env = {}) {
   const { exportsDir = null, importsDir = null, seedDir = null, backup = null } = env;
+  const { duyetBat } = require('../utils/duyet');
+  const allStates = (f) => ({ moi_trang_thai: true, ...(f || {}) });   // Phiếu cân thấy cả phiếu Nháp (trừ khi lọc theo trạng thái duyệt)
   const session = env.session || { get: () => null, set: () => {} };
   const { ROLE_PERMS, ROLE_LABEL } = require('../utils/permissions');
   const authStatus = () => { const u = session.get(); return { enabled: app.auth.enabled(), user: u ? { id: u.id, ten_dang_nhap: u.ten_dang_nhap, ho_ten: u.ho_ten, vai_tro: u.vai_tro } : null, perms: u ? ROLE_PERMS[u.vai_tro] : [], roles: ROLE_LABEL }; };
@@ -46,7 +48,8 @@ function createHandlers(app, env = {}) {
     // ---------------- hệ thống
     'app.info': () => ({ version: env.version || 'dev', dataDir: env.dataDir || null, driver: app.db.driver, schema: app.db.get('SELECT MAX(version) v FROM schema_version').v,
       counts: { phieu: app.db.get(`SELECT COUNT(*) n FROM phieu_can WHERE trang_thai='ACTIVE'`).n, xe: app.db.get('SELECT COUNT(*) n FROM xe').n },
-      alertsOpen: app.alerts.countOpen(), pendingReviews: app.imports.pendingReviews().length }),
+      alertsOpen: app.alerts.countOpen(), pendingReviews: app.imports.pendingReviews().length,
+      duyetBat: duyetBat(app.settings), choDuyet: app.db.get(`SELECT COUNT(*) n FROM phieu_can WHERE trang_thai='ACTIVE' AND trang_thai_duyet='NHAP'`).n }),
     'settings.all': () => app.settings.all(),
     'settings.set': ({ key, value }) => { app.settings.set(key, value); if (key === 'time_anomaly') app.cost.syncTimeAlerts(app.db.all('SELECT DISTINCT bien_so_chuan b FROM phieu_can').map((x) => x.b)); return { ok: true }; },
     'seed.loadSample': () => {
@@ -103,10 +106,11 @@ function createHandlers(app, env = {}) {
 
     // ---------------- phiếu & báo cáo
     'workflow.todo': () => ({ ...app.reports.todo(), cho_xu_ly: app.imports.pendingReviews().length, canh_bao_mo: app.alerts.countOpen() }),
-    'tickets.count': ({ filter }) => app.reports.count(filter || {}),
+    'tickets.count': ({ filter }) => app.reports.count(allStates(filter)),
     'tickets.periods': () => app.reports.periods(),
-    'tickets.list': ({ filter, ...o }) => app.reports.tickets(filter || {}, o),
-    'tickets.ids': ({ filter }) => { const { sql, params } = app.reports.where(filter || {}); return app.db.all(`SELECT p.id FROM phieu_can p WHERE ${sql}`, params).map((r) => r.id); },
+    'tickets.list': ({ filter, ...o }) => app.reports.tickets(allStates(filter), o),
+    'tickets.ids': ({ filter }) => { const { sql, params } = app.reports.where(allStates(filter)); return app.db.all(`SELECT p.id FROM phieu_can p WHERE ${sql}`, params).map((r) => r.id); },
+    'tickets.approve': ({ ids, note }) => app.tickets.approve(ids, note),
     'tickets.removePreview': ({ ids }) => app.tickets.removePreview(ids),
     'tickets.remove': ({ ids, reason }) => app.tickets.remove(ids, reason),
     'tickets.get': ({ id }) => app.tickets.get(id),
@@ -161,7 +165,7 @@ function createHandlers(app, env = {}) {
     'template.tickets': async () => writeExport(await require('../excel/templates').ticketTemplate({ locations: app.db.all(`SELECT ten FROM dia_diem WHERE trang_thai='ACTIVE' ORDER BY ten`).map((x) => x.ten) }), 'MAU_Import_Phieu_can.xlsx'),
     'template.vehicles': async () => writeExport(await require('../excel/templates').vehicleTemplate({ carriers: app.db.all(`SELECT ma FROM don_vi_van_chuyen WHERE trang_thai='ACTIVE' ORDER BY ma`).map((x) => x.ma) }), 'MAU_Import_Danh_sach_xe.xlsx'),
     'export.tickets': async ({ filter }) => {
-      const all = app.reports.tickets(filter || {}, { offset: 0, limit: 10_000_000 });
+      const all = app.reports.tickets(allStates(filter), { offset: 0, limit: 10_000_000 });
       return writeExport(await exporters.ticketsWorkbook(all, filter), `ChiTietVanChuyen_${stamp()}.xlsx`);
     },
     // Bảng kê (Excel in/ký + PDF) và báo cáo tổng hợp

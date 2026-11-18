@@ -241,7 +241,7 @@ const App = (() => {
 
   const NAV = [
     ['TỔNG QUAN', [['dashboard', '📊', 'Dashboard · việc cần làm']]],
-    ['① NHẬP & KIỂM TRA', [['import', '📥', 'Import phiếu cân'], ['review', '🔍', 'Cần kiểm tra', 'pending'], ['tickets', '🧾', 'Phiếu cân'], ['vehicle', '🚛', 'Chi tiết theo xe']]],
+    ['① NHẬP & KIỂM TRA', [['import', '📥', 'Import phiếu cân'], ['review', '🔍', 'Cần kiểm tra', 'pending'], ['tickets', '🧾', 'Phiếu cân', 'duyet'], ['vehicle', '🚛', 'Chi tiết theo xe']]],
     ['② GIÁ & TÍNH CƯỚC', [['prices', '💲', 'Bảng giá'], ['fuel', '⛽', 'Giá dầu'], ['pricecalc', '🧮', 'Bảng tính đơn giá']]],
     ['③ ĐỐI CHIẾU & CHỐT KỲ', [['reconcile', '⚖️', 'Đối chiếu'], ['lock', '🔒', 'Chốt kỳ']]],
     ['④ BẢNG KÊ & BÁO CÁO', [['statements', '📄', 'Bảng kê thanh toán'], ['forms', '🖨', 'Biểu mẫu in ký 2 bên'], ['rp:vehicle', '📋', 'Theo xe'], ['rp:carrier', '📋', 'Theo đơn vị'], ['rp:origin', '📋', 'Theo nơi xuất'], ['rp:date', '📋', 'Theo thời gian'], ['rp:dot', '📋', 'Theo tàu']]],
@@ -255,7 +255,7 @@ const App = (() => {
       sb.append(h('div', { class: 'nav-group' }, group));
       for (const [id, ic, label, bk] of items) {
         if (NAV_NEED[id] && !can(NAV_NEED[id])) continue;
-        const n = bk && info ? (bk === 'pending' ? info.pendingReviews : info.alertsOpen) : 0;
+        const n = bk && info ? (bk === 'pending' ? info.pendingReviews : bk === 'duyet' ? info.choDuyet : info.alertsOpen) : 0;
         sb.append(h('div', { class: 'nav-item' + (current === id ? ' active' : ''), 'data-nav': id, onclick: () => go(id) },
           h('span', { class: 'ic' }, ic), label, n ? h('span', { class: 'badge' + (bk === 'alerts' ? ' red' : '') }, n) : null));
       }

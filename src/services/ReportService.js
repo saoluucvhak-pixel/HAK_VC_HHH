@@ -36,6 +36,9 @@ class ReportService {
     if (f.trang_thai_tinh_gia) add(`${alias}.trang_thai_tinh_gia = ?`, f.trang_thai_tinh_gia);
     if (f.chua_tinh_gia) w.push(`NOT ${pricedSql(alias)}`);
     if (f.da_tinh_gia) w.push(pricedSql(alias));
+    // Duyệt phiếu: mặc định mọi số liệu (Dashboard, Bảng kê, báo cáo, chốt kỳ, đối chiếu) chỉ gồm phiếu ĐÃ DUYỆT; danh sách Phiếu cân dùng moi_trang_thai để thấy cả Nháp
+    if (f.trang_thai_duyet === 'NHAP' || f.trang_thai_duyet === 'DA_DUYET') add(`${alias}.trang_thai_duyet = ?`, f.trang_thai_duyet);
+    else if (!f.moi_trang_thai) w.push(`${alias}.trang_thai_duyet = 'DA_DUYET'`);
     if (f.chua_chot) w.push(`${alias}.chot_ky_id IS NULL`);
     if (f.chot_ky_id) add(`${alias}.chot_ky_id = ?`, f.chot_ky_id);
     if (f.search && String(f.search).trim()) this._search(String(f.search).trim(), alias, add);
@@ -68,9 +71,10 @@ class ReportService {
     const priced = pricedSql('p');
     return {
       tong_phieu: c(`SELECT COUNT(*) n FROM phieu_can WHERE trang_thai='ACTIVE'`),
-      chua_tinh_gia: c(`SELECT COUNT(*) n FROM phieu_can p WHERE p.trang_thai='ACTIVE' AND NOT ${priced}`),
-      can_doi_chieu: c(`SELECT COUNT(*) n FROM phieu_can p WHERE p.trang_thai='ACTIVE' AND ${priced} AND p.trang_thai_doi_chieu IN ('CHUA_DOI_CHIEU','LECH')`),
-      chua_chot: c(`SELECT COUNT(*) n FROM phieu_can p WHERE p.trang_thai='ACTIVE' AND ${priced} AND p.chot_ky_id IS NULL`),
+      chua_tinh_gia: c(`SELECT COUNT(*) n FROM phieu_can p WHERE p.trang_thai='ACTIVE' AND p.trang_thai_duyet='DA_DUYET' AND NOT ${priced}`),
+      can_doi_chieu: c(`SELECT COUNT(*) n FROM phieu_can p WHERE p.trang_thai='ACTIVE' AND p.trang_thai_duyet='DA_DUYET' AND ${priced} AND p.trang_thai_doi_chieu IN ('CHUA_DOI_CHIEU','LECH')`),
+      chua_chot: c(`SELECT COUNT(*) n FROM phieu_can p WHERE p.trang_thai='ACTIVE' AND p.trang_thai_duyet='DA_DUYET' AND ${priced} AND p.chot_ky_id IS NULL`),
+      cho_duyet: c(`SELECT COUNT(*) n FROM phieu_can WHERE trang_thai='ACTIVE' AND trang_thai_duyet='NHAP'`),
       da_chot: c(`SELECT COUNT(*) n FROM phieu_can WHERE trang_thai='ACTIVE' AND chot_ky_id IS NOT NULL`),
       import_gan_nhat: this.db.get(`SELECT import_time, file_name, inserted_rows FROM import_batch WHERE trang_thai='COMMITTED' ORDER BY id DESC LIMIT 1`) || null,
     };
@@ -90,7 +94,7 @@ class ReportService {
     const tot = this.db.get(`SELECT COUNT(*) n, SUM(p.kl_hang_kg) kg, SUM(p.tien_truoc_vat) tien_truoc_vat, SUM(p.tien_vat) tien_vat, SUM(p.tong_tien) tong_tien ${base}`, params);
     const rows = this.db.all(`SELECT p.id, p.so_phieu, p.ngay_can, p.ngay_gio_can_1, p.ngay_gio_can_2, p.bien_so, d.ma AS don_vi, p.noi_xuat, p.noi_xuat_goc, p.noi_den,
         t.ma_tuyen AS tuyen, p.tuyen_id, p.don_vi_tinh, p.can_lan_1, p.can_lan_2, p.kl_hang_kg, p.kl_hang_tan, p.don_gia, p.tien_truoc_vat, p.ty_le_vat, p.tien_vat, p.tong_tien,
-        dt.ma_dot AS dot, p.trang_thai_tinh_gia, p.trang_thai_doi_chieu, p.xe_tra_ve, p.chot_ky_id, p.ghi_chu, p.bang_gia_id
+        dt.ma_dot AS dot, p.trang_thai_tinh_gia, p.trang_thai_doi_chieu, p.xe_tra_ve, p.chot_ky_id, p.ghi_chu, p.bang_gia_id, p.trang_thai_duyet
         ${base} ORDER BY ${col} ${dir === 'desc' ? 'DESC' : 'ASC'}, p.id LIMIT ${Number(limit)} OFFSET ${Number(offset)}`, params).map(conv);
     return { total: tot.n, totals: { so_chuyen: tot.n, tong_kg: tot.kg || 0, tien_truoc_vat: fromDb(tot.tien_truoc_vat) || 0, tien_vat: fromDb(tot.tien_vat) || 0, tong_tien: fromDb(tot.tong_tien) || 0 }, rows };
   }
