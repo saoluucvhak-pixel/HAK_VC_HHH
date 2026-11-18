@@ -1,6 +1,6 @@
 # CHANGELOG
 
-## Chưa phát hành
+## 0.7.1 — 18/11/2026 (schema 6, không đổi)
 - **Ngưỡng KL cấu hình được**: Cài đặt → "Khối lượng hợp lý mỗi chuyến" (`kl_hop_ly`, mặc định 100–100.000 kg như cũ) áp dụng thống nhất cho import, sửa trực tiếp, duyệt xung đột và kiểm tra toàn vẹn; giá trị sai bị từ chối.
 - **Đọc nhiều khối (tùy chọn)**: bước ghép cột có ô "File có nhiều khối" — mỗi dòng "Tổng cộng" là ngăn cách, đọc tiếp các khối sau (chỉ nhận dòng trông như phiếu cân, bỏ bảng tóm tắt), tổng đối chiếu = tổng các dòng Tổng cộng. Mặc định tắt: vẫn dừng ở dòng Tổng cộng đầu và cảnh báo.
 
