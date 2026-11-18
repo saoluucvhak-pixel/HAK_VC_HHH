@@ -9,6 +9,7 @@ const { buildStatement } = require('./StatementService');
 const { normalizePlate } = require('../utils/plate');
 const { asIds, oneId } = require('../utils/filterIds');
 const { fold } = require('../excel/columnMapping');
+const { ticketVersionSql } = require('../utils/duyet');
 
 const MONEY = ['don_gia', 'tien_truoc_vat', 'tien_vat', 'tong_tien'];
 const conv = (r) => { for (const k of MONEY) if (k in r) r[k] = fromDb(r[k]); return r; };
@@ -100,7 +101,7 @@ class ReportService {
     const tot = this.db.get(`SELECT COUNT(*) n, SUM(p.kl_hang_kg) kg, SUM(p.tien_truoc_vat) tien_truoc_vat, SUM(p.tien_vat) tien_vat, SUM(p.tong_tien) tong_tien ${base}`, params);
     const rows = this.db.all(`SELECT p.id, p.so_phieu, p.ngay_can, p.ngay_gio_can_1, p.ngay_gio_can_2, p.bien_so, d.ma AS don_vi, p.noi_xuat, p.noi_xuat_goc, p.noi_den,
         t.ma_tuyen AS tuyen, p.tuyen_id, p.don_vi_tinh, p.can_lan_1, p.can_lan_2, p.kl_hang_kg, p.kl_hang_tan, p.don_gia, p.tien_truoc_vat, p.ty_le_vat, p.tien_vat, p.tong_tien,
-        dt.ma_dot AS dot, p.trang_thai_tinh_gia, p.trang_thai_doi_chieu, p.xe_tra_ve, p.chot_ky_id, p.ghi_chu, p.bang_gia_id, p.trang_thai_duyet
+        dt.ma_dot AS dot, p.trang_thai_tinh_gia, p.trang_thai_doi_chieu, p.xe_tra_ve, p.chot_ky_id, p.ghi_chu, p.bang_gia_id, p.trang_thai_duyet, ${ticketVersionSql('p')} AS ver
         ${base} ORDER BY ${col} ${dir === 'desc' ? 'DESC' : 'ASC'}, p.id LIMIT ${Number(limit)} OFFSET ${Number(offset)}`, params).map(conv);
     return { total: tot.n, totals: { so_chuyen: tot.n, tong_kg: tot.kg || 0, tien_truoc_vat: fromDb(tot.tien_truoc_vat) || 0, tien_vat: fromDb(tot.tien_vat) || 0, tong_tien: fromDb(tot.tong_tien) || 0 }, rows };
   }

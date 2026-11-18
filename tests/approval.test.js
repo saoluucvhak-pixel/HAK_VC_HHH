@@ -52,3 +52,43 @@ test('chốt kỳ: còn phiếu Nháp trong phạm vi → preview báo chua_duye
   assert.equal(pv.chua_duyet, 1); assert.equal(pv.chot_duoc, false);
   assert.throws(() => app.lock.lock(scope), /Nháp/);
 });
+
+test('duyệt kèm phiên bản: phiếu đổi sau khi chọn → không duyệt, báo rõ; phiếu không đổi → duyệt', async () => {
+  const app = await mk();
+  app.settings.set('duyet_phieu', { bat: true });
+  const ver = (id) => app.reports.tickets({ moi_trang_thai: true, search: app.tickets.get(id).so_phieu }, { offset: 0, limit: 5 }).rows.find((r) => r.id === id).ver;
+  const t = first(app);
+  app.tickets.update(t.id, { kl_hang_kg: 20000, can_lan_2: app.tickets.get(t.id).can_lan_1 + 20000 }, 'sửa lần 1');
+  const v1 = ver(t.id);
+  app.tickets.update(t.id, { kl_hang_kg: 21000, can_lan_2: app.tickets.get(t.id).can_lan_1 + 21000 }, 'sửa lần 2 (cùng giây)');
+  const r = app.tickets.approve([t.id], null, { [t.id]: v1 });
+  assert.equal(r.ok, 0); assert.match(r.results[0].reason, /đã thay đổi sau khi bạn chọn/);
+  assert.equal(app.tickets.approve([t.id], null, { [t.id]: ver(t.id) }).ok, 1);
+});
+
+test('duyệt: phiếu có KL ngoài ngưỡng hiện hành không duyệt được cho tới khi sửa', async () => {
+  const app = await mk();
+  app.settings.set('duyet_phieu', { bat: true });
+  const t = first(app);
+  app.tickets.update(t.id, { kl_hang_kg: 20000, can_lan_2: app.tickets.get(t.id).can_lan_1 + 20000 }, 'sửa');
+  app.settings.set('kl_hop_ly', { min_kg: 30000, max_kg: 100000 });
+  const r = app.tickets.approve([t.id]);
+  assert.equal(r.ok, 0); assert.match(r.results[0].reason, /sửa khối lượng trước khi duyệt/);
+});
+
+test('phiên bản duyệt nhận ra thay đổi xe trả về dù cùng giây và giữ nguyên tiền/KL', async () => {
+  const app = await mk();
+  try {
+    app.settings.set('duyet_phieu', { bat: true });
+    const t = first(app);
+    app.tickets.update(t.id, { xe_tra_ve: 1 }, 'lần đầu');
+    app.db.run("UPDATE phieu_can SET updated_at='2026-11-18T10:00:00' WHERE id=?", [t.id]);
+    const row = app.reports.tickets({ moi_trang_thai: true }).rows.find((r) => r.id === t.id);
+    app.tickets.update(t.id, { xe_tra_ve: 0 }, 'đổi lại cùng giây');
+    app.db.run("UPDATE phieu_can SET updated_at='2026-11-18T10:00:00' WHERE id=?", [t.id]);
+    assert.equal(app.tickets.get(t.id).kl_hang_kg, row.kl_hang_kg);
+    const result = app.tickets.approve([t.id], null, { [t.id]: row.ver });
+    assert.equal(result.ok, 0);
+    assert.match(result.results[0].reason, /đã thay đổi/);
+  } finally { app.close(); }
+});

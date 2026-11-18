@@ -1,11 +1,12 @@
-# VC Cost 0.8.0 — schema SQLite 7
+# VC Cost 0.8.1 — schema SQLite 7
 
-Ứng dụng quản lý chi phí vận chuyển offline cho HAK. Bản này tích hợp duyệt phiếu tùy chọn và sửa phạm vi báo cáo/chứng từ.
+Ứng dụng quản lý chi phí vận chuyển offline cho HAK. Bản vá tích hợp trên 0.8.0, giữ schema 7, hoàn thiện phạm vi báo cáo, sửa dữ liệu và xử lý phản hồi bộ lọc.
 
 ## Thay đổi
 - Khi bật duyệt, phiếu mới hoặc vừa sửa là Nháp. Phiếu vào số liệu sau khi được duyệt; tài khoản nhập/sửa cần người khác duyệt khi bật phân quyền.
 - Backend bảo vệ Dashboard, tổng hợp, bảng kê, đối chiếu và biểu mẫu ký theo trạng thái đã duyệt. Bộ lọc Nháp cho kết quả rỗng ở các đầu ra này; mở rộng trạng thái vẫn giữ phạm vi đã duyệt.
-- Màn Phiếu cân xem được Nháp. Excel dữ liệu nhập ghi rõ trạng thái duyệt, phục vụ kiểm tra nguồn.
+- Màn Phiếu cân xem được Nháp. Excel mặc định chỉ xuất Đã duyệt, có ghi số Nháp bị bỏ qua; lọc Nháp rõ ràng thì xuất dữ liệu Nháp kèm trạng thái.
+- Giữ kiểm tra phiên bản trước khi duyệt của 0.8.0; phiên bản bao gồm toàn bộ nội dung cần duyệt và tác vụ hàng loạt lấy đủ phiên bản các phiếu.
 - Bộ đếm lọc theo đúng màn nhập/báo cáo; phản hồi đếm cũ được bỏ qua khi đổi lọc nhanh.
 - Sửa trực tiếp đối chiếu KL hàng với hai số cân, kiểm tra số hữu hạn và lý do; xóa giờ cân 2 được xử lý đúng.
 - Ghi import kiểm lại ngưỡng khối lượng hiện hành. Hoàn tác cập nhật số liệu khi bật duyệt đưa phiếu về Nháp để xác nhận lại.

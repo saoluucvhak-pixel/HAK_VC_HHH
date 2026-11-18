@@ -45,7 +45,8 @@
     for (const [k, v] of Object.entries(f)) {
       if (k === 'ky') continue;
       if (k === 'trang_thai') {
-        if (v === 'NHAP' || v === 'DA_DUYET') out.trang_thai_duyet = v; else if (v === 'DA_TINH') out.da_tinh_gia = true; else if (v === 'CHUA_TINH') out.chua_tinh_gia = true; else if (v) out.trang_thai_tinh_gia = v;
+        if (v === 'NHAP' || v === 'DA_DUYET') { if (App.info && App.info.duyetBat) out.trang_thai_duyet = v; }   // duyệt đã tắt: bỏ bộ lọc Nháp còn lưu, tránh danh sách trống không rõ lý do
+        else if (v === 'DA_TINH') out.da_tinh_gia = true; else if (v === 'CHUA_TINH') out.chua_tinh_gia = true; else if (v) out.trang_thai_tinh_gia = v;
         continue;
       }
       if (Array.isArray(v)) { if (v.length) out[k] = v.map(Number); } else if (v !== '' && v !== null && v !== undefined) out[k] = v;

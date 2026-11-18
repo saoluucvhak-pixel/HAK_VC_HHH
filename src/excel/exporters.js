@@ -83,11 +83,11 @@ function addTable(ws, { title, subtitle, cols, rows, startRow = 1, totalLabel = 
 async function done(wb) { return Buffer.from(await wb.xlsx.writeBuffer()); }
 const newWb = () => { const wb = new ExcelJS.Workbook(); wb.creator = 'VC Cost'; wb.created = new Date(); return wb; };
 
-async function ticketsWorkbook(data, filter, labels = null) {
+async function ticketsWorkbook(data, filter, { labels = null, nhapBoQua = 0 } = {}) {
   const wb = newWb();
   const ws = wb.addWorksheet('Chi tiết vận chuyển');
   addTable(ws, {
-    title: 'DỮ LIỆU PHIẾU CÂN', subtitle: `Lọc: ${labels ? labels.map(([k, v]) => `${k}: ${v}`).join('; ') || 'Tất cả' : filterText(filter)} — ${data.total} phiếu. Gồm Nháp theo bộ lọc; bảng kê thanh toán chỉ dùng phiếu đã duyệt.`,
+    title: 'DỮ LIỆU PHIẾU CÂN', subtitle: `Lọc: ${labels ? labels.map(([k, v]) => `${k}: ${v}`).join('; ') || 'Tất cả' : filterText(filter)} — ${data.total} phiếu${nhapBoQua ? ` (không gồm ${nhapBoQua} phiếu Nháp chưa duyệt)` : ''}. Gồm Nháp khi lọc Nháp rõ ràng; bảng kê thanh toán chỉ dùng phiếu đã duyệt.`,
     cols: [
       { header: 'STT', value: (r) => data.rows.indexOf(r) + 1, width: 6 },
       { header: 'Số phiếu', key: 'so_phieu', text: true, width: 10, count: true },

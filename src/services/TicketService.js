@@ -8,7 +8,7 @@ const EDITABLE = ['ngay_gio_can_1', 'ngay_gio_can_2', 'bien_so', 'can_lan_1', 'c
 const FINANCIAL = EDITABLE.filter((k) => k !== 'ghi_chu'); // phiếu đã chốt: chỉ còn sửa được ghi chú
 const { parseDateTime } = require('../utils/datetime');
 const { weightProblem, limitsFrom } = require('../utils/weight');
-const { duyetBat } = require('../utils/duyet');
+const { duyetBat, ticketVersionSql } = require('../utils/duyet');
 
 class TicketService {
   constructor(db, { audit, cost, auth = null }) { Object.assign(this, { db, audit, cost, auth }); }
@@ -120,7 +120,7 @@ class TicketService {
    * Duyệt phiếu Nháp (chỉ khi bật duyệt phiếu). Mỗi phiếu một giao dịch, trả kết quả từng ID, không dừng ở lỗi đầu.
    * Không duyệt: phiếu không còn hiệu lực/đã duyệt; ngày thuộc kỳ đã chốt; thuộc đợt đã khóa; (khi bật phân quyền) phiếu do chính người duyệt nhập/sửa gần nhất.
    */
-  approve(ids, note = null) {
+  approve(ids, note = null, vers = null) {
     if (!duyetBat(this.cost && this.cost.settings)) throw new ValidationError('Chưa bật duyệt phiếu (Cài đặt)');
     if (!Array.isArray(ids) || !ids.length) throw new ValidationError('Chưa chọn phiếu nào');
     const actor = this.audit.actor() || null; const authOn = !!(this.auth && this.auth.enabled());
@@ -130,6 +130,8 @@ class TicketService {
       try {
         if (!t || t.trang_thai !== 'ACTIVE') throw new ValidationError('Phiếu không còn hiệu lực');
         if (t.trang_thai_duyet !== 'NHAP') throw new ValidationError('Phiếu đã được duyệt');
+        if (vers && vers[id] !== this.db.get(`SELECT ${ticketVersionSql()} v FROM phieu_can WHERE id=?`, [id]).v) throw new ValidationError('Phiếu đã thay đổi sau khi bạn chọn — tải lại danh sách và xem lại trước khi duyệt');
+        { const wp = weightProblem(t.kl_hang_kg, limitsFrom(this.cost && this.cost.settings)); if (wp) throw new ValidationError(`${wp} — sửa khối lượng trước khi duyệt`); }
         if (authOn && actor && t.nhap_boi === actor) throw new ValidationError('Người nhập/sửa phiếu không tự duyệt phiếu của mình — cần người khác duyệt');
         if (t.dot_van_chuyen_id) { const d = this.db.get('SELECT trang_thai FROM dot_van_chuyen WHERE id=?', [t.dot_van_chuyen_id]); if (d && d.trang_thai === 'KHOA') throw new ValidationError('Phiếu thuộc đợt đã khóa'); }
         this.db.tx(() => {

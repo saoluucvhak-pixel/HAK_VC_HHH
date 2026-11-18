@@ -115,7 +115,7 @@ jobs:
           path: ${{ runner.temp }}/smoke-*.json
           if-no-files-found: ignore
 
-  publish-080:
+  publish-081:
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     needs: windows
     runs-on: ubuntu-latest
@@ -132,7 +132,7 @@ jobs:
         shell: bash
         run: |
           version=$(node -p "require('./package.json').version")
-          if [ "$version" = '0.8.0' ]; then echo 'publish=true' >> "$GITHUB_OUTPUT"; fi
+          if [ "$version" = '0.8.1' ]; then echo 'publish=true' >> "$GITHUB_OUTPUT"; fi
 
       - name: Xác nhận CI Linux của đúng commit
         if: steps.version.outputs.publish == 'true'
@@ -157,7 +157,7 @@ jobs:
           name: vc-cost-installers
           path: release-assets
 
-      - name: Kiểm tra checksum và công bố 0.8.0
+      - name: Kiểm tra checksum và công bố 0.8.1
         if: steps.version.outputs.publish == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
@@ -165,13 +165,13 @@ jobs:
         run: |
           set -euo pipefail
           (cd release-assets && sha256sum -c SHA256SUMS.txt)
-          test -f release-assets/VC-Cost-0.8.0-Setup.exe
-          test -f release-assets/VC-Cost-0.8.0-Portable.exe
+          test -f release-assets/VC-Cost-0.8.1-Setup.exe
+          test -f release-assets/VC-Cost-0.8.1-Portable.exe
           cp docs/RELEASE_NOTES.md release-notes.md
           printf '\nCommit `%s` · Windows build + nghiệm thu run %s\n\n' "$GITHUB_SHA" "$GITHUB_RUN_ID" >> release-notes.md
           printf '```\n' >> release-notes.md
           cat release-assets/SHA256SUMS.txt >> release-notes.md
           printf '```\n' >> release-notes.md
-          gh release create v0.8.0 --target "$GITHUB_SHA" --title 'VC Cost v0.8.0' --notes-file release-notes.md --latest \
-            release-assets/VC-Cost-0.8.0-Setup.exe release-assets/VC-Cost-0.8.0-Portable.exe release-assets/SHA256SUMS.txt
+          gh release create v0.8.1 --target "$GITHUB_SHA" --title 'VC Cost v0.8.1' --notes-file release-notes.md --latest \
+            release-assets/VC-Cost-0.8.1-Setup.exe release-assets/VC-Cost-0.8.1-Portable.exe release-assets/SHA256SUMS.txt
 
