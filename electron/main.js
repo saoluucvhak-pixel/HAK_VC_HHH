@@ -136,6 +136,19 @@ function runSmoke() {
           const x = await rt.dispatch('export.statement', { filter: { don_vi_id: dv.id, da_tinh_gia: true } });
           if (!x.ok) problems.push('xuất Excel lỗi: ' + x.error);
           else { const b = fs.readFileSync(x.data.path); acc.xlsx = { bytes: b.length, header: b.subarray(0, 2).toString('latin1') }; if (acc.xlsx.header !== 'PK' || b.length < 3000) problems.push('Excel không hợp lệ: ' + JSON.stringify(acc.xlsx)); }
+          // Quy trình duyệt trên chính bản đóng gói: Nháp vẫn ở màn nhập, chứng từ chỉ có phiếu đã duyệt.
+          const ticket = rt.app.db.get(`SELECT * FROM phieu_can WHERE trang_thai='ACTIVE' AND trang_thai_tinh_gia='OK' LIMIT 1`);
+          await rt.dispatch('settings.set', { key: 'duyet_phieu', value: { bat: true } });
+          const changed = await rt.dispatch('tickets.update', { id: ticket.id, data: { xe_tra_ve: ticket.xe_tra_ve ? 0 : 1 }, note: 'Nghiệm thu duyệt lại' });
+          if (!changed.ok) throw new Error(changed.error);
+          const draftFilter = { trang_thai_duyet: 'NHAP', moi_trang_thai: true, don_vi_id: ticket.don_vi_van_chuyen_id };
+          const draftBill = await rt.dispatch('reports.statement', draftFilter);
+          const draftCount = await rt.dispatch('tickets.count', { filter: draftFilter });
+          if (!draftBill.ok || draftBill.data.so_chuyen !== 0 || draftCount.data.kept !== 1) problems.push('Phiếu Nháp lọt báo cáo hoặc mất khỏi màn nhập');
+          const approved = await rt.dispatch('tickets.approve', { ids: [ticket.id], note: 'Đã kiểm tra bộ cài' });
+          if (!approved.ok || approved.data.ok !== 1) problems.push('Duyệt phiếu trên bộ cài thất bại');
+          await rt.dispatch('settings.set', { key: 'duyet_phieu', value: { bat: false } });
+          acc.approval = { draftTripsInStatement: draftBill.data && draftBill.data.so_chuyen, draftVisible: draftCount.data && draftCount.data.kept, approved: approved.data && approved.data.ok };
           const lk = await rt.dispatch('lock.create', { loai: 'KY', tu_ngay: '2026-09-28', den_ngay: '2026-10-01' });
           if (!lk.ok) problems.push('chốt kỳ lỗi: ' + lk.error); else acc.chot = { so_phieu: lk.data.so_phieu };
           const lst = await rt.dispatch('lock.list', {}); if (!lst.ok || !lst.data.length) problems.push('danh sách kỳ chốt rỗng sau khi chốt');

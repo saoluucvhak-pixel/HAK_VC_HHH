@@ -19,7 +19,7 @@ test('BẬT: sửa phiếu → Nháp, loại khỏi số liệu/Dashboard; duy�
   const app = await mk();
   app.settings.set('duyet_phieu', { bat: true });
   const t = first(app); const before = app.reports.count({});
-  app.tickets.update(t.id, { kl_hang_kg: 20000 }, 'sửa thử');
+  app.tickets.update(t.id, { xe_tra_ve: 1 }, 'sửa thử');
   assert.equal(app.tickets.get(t.id).trang_thai_duyet, 'NHAP');
   const after = app.reports.count({});
   assert.equal(after.kept, before.kept - 1);                                   // phiếu Nháp không tính
@@ -36,7 +36,7 @@ test('không tắt duyệt khi còn Nháp; chốt kỳ bị chặn khi còn Nhá
   const app = await mk();
   app.settings.set('duyet_phieu', { bat: true });
   const t = first(app);
-  app.tickets.update(t.id, { kl_hang_kg: 20000 }, 'sửa thử');
+  app.tickets.update(t.id, { xe_tra_ve: 1 }, 'sửa thử');
   assert.throws(() => app.settings.set('duyet_phieu', { bat: false }), /Nháp|chưa duyệt/i);
   app.tickets.approve([t.id]);
   app.settings.set('duyet_phieu', { bat: false });                       // hết Nháp → tắt được
@@ -47,7 +47,7 @@ test('chốt kỳ: còn phiếu Nháp trong phạm vi → preview báo chua_duye
   app.settings.set('duyet_phieu', { bat: true });
   const t = first(app); const full = app.tickets.get(t.id);
   const d0 = full.ngay_can.slice(0, 10); const scope = { loai: 'KY', tu_ngay: d0, den_ngay: d0 };
-  app.tickets.update(t.id, { kl_hang_kg: 20000 }, 'sửa thử');
+  app.tickets.update(t.id, { xe_tra_ve: 1 }, 'sửa thử');
   const pv = app.lock.preview(scope);
   assert.equal(pv.chua_duyet, 1); assert.equal(pv.chot_duoc, false);
   assert.throws(() => app.lock.lock(scope), /Nháp/);

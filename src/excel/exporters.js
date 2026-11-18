@@ -83,11 +83,11 @@ function addTable(ws, { title, subtitle, cols, rows, startRow = 1, totalLabel = 
 async function done(wb) { return Buffer.from(await wb.xlsx.writeBuffer()); }
 const newWb = () => { const wb = new ExcelJS.Workbook(); wb.creator = 'VC Cost'; wb.created = new Date(); return wb; };
 
-async function ticketsWorkbook(data, filter) {
+async function ticketsWorkbook(data, filter, labels = null) {
   const wb = newWb();
   const ws = wb.addWorksheet('Chi tiết vận chuyển');
   addTable(ws, {
-    title: 'CHI TIẾT VẬN CHUYỂN', subtitle: `Lọc: ${filterText(filter)} — ${data.total} phiếu. Tiền từng phiếu chưa làm tròn (số thanh toán theo bảng kê).`,
+    title: 'DỮ LIỆU PHIẾU CÂN', subtitle: `Lọc: ${labels ? labels.map(([k, v]) => `${k}: ${v}`).join('; ') || 'Tất cả' : filterText(filter)} — ${data.total} phiếu. Gồm Nháp theo bộ lọc; bảng kê thanh toán chỉ dùng phiếu đã duyệt.`,
     cols: [
       { header: 'STT', value: (r) => data.rows.indexOf(r) + 1, width: 6 },
       { header: 'Số phiếu', key: 'so_phieu', text: true, width: 10, count: true },
@@ -107,6 +107,7 @@ async function ticketsWorkbook(data, filter) {
       { header: 'VAT', key: 'tien_vat', fmt: 'money2', sum: true, width: 14 },
       { header: 'Tổng tiền', key: 'tong_tien', fmt: 'money2', sum: true, width: 16 },
       { header: 'Đợt/Tàu', key: 'dot', width: 12 },
+      { header: 'Trạng thái duyệt', value: (r) => r.trang_thai_duyet === 'NHAP' ? 'Nháp' : 'Đã duyệt', width: 16 },
       { header: 'Trạng thái giá', key: 'trang_thai_tinh_gia', width: 14 },
       { header: 'Đối chiếu', key: 'trang_thai_doi_chieu', width: 14 },
       { header: 'Ghi chú', key: 'ghi_chu', width: 20 },

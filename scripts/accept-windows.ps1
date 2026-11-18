@@ -46,6 +46,13 @@ $r = Invoke-Smoke $exe @{ VCCOST_EXPECT_UPGRADE_FROM = '4'; VCCOST_EXPECT_PHIEU 
 Assert-True ($r.schema -ge 6) "Sau nâng cấp schema phải >= 6, thực tế $($r.schema)"
 Assert-True (@(Get-ChildItem (Join-Path $appdataDir 'backups') -Filter '*_PRE_MIGRATION.db').Count -ge 1) 'Thiếu file PRE_MIGRATION trong %APPDATA%\VCCost\backups'
 
+# Nâng DB của bản 0.7.1 (schema 6) lên schema 7, giữ dữ liệu cũ.
+Remove-Item -LiteralPath $appdataDir -Recurse -Force
+$old = node --no-warnings scripts/make-old-db.js (Join-Path $appdataDir 'data\app.db') 6
+Write-Host "DB schema 6: $old"
+$r = Invoke-Smoke $exe @{ VCCOST_EXPECT_UPGRADE_FROM = '6'; VCCOST_EXPECT_PHIEU = '3' } 'nang-cap-tu-v6'
+Assert-True ($r.schema -eq 7) "Sau nâng cấp phải có schema 7, thực tế $($r.schema)"
+
 # Ca 3: thư mục dữ liệu TÙY CHỈNH (VCCOST_DATA_DIR) — không đụng thư mục mặc định
 Remove-Item $appdataDir -Recurse -Force
 $custom = Join-Path $Work 'du-lieu-tuy-chinh'

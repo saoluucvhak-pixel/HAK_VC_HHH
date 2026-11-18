@@ -26,7 +26,7 @@ function fit(rows, key, total) {
   if (diff) rows.reduce((m, r) => (r[key] > m[key] ? r : m))[key] += diff;
 }
 function loadTickets(app, filter) {
-  return app.reports.tickets(filter, { offset: 0, limit: 10_000_000, sort: 'ngay_gio_can_1', dir: 'asc' }).rows;
+  return app.reports.tickets(filter, { offset: 0, limit: 10_000_000, sort: 'ngay_gio_can_1', dir: 'asc', approvedOnly: true }).rows;
 }
 function carriers(app, ngay) {
   return new Map(app.db.all('SELECT * FROM don_vi_van_chuyen').map((d) => [d.ma, withContract(app, d, ngay)]));
@@ -135,7 +135,7 @@ function priceDoc(app, { ngay, gia_dau = null, dau_tu = null, dau_den = null, do
     const sec = { x, rule, steps: x.thieu ? [] : priceSteps(x, sh), sheet: x.ma_tuyen, vat: x.vat_percent };
     if (!x.thieu && (tu_ngay || den_ngay)) {
       const f = { tuyen_id: x.tuyen_id, tu_ngay, den_ngay }; if (don_vi_id) f.don_vi_id = don_vi_id;
-      const ts = app.reports.tickets(f, { offset: 0, limit: 10_000_000 }).rows.filter(pricedTicket);
+      const ts = app.reports.tickets(f, { offset: 0, limit: 10_000_000, approvedOnly: true }).rows.filter(pricedTicket);
       if (ts.length) { const st = stmtOf(app, ts); sec.kyTri = { so_chuyen: ts.length, tan: st.tong_tan, tien: st.tien_truoc_vat, vat: st.tien_vat, tong: st.tong_tien }; }
       if (sec.kyTri) sec.kyTri.bangChu = docTienBangChu(sec.kyTri.tong);
     }

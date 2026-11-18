@@ -297,6 +297,34 @@ console.log('app.info', JSON.stringify(info.data.counts));
   ck((await page.locator('[data-user]').count()) === 0, 'tắt phân quyền: không còn ô người dùng');
 }
 
+// Duyệt phiếu: cùng bộ lọc Nháp, màn nhập thấy phiếu còn bảng kê và số đếm báo cáo bằng 0.
+{
+  const draft = await page.evaluate(async () => {
+    await App.api('settings.set', { key: 'duyet_phieu', value: { bat: true } });
+    const data = await App.api('tickets.list', { filter: { chua_chot: true }, limit: 1 });
+    const t = await App.api('tickets.get', { id: data.rows[0].id });
+    await App.api('tickets.update', { id: t.id, data: { xe_tra_ve: t.xe_tra_ve ? 0 : 1 }, note: 'UI kiểm tra duyệt lại' });
+    await App.refreshInfo();
+    Object.keys(App.state.filter).forEach((k) => delete App.state.filter[k]);
+    Object.assign(App.state.filter, { trang_thai: 'NHAP', don_vi_id: [t.don_vi_van_chuyen_id] });
+    return { id: t.id };
+  });
+  await nav('tickets');
+  await page.waitForSelector('[data-act=approve-filtered]');
+  await page.waitForFunction(() => /Hiển thị 1\s*\//.test(document.body.innerText));
+  await shot('41-phieu-nhap');
+  await nav('statements');
+  await page.waitForFunction(() => /Hiển thị 0\s*\//.test(document.body.innerText));
+  if (!(await page.textContent('body')).includes('Số liệu báo cáo và chứng từ chỉ gồm phiếu đã duyệt.')) errors.push('thiếu phạm vi đã duyệt trên bảng kê');
+  await shot('42-bang-ke-chan-nhap');
+  await page.evaluate(async ({ id }) => {
+    const result = await App.api('tickets.approve', { ids: [id], note: 'kiểm tra xong' });
+    if (result.ok !== 1) throw new Error('Duyệt phiếu UI thất bại');
+    await App.api('settings.set', { key: 'duyet_phieu', value: { bat: false } });
+    Object.keys(App.state.filter).forEach((k) => delete App.state.filter[k]);
+  }, draft);
+}
+
 console.log('errors:', errors.length ? errors : 'none');
 await browser.close(); srv.close();
 process.exit(errors.length ? 1 : 0);

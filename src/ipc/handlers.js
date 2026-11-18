@@ -106,7 +106,7 @@ function createHandlers(app, env = {}) {
 
     // ---------------- phiếu & báo cáo
     'workflow.todo': () => ({ ...app.reports.todo(), cho_xu_ly: app.imports.pendingReviews().length, canh_bao_mo: app.alerts.countOpen() }),
-    'tickets.count': ({ filter }) => app.reports.count(allStates(filter)),
+    'tickets.count': ({ filter, approvedOnly = false }) => app.reports.count(allStates(filter), { approvedOnly }),
     'tickets.periods': () => app.reports.periods(),
     'tickets.list': ({ filter, ...o }) => app.reports.tickets(allStates(filter), o),
     'tickets.ids': ({ filter }) => { const { sql, params } = app.reports.where(allStates(filter)); return app.db.all(`SELECT p.id FROM phieu_can p WHERE ${sql}`, params).map((r) => r.id); },
@@ -166,7 +166,7 @@ function createHandlers(app, env = {}) {
     'template.vehicles': async () => writeExport(await require('../excel/templates').vehicleTemplate({ carriers: app.db.all(`SELECT ma FROM don_vi_van_chuyen WHERE trang_thai='ACTIVE' ORDER BY ma`).map((x) => x.ma) }), 'MAU_Import_Danh_sach_xe.xlsx'),
     'export.tickets': async ({ filter }) => {
       const all = app.reports.tickets(allStates(filter), { offset: 0, limit: 10_000_000 });
-      return writeExport(await exporters.ticketsWorkbook(all, filter), `ChiTietVanChuyen_${stamp()}.xlsx`);
+      return writeExport(await exporters.ticketsWorkbook(all, filter, documents.filterLabels(app, filter || {})), `ChiTietVanChuyen_${stamp()}.xlsx`);
     },
     // Bảng kê (Excel in/ký + PDF) và báo cáo tổng hợp
     'export.statement': async ({ filter, reconBatchId }) => { const d = documents.statementDoc(app, filter || {}, { reconBatchId }); return writeExport(await exporters.statementWorkbook(d), `${d.file}_${stamp()}.xlsx`); },

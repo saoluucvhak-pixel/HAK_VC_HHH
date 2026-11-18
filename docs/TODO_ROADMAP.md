@@ -29,7 +29,7 @@ Q1–Q10 ✅ đã chốt đủ (07/10/2026) — chi tiết: `PHAN_TICH_THIET_KE_
 
 ## Việc còn lại (đề xuất)
 2. Ký số bộ cài (SmartScreen); `minimatch` trong `electron-builder` (chờ bản sửa upstream).
-3. (Tùy chọn, sau) trạng thái phiếu Nháp → Duyệt từng phiếu; hiện đã có phân quyền theo vai trò (người nhập không duyệt xung đột/chốt kỳ).
+3. Duyệt từng phiếu đã triển khai ở 0.8.0 (schema 7), mặc định tắt; khi bật, báo cáo/chứng từ chỉ nhận phiếu đã duyệt.
 
 ## Ý tưởng sau
 - Đọc trực tiếp file xuất từ phần mềm trạm cân theo lịch.

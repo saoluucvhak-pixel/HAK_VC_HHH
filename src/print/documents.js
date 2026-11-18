@@ -26,6 +26,7 @@ function filterLabels(app, f = {}) {
   if (asIds(f.noi_xuat_id).length) out.push(['Nơi xuất', names('SELECT ten FROM dia_diem WHERE id=?', f.noi_xuat_id)]);
   if (asIds(f.tuyen_id).length) out.push(['Tuyến', names('SELECT ma_tuyen FROM tuyen_van_chuyen WHERE id=?', f.tuyen_id)]);
   if (f.bien_so) out.push(['Biển số', f.bien_so]);
+  if (f.trang_thai_duyet) out.push(['Trạng thái duyệt', f.trang_thai_duyet === 'NHAP' ? 'Nháp' : 'Đã duyệt']);
   if (f.search && String(f.search).trim()) out.push(['Tìm', String(f.search).trim()]);
   return out;
 }
@@ -59,7 +60,7 @@ function statementDoc(app, filter = {}, opt = {}) {
   const dot = oneId(filter.dot_id) !== null ? app.db.get('SELECT * FROM dot_van_chuyen WHERE id=?', [oneId(filter.dot_id)]) : null;
   const rn = routeNames(app);
   st.lines.forEach((l) => { l.tuyen_ten = rn.get(l.tuyen_id) || l.tuyen; });
-  const all = app.reports.tickets(filter, { offset: 0, limit: 10_000_000, sort: 'ngay_gio_can_1', dir: 'asc' }).rows;
+  const all = app.reports.tickets(filter, { offset: 0, limit: 10_000_000, sort: 'ngay_gio_can_1', dir: 'asc', approvedOnly: true }).rows;
   const tickets = all.filter((t) => (t.trang_thai_tinh_gia === 'OK' || t.trang_thai_tinh_gia === 'LOCKED') && t.don_gia !== null);
   const period = dot ? `Đợt/Tàu: ${[dot.ten_tau, dot.voyage].filter(Boolean).join(' ')} (${dot.ma_dot})${dot.tu_ngay ? ` — ${dmy(dot.tu_ngay)} → ${dmy(dot.den_ngay)}` : ''}`
     : (() => {   // không lọc ngày → lấy khoảng ngày thực tế của các phiếu trong bảng kê

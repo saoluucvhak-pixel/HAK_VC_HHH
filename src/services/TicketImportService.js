@@ -216,6 +216,8 @@ class TicketImportService {
         const raw = JSON.stringify({ so_phieu: r.so_phieu, ngay_gio_can_1: r.ngay_gio_can_1, ngay_gio_can_2: r.ngay_gio_can_2, bien_so: r.bien_so_goc,
           can_lan_1: r.can_lan_1, can_lan_2: r.can_lan_2, kl_hang_kg: r.kl_hang_kg, noi_xuat: r.noi_xuat, noi_den: r.noi_den, cong_ty_vc: r.cong_ty_vc_nguon });
         if (r.phan_loai === 'NEW') {
+          const current = this._parseRaw(JSON.parse(raw));
+          if (current.errors.length) throw new ValidationError(`Phiếu ${r.so_phieu} không còn hợp lệ (${current.errors[0]}) — hãy xem trước lại`);
           // kiểm tra lại ngay trong transaction (phòng import song song)
           const again = this.db.get(`SELECT id FROM phieu_can WHERE business_key=? AND trang_thai='ACTIVE'`, [r.key]);
           if (again) throw new ValidationError(`Phiếu ${r.so_phieu} vừa được import ở nơi khác — hãy preview lại`);
@@ -388,6 +390,9 @@ class TicketImportService {
                        noi_xuat_goc=?, noi_xuat_id=?, business_key=?, strong_key=?, fingerprint=? WHERE id=?`,
         [o.ngay_gio_can_1, o.ngay_gio_can_2, o.bien_so_goc, o.bien_so, o.bien_so_chuan, o.can_lan_1, o.can_lan_2, o.kl_hang_kg, o.noi_xuat_goc, o.noi_xuat_id,
           o.business_key, o.strong_key, o.fingerprint, o.id]);
+        if (duyetBat(this.settings)) {
+          this.db.run(`UPDATE phieu_can SET trang_thai_duyet='NHAP', nhap_boi=?, duyet_boi=NULL, duyet_luc=NULL WHERE id=?`, [this.audit.actor() || null, o.id]);
+        }
       }
       for (const pr of this.db.all(`SELECT phieu_can_id FROM import_batch_row WHERE batch_id=? AND hanh_dong='PENDING_REVIEW' AND phieu_can_id IS NOT NULL`, [batchId])) {
         const left = this.db.get(`SELECT COUNT(*) n FROM import_batch_row WHERE phieu_can_id=? AND hanh_dong='PENDING_REVIEW' AND batch_id<>?`, [pr.phieu_can_id, batchId]).n;

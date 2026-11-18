@@ -140,7 +140,7 @@ class ReconciliationService {
   _p(token) { const p = this.previews.get(token); if (!p) throw new ValidationError('Phiên đối chiếu đã hết hạn — chọn lại file'); return p; }
 
   _loadA({ don_vi_id, dot_id, tu_ngay, den_ngay }) {
-    const { sql, params } = this.reports.where({ don_vi_id, dot_id, tu_ngay, den_ngay });
+    const { sql, params } = this.reports.approvedWhere({ don_vi_id, dot_id, tu_ngay, den_ngay });
     return this.db.all(`SELECT p.id, p.so_phieu, p.bien_so, p.bien_so_chuan, p.ngay_can, p.kl_hang_kg, p.don_gia, p.tien_truoc_vat, p.tien_vat, p.tong_tien FROM phieu_can p WHERE ${sql}`, params)
       .map((r) => ({ ...r, don_gia: fromDb(r.don_gia), tien_truoc_vat: fromDb(r.tien_truoc_vat), tien_vat: fromDb(r.tien_vat), tong_tien: fromDb(r.tong_tien) }));
   }

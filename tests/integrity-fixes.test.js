@@ -26,6 +26,26 @@ async function open(app, rows) {
 const idOf = (app, sp) => app.db.get(`SELECT id FROM phieu_can WHERE so_phieu=? AND trang_thai='ACTIVE'`, [sp]).id;
 const kl = (app, id) => app.db.get('SELECT kl_hang_kg, can_lan_2 FROM phieu_can WHERE id=?', [id]);
 
+test('hoàn tác thay đổi số liệu sau duyệt đưa phiếu về Nháp và xóa xác nhận cũ', async () => {
+  const app = await mk();
+  try {
+    app.settings.set('duyet_phieu', { bat: true });
+    (await open(app, [row(app, 'UNDO-APPROVAL')])).commit();
+    const id = idOf(app, 'UNDO-APPROVAL');
+    assert.equal(app.tickets.approve([id]).ok, 1);
+    const batch = (await open(app, [row(app, 'UNDO-APPROVAL', '02', 16000)])).commit();
+    app.imports.resolveReview(app.imports.pendingReviews().find((r) => r.phieu_can_id === id).id, 'UPDATE', 'theo file mới');
+    assert.equal(app.tickets.approve([id]).ok, 1);
+    app.imports.undoBatch(batch.batchId, 'phục hồi cần duyệt lại');
+    const restored = app.tickets.get(id);
+    assert.equal(restored.kl_hang_kg, 17000);
+    assert.equal(restored.trang_thai_duyet, 'NHAP');
+    assert.equal(restored.duyet_boi, null);
+    assert.equal(restored.duyet_luc, null);
+    assert.equal(app.reports.count({}).kept, 0);
+  } finally { app.close(); }
+});
+
 test('hoàn tác import khôi phục đúng trạng thái ngay trước lần cập nhật; phiếu đã sửa tay sau đó thì chặn (không ghi đè)', async () => {
   const app = await mk();
   (await open(app, [row(app, '7002')])).commit();
