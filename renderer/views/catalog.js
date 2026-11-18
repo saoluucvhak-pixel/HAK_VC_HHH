@@ -82,7 +82,7 @@
       const c = (await cfg())[arg];
       const body = h('div', {}); let search = '';
       const cols = await columnsFor(arg);
-      const load = async () => {
+      const load = App.latestRender(body, async (body) => {
         const rows = await api('catalog.list', { table: arg, search });
         App.clear(body).append(h('div', { class: 'card' }, table({
           columns: [...cols, { key: '_a', label: '', render: (r) => h('span', { class: 'row gap-s' },
@@ -90,18 +90,19 @@
             (c.children || []).length ? h('button', { class: 'btn ghost sm', onclick: (e) => { e.stopPropagation(); children(r); } }, 'Chi tiết') : null,
             h('button', { class: 'btn ghost sm', onclick: async (e) => { e.stopPropagation(); if (await App.confirmBox('Xóa', `Xóa ${r[c.displayField]}?`, 'Xóa', 'danger')) { if (await call('catalog.remove', { table: arg, id: r.id }, 'Đã xóa')) load(); } } }, 'Xóa')) }],
           rows, wrapClass: 'tall', onRow: (r) => editDialog(arg, r, { onDone: load }) }), h('p', { class: 'muted' }, `${rows.length} bản ghi`)));
-      };
+      });
       async function children(parent) {
         const kids = c.children; const cc = (await cfg());
         const holder = h('div', {}); let active = kids[0];
-        const draw = async () => {
-          const k = cc[active]; const kcols = await columnsFor(active);
-          const rows = await api('catalog.list', { table: active, parentId: parent.id });
-          App.clear(holder).append(h('div', { class: 'tabs' }, kids.map((t) => h('div', { class: 'tab' + (t === active ? ' active' : ''), onclick: () => { active = t; draw(); } }, cc[t].label))),
-            h('div', { class: 'row end', style: { marginBottom: '8px' } }, h('button', { class: 'btn sm', onclick: () => editDialog(active, null, { parentId: parent.id, onDone: draw }) }, '+ Thêm')),
-            table({ columns: [...kcols, { key: '_a', label: '', render: (r) => h('span', { class: 'row gap-s' }, h('button', { class: 'btn ghost sm', onclick: () => editDialog(active, r, { onDone: draw }) }, 'Sửa'),
-              h('button', { class: 'btn ghost sm', onclick: async () => { if (await call('catalog.remove', { table: active, id: r.id }, 'Đã xóa')) draw(); } }, 'Xóa')) }], rows }));
-        };
+        const draw = App.latestRender(holder, async (holder) => {
+          const childTable = active;
+          const kcols = await columnsFor(childTable);
+          const rows = await api('catalog.list', { table: childTable, parentId: parent.id });
+          App.clear(holder).append(h('div', { class: 'tabs' }, kids.map((t) => h('div', { class: 'tab' + (t === childTable ? ' active' : ''), onclick: () => { active = t; draw(); } }, cc[t].label))),
+            h('div', { class: 'row end', style: { marginBottom: '8px' } }, h('button', { class: 'btn sm', onclick: () => editDialog(childTable, null, { parentId: parent.id, onDone: draw }) }, '+ Thêm')),
+            table({ columns: [...kcols, { key: '_a', label: '', render: (r) => h('span', { class: 'row gap-s' }, h('button', { class: 'btn ghost sm', onclick: () => editDialog(childTable, r, { onDone: draw }) }, 'Sửa'),
+              h('button', { class: 'btn ghost sm', onclick: async () => { if (await call('catalog.remove', { table: childTable, id: r.id }, 'Đã xóa')) draw(); } }, 'Xóa')) }], rows }));
+        });
         draw(); App.modal({ title: `${c.label}: ${parent[c.displayField]}`, wide: true, body: holder, actions: [{ label: 'Đóng', primary: false, onClick: () => load() }] });
       }
       v.append(App.pageHead(c.label, null,
@@ -123,12 +124,12 @@
         if (!(await App.confirmBox('Xóa bảng giá', msg, r.so_phieu ? 'Xóa và tính lại' : 'Xóa', 'danger'))) return;
         const x = await call('price.remove', { id: r.id, recalc: true }, 'Đã xóa bảng giá'); if (x) load();
       };
-      load = async () => {
+      load = App.latestRender(body, async (body) => {
         const rows = await api('catalog.list', { table: 'bang_gia_van_chuyen' });
         App.clear(body).append(h('div', { class: 'card' }, table({ columns: [{ key: '_a', label: 'Xóa', render: (r) => h('button', { class: 'btn ghost sm', 'data-act': 'delprice', title: 'Xóa bảng giá', onclick: (e) => { e.stopPropagation(); delRule(r); } }, '🗑') }, ...cols], rows, wrapClass: 'tall', onRow: (r) => editDialog('bang_gia_van_chuyen', r, { onDone: load, onDelete: () => delRule(r) }),
           rowClass: (r) => (r.trang_thai === 'ACTIVE' && !r.den_ngay ? '' : 'dup') }),
         h('p', { class: 'muted' }, 'Giá cũ không bị sửa: dùng "Phiên bản giá mới" để đóng giá cũ (đến ngày X−1) và mở giá mới từ ngày X. Sau khi đổi, các phiếu bị ảnh hưởng được tính lại.')));
-      };
+      });
       const newVersion = async () => {
         const tuyen = await api('catalog.options', { table: 'tuyen_van_chuyen' }); const dv = await api('catalog.options', { table: 'don_vi_van_chuyen' });
         const rules = await api('catalog.list', { table: 'bang_gia_van_chuyen' });
@@ -230,7 +231,7 @@
     async render(v) {
       const body = h('div', {});
       const pcols = await columnsFor('gia_dau');
-      const load = async () => {
+      const load = App.latestRender(body, async (body) => {
         const [prices, periods] = await Promise.all([api('catalog.list', { table: 'gia_dau' }), api('price.fuelPeriods')]);
         App.clear(body).append(
           h('div', { class: 'card' }, h('div', { class: 'row' }, h('h3', { class: 'grow' }, 'Kỳ điều chỉnh giá theo dầu'), h('button', { class: 'btn', 'data-act': 'newperiod', onclick: newPeriod }, '+ Kỳ điều chỉnh mới')),
@@ -238,7 +239,7 @@
               { key: 'ngay_ap_dung', label: 'Áp dụng từ', fmt: 'date' }, { key: 'trang_thai', label: 'Trạng thái', tag: true }, { key: '_a', label: '', render: (k) => h('span', { class: 'row gap-s' }, h('button', { class: 'btn ghost sm', onclick: () => preview(k) }, k.trang_thai === 'NHAP' ? 'Xem trước & duyệt' : 'Xem'), h('button', { class: 'btn ghost sm', 'data-act': 'delperiod', title: 'Xóa kỳ', onclick: async () => { if (await App.confirmBox('Xóa kỳ điều chỉnh', k.trang_thai === 'NHAP' ? `Xóa kỳ ${k.ma_ky}?` : `Xóa kỳ ${k.ma_ky}? Các bảng giá do kỳ này sinh ra sẽ được gỡ và bảng giá cũ mở lại Phiếu đang dùng các bảng giá đó (chưa chốt kỳ) sẽ được tính lại giá.`, 'Xóa và tính lại', 'danger')) { if (await call('price.removeFuelPeriod', { id: k.id, recalc: true }, 'Đã xóa kỳ')) load(); } } }, '🗑')) }], rows: periods, empty: 'Chưa có kỳ điều chỉnh' })),
           h('div', { class: 'card' }, h('div', { class: 'row' }, h('h3', { class: 'grow' }, 'Giá dầu theo ngày'), h('span', { class: 'row gap-s' }, h('button', { class: 'btn ghost', 'data-act': 'importfuel', onclick: importFuel }, '📂 Import từ file…'), h('button', { class: 'btn ghost', onclick: () => editDialog('gia_dau', null, { onDone: load }) }, '+ Thêm giá'))),
             table({ columns: [{ key: '_a', label: 'Xóa', render: (r) => h('button', { class: 'btn ghost sm', 'data-act': 'delfuel', title: 'Xóa giá dầu ghi nhầm', onclick: async (e) => { e.stopPropagation(); if (await App.confirmBox('Xóa giá dầu', `Xóa giá dầu ngày ${r.ngay}?`, 'Xóa', 'danger')) { if (await call('catalog.remove', { table: 'gia_dau', id: r.id }, 'Đã xóa')) load(); } } }, '🗑') }, ...pcols], rows: prices, onRow: (r) => editDialog('gia_dau', r, { onDone: load, onDelete: async () => { if (await App.confirmBox('Xóa giá dầu', `Xóa giá dầu ngày ${r.ngay}?`, 'Xóa', 'danger')) { if (await call('catalog.remove', { table: 'gia_dau', id: r.id }, 'Đã xóa')) load(); } } }), wrapClass: 'tall' })));
-      };
+      });
       async function importFuel() {
         const f = await App.pickFile(); if (!f) return;
         const r = await call('fuel.importPreview', f); if (!r) return;

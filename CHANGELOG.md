@@ -2,7 +2,7 @@
 
 ## 0.8.0 — 18/11/2026 (schema 7)
 - Báo cáo và chứng từ chỉ nhận phiếu đã duyệt ở backend, kể cả bộ lọc Nháp/mọi trạng thái. Dashboard, tổng hợp, bảng kê, đối chiếu và biểu mẫu ký dùng cùng phạm vi. Danh sách Phiếu cân vẫn xem được Nháp; Excel dữ liệu có cột trạng thái duyệt.
-- Bộ đếm Smart Filter theo đúng phạm vi màn nhập hoặc báo cáo; phản hồi đếm cũ được bỏ qua khi đổi lọc nhanh. Màn báo cáo nêu phạm vi đã duyệt.
+- Bộ đếm Smart Filter theo đúng phạm vi màn nhập hoặc báo cáo; phản hồi dữ liệu/đếm cũ được bỏ qua khi đổi lọc nhanh; số đếm được làm mới sau duyệt/xóa. Bảng con giữ đúng loại dữ liệu khi chuyển tab. Màn báo cáo nêu phạm vi đã duyệt.
 - Sửa trực tiếp kiểm tra KL = |Cân 1 − Cân 2| như import, chặn số không hữu hạn/lý do trắng; xóa giờ cân 2 được xét đúng. Commit kiểm lại quy tắc khối lượng nếu cấu hình thay đổi sau preview.
 - Hoàn tác cập nhật số liệu khi bật duyệt đưa phiếu về Nháp, xóa xác nhận cũ. Bổ sung hồi quy qua API, Excel, biểu mẫu và giao diện thật.
 

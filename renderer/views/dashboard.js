@@ -69,7 +69,7 @@
           step('6', 'Bảng kê thanh toán', `Đã chốt ${fmt.int(t.da_chot)} phiếu — in/ký bảng kê từng đơn vị`, 0, '', () => App.go('statements'), 'Mở bảng kê', `${fmt.int(t.da_chot)} phiếu đã chốt`, true),
           t.canh_bao_mo ? h('p', { class: 'muted small', style: { margin: '10px 0 0' } }, `🔔 ${fmt.int(t.canh_bao_mo)} cảnh báo đang mở — `, h('a', { class: 'lnk', onclick: () => App.go('alerts') }, 'xem Trung tâm cảnh báo')) : null);
       };
-      const load = async () => {
+      const load = App.latestRender(body, async (body) => {
         const d = await api('reports.dashboard', App.cleanFilter(App.state.filter));
         App.clear(body);
         const k = d.kpi, cu = k.chua_tinh;
@@ -98,7 +98,7 @@
             h('div', { class: 'card' }, h('h3', {}, 'Khối lượng theo nơi xuất (tấn)'), bars(d.byOrigin, 'tong_tan', 'label', fmt.tan)),
             h('div', { class: 'card' }, h('h3', {}, 'Chi phí theo đơn vị vận chuyển (đ, tham khảo)'), bars(d.byCarrier, 'tong_tien', 'label', fmt.money)),
             h('div', { class: 'card' }, h('h3', {}, 'Top xe nhiều chuyến'), table({ columns: [{ key: 'label', label: 'Biển số', mono: true }, { key: 'so_chuyen', label: 'Chuyến', fmt: 'int' }, { key: 'tong_kg', label: 'KL (tấn)', render: (r) => fmt.tan(r.tong_kg / 1000), num: true }], rows: d.topTrips }))));
-      };
+      });
       v.append(App.pageHead('Dashboard', 'Tổng quan chi phí vận chuyển theo kỳ / bộ lọc', h('label', { class: 'field' }, 'Kỳ thể hiện', sel)), await App.filterBar(load), body);
       await load();
     },
@@ -116,7 +116,7 @@
     async render(v, { arg }) {
       const def = RP[arg];
       const body = h('div', {});
-      const load = async () => {
+      const load = App.latestRender(body, async (body) => {
         const f = App.cleanFilter(App.state.filter);
         const rows = await api(def.ch, f);
         const tot = rows.reduce((a, r) => ({ so_chuyen: a.so_chuyen + r.so_chuyen, tong_kg: a.tong_kg + r.tong_kg, tong_tan: a.tong_tan + r.tong_tan, tien_truoc_vat: a.tien_truoc_vat + r.tien_truoc_vat, tien_vat: a.tien_vat + r.tien_vat, tong_tien: a.tong_tien + r.tong_tien, chua_tinh_gia: a.chua_tinh_gia + r.chua_tinh_gia }),
@@ -134,7 +134,7 @@
               { key: 'tien_truoc_vat', label: 'Trước VAT', fmt: 'money' }, { key: 'tien_vat', label: 'VAT', fmt: 'money' }, { key: 'tong_tien', label: 'Tổng', fmt: 'money' },
             ], rows, totals: { ...tot, label: null }, onRow: def.click, wrapClass: 'tall',
           })));
-      };
+      });
       v.append(App.pageHead(def.title, 'Bấm một dòng để xem chi tiết', h('span', { class: 'row gap-s' }, h('button', { class: 'btn ghost', 'data-act': 'xlsx', onclick: () => App.exportXlsx('export.report', { kind: arg, filter: App.cleanFilter(App.state.filter) }) }, '⬇ Excel (in/ký)'), h('button', { class: 'btn ghost', 'data-act': 'pdf', onclick: () => App.exportXlsx('export.reportPdf', { kind: arg, filter: App.cleanFilter(App.state.filter) }) }, '⬇ PDF'))),
         await App.filterBar(load), body);
       await load();
@@ -145,7 +145,7 @@
   App.register('forms', {
     async render(v) {
       const body = h('div', {});
-      const load = async () => {
+      const load = App.latestRender(body, async (body) => {
         const f = App.cleanFilter(App.state.filter);
         const pv = await api('forms.preview', { filter: f }); if (!pv) return;
         const btns = (x, p) => h('span', { class: 'row gap-s' }, h('button', { class: 'btn', 'data-act': `${p}-xlsx`, onclick: () => App.exportXlsx(`export.${x}`, { filter: f }) }, '⬇ Excel (in/ký)'), h('button', { class: 'btn ghost', 'data-act': `${p}-pdf`, onclick: () => App.exportXlsx(`export.${x}Pdf`, { filter: f }) }, '⬇ PDF'));
@@ -155,7 +155,7 @@
           h('div', { class: 'card' }, h('div', { class: 'row' }, h('div', { class: 'grow' }, h('h3', {}, '2. Chi tiết vận chuyển — từng xe, từng chuyến'), h('div', { class: 'muted' }, 'Số phiếu, giờ cân 1/2, cân lần 1/2, KL (KG, tấn), nơi xuất/đến, đơn giá, thành tiền; cộng theo từng xe; mỗi đơn vị một bảng có chữ ký 2 bên')), btns('detail', 'detail')),
             table({ columns: [{ key: 'don_vi', label: 'Đơn vị (Bên B)' }, { key: 'xe', label: 'Xe', fmt: 'int' }, { key: 'so_chuyen', label: 'Chuyến', fmt: 'int' }, { key: 'kg', label: 'KG', fmt: 'int' }, { key: 'chuaTinh', label: 'Chưa tính giá', fmt: 'int' }], rows: pv.detail, empty: 'Chưa có phiếu theo bộ lọc' })),
           h('div', { class: 'card' }, h('div', { class: 'row' }, h('div', { class: 'grow' }, h('h3', {}, '3. Bảng tính đơn giá vận chuyển'), h('div', { class: 'muted' }, 'Từng tuyến, từng bước tính theo giá dầu; chọn giá dầu và bên ký ở màn "Bảng tính đơn giá"')), h('button', { class: 'btn', onclick: () => App.go('pricecalc') }, 'Mở Bảng tính đơn giá →'))));
-      };
+      });
       v.append(App.pageHead('Biểu mẫu in ký 2 bên', 'Excel chuẩn in A4 + PDF · Times New Roman · có KG · chữ ký Bên A / Bên B'), await App.filterBar(load, { fields: ['tu_ngay', 'den_ngay', 'dot_id', 'don_vi_id', 'noi_xuat_id', 'bien_so'] }), body);
       await load();
     },
@@ -165,7 +165,7 @@
   App.register('statements', {
     async render(v) {
       const body = h('div', {});
-      const load = async () => {
+      const load = App.latestRender(body, async (body) => {
         const f = App.cleanFilter(App.state.filter);
         App.clear(body);
         const dvOne = App.one(f.don_vi_id);
@@ -211,7 +211,7 @@
           table({ columns: [{ key: 'bien_so', label: 'Biển số', mono: true, render: (r) => h('a', { style: { cursor: 'pointer', color: 'var(--green)' }, onclick: () => App.go('vehicle', { bien_so: r.bien_so }) }, r.bien_so) },
             { key: 'so_chuyen', label: 'Chuyến', fmt: 'int' }, { key: 'tong_tan', label: 'KL (tấn)', fmt: 'tan' }, { key: 'don_gia', label: 'Đơn giá', num: true, fmt: (x) => (typeof x === 'number' ? fmt.money(x) : x) },
             { key: 'thanh_tien', label: 'Thành tiền', fmt: 'money' }, { key: 'tien_vat', label: 'VAT', fmt: 'money' }, { key: 'tong_tien', label: 'Tổng', fmt: 'money' }], rows: st.vehicles })));
-      };
+      });
       v.append(App.pageHead('Bảng kê thanh toán', 'Làm tròn theo bảng kê · hóa đơn xuất riêng từng đơn vị'), await App.filterBar(load, { fields: ['tu_ngay', 'den_ngay', 'dot_id', 'don_vi_id', 'noi_xuat_id', 'tuyen_id', 'bien_so'] }), body);
       await load();
     },

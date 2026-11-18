@@ -299,7 +299,7 @@ console.log('app.info', JSON.stringify(info.data.counts));
 
 // Duyệt phiếu: cùng bộ lọc Nháp, màn nhập thấy phiếu còn bảng kê và số đếm báo cáo bằng 0.
 {
-  const draft = await page.evaluate(async () => {
+  await page.evaluate(async () => {
     await App.api('settings.set', { key: 'duyet_phieu', value: { bat: true } });
     const data = await App.api('tickets.list', { filter: { chua_chot: true }, limit: 1 });
     const t = await App.api('tickets.get', { id: data.rows[0].id });
@@ -307,7 +307,6 @@ console.log('app.info', JSON.stringify(info.data.counts));
     await App.refreshInfo();
     Object.keys(App.state.filter).forEach((k) => delete App.state.filter[k]);
     Object.assign(App.state.filter, { trang_thai: 'NHAP', don_vi_id: [t.don_vi_van_chuyen_id] });
-    return { id: t.id };
   });
   await nav('tickets');
   await page.waitForSelector('[data-act=approve-filtered]');
@@ -317,13 +316,31 @@ console.log('app.info', JSON.stringify(info.data.counts));
   await page.waitForFunction(() => /Hiển thị 0\s*\//.test(document.body.innerText));
   if (!(await page.textContent('body')).includes('Số liệu báo cáo và chứng từ chỉ gồm phiếu đã duyệt.')) errors.push('thiếu phạm vi đã duyệt trên bảng kê');
   await shot('42-bang-ke-chan-nhap');
-  await page.evaluate(async ({ id }) => {
-    const result = await App.api('tickets.approve', { ids: [id], note: 'kiểm tra xong' });
-    if (result.ok !== 1) throw new Error('Duyệt phiếu UI thất bại');
+  await nav('tickets');
+  await page.click('[data-act=approve-filtered]');
+  await page.click('.modal .btn:not(.ghost)');
+  await page.waitForFunction(() => /Hiển thị 0\s*\//.test(document.body.innerText));
+  await page.evaluate(async () => {
     await App.api('settings.set', { key: 'duyet_phieu', value: { bat: false } });
     Object.keys(App.state.filter).forEach((k) => delete App.state.filter[k]);
-  }, draft);
+  });
 }
+
+// Đổi lọc cùng màn: phản hồi rỗng về muộn phải bị bỏ qua sau phản hồi mới.
+await nav('dashboard');
+await page.route('**/api/reports.dashboard', async (route) => {
+  const data = route.request().postDataJSON();
+  if (data.search === 'NO-MATCH-RELEASE') await new Promise((resolve) => setTimeout(resolve, 800));
+  await route.continue();
+});
+const delayed = page.waitForRequest((r) => r.url().endsWith('/api/reports.dashboard') && r.postDataJSON().search === 'NO-MATCH-RELEASE');
+await page.fill('[data-sf-q]', 'NO-MATCH-RELEASE');
+await delayed;
+await page.fill('[data-sf-q]', '');
+await page.waitForFunction(() => document.querySelector('.kpi b')?.textContent === '2.035');
+await page.waitForTimeout(1100);
+if (await page.textContent('.kpi b') !== '2.035') errors.push('phản hồi bộ lọc cũ ghi đè Dashboard');
+await page.unroute('**/api/reports.dashboard');
 
 console.log('errors:', errors.length ? errors : 'none');
 await browser.close(); srv.close();
