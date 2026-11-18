@@ -1,6 +1,10 @@
 # CHANGELOG
 
-## 0.7.0 — chờ nghiệm thu (schema 6)
+## Chưa phát hành
+- **Ngưỡng KL cấu hình được**: Cài đặt → "Khối lượng hợp lý mỗi chuyến" (`kl_hop_ly`, mặc định 100–100.000 kg như cũ) áp dụng thống nhất cho import, sửa trực tiếp, duyệt xung đột và kiểm tra toàn vẹn; giá trị sai bị từ chối.
+- **Đọc nhiều khối (tùy chọn)**: bước ghép cột có ô "File có nhiều khối" — mỗi dòng "Tổng cộng" là ngăn cách, đọc tiếp các khối sau (chỉ nhận dòng trông như phiếu cân, bỏ bảng tóm tắt), tổng đối chiếu = tổng các dòng Tổng cộng. Mặc định tắt: vẫn dừng ở dòng Tổng cộng đầu và cảnh báo.
+
+## 0.7.0 — 18/11/2026 (schema 6)
 - **Nghiệm thu bàn giao 0.7.0** (`docs/NGHIEM_THU_0.7.0.md`): phản hồi về chậm không còn ghi đè màn đang mở; "Việc cần làm" nêu rõ phạm vi toàn hệ thống và bấm xử lý bỏ bộ lọc ngầm; cảnh báo dữ liệu nằm dưới dòng "Tổng cộng" (file nhiều khối) và dòng tổng không có giá trị; duyệt xung đột kiểm lại dòng nguồn; hộp xác nhận chặn bấm lặp; EXE/Setup có thông tin phiên bản + nhà phát hành; `npm run integrity -- <db> --csv` xuất danh sách ID nghi vấn; test ma trận đối chiếu giữa các màn sau từng thao tác (`tests/handover-matrix.test.js`).
 - **Logic khối lượng (kg/tấn)**: KL ghi nhầm theo tấn (vd 17,5 hiểu thành 17,5 kg → tiền nhỏ 1000 lần) hoặc quá lớn (> 100.000 kg/chuyến) nay bị chặn ở import và sửa trực tiếp (`src/utils/weight.js`); số cân âm bị chặn. Bước xem trước hiển thị tổng KL đọc được, đối chiếu với dòng "Tổng cộng" của file (lệch thì báo đỏ: có thể mất dòng/sai đơn vị) và tổng tạm tính phiếu mới. Kiểm tra toàn vẹn thêm: KL bất thường, số phiếu chỉ khác số 0 đầu. Bảng dữ liệu không còn xuống dòng biển số/ngày giờ; màn Backup gắn nhãn dễ hiểu cho từng loại bản sao (Trước nâng cấp / Trước khôi phục…). Test: `tests/weight-logic.test.js`.
 - Sửa lỗi quay lui khôi phục có thể xóa DB gốc khi Windows từ chối bước đổi tên đầu tiên. Quay lui chỉ dọn các đường dẫn đã dời thành công hoặc bộ DB thay thế; hai ca hồi quy trên cả hai driver đã tái hiện mất dữ liệu trước bản sửa.

@@ -8,6 +8,7 @@ class IntegrityService {
 
   check({ sampleSize = 20 } = {}) {
     const db = this.db; const checks = [];
+    const lim = (() => { const r = db.get(`SELECT value_json FROM settings WHERE key='kl_hop_ly'`); try { const v = r && JSON.parse(r.value_json); return { lo: v && v.min_kg >= 0 ? v.min_kg : 100, hi: v && v.max_kg > 0 ? v.max_kg : 100000 }; } catch (e) { return { lo: 100, hi: 100000 }; } })();
     const add = (id, title, severity, rows, hint) => checks.push({ id, title, severity, count: rows.length, sample: rows.slice(0, sampleSize), hint: hint || null });
 
     // 0) khóa ngoại
@@ -27,8 +28,8 @@ class IntegrityService {
       db.all(`SELECT noi_xuat_id, ltrim(so_phieu,'0') so_khong_0, COUNT(DISTINCT so_phieu) so_cach_viet, group_concat(DISTINCT so_phieu) cac_so_phieu, group_concat(id) ids FROM phieu_can
               WHERE trang_thai='ACTIVE' AND noi_xuat_id IS NOT NULL AND ltrim(so_phieu,'0') <> '' GROUP BY noi_xuat_id, ltrim(so_phieu,'0') HAVING COUNT(DISTINCT so_phieu) > 1`),
       'Số phiếu có số 0 đầu được giữ nguyên khi nhập; nếu hai cách viết là một phiếu cân thật thì xóa mềm bản thừa.');
-    add('KL_BAT_THUONG', 'Phiếu có KL ngoài khoảng hợp lý (dưới 100 kg hoặc trên 100.000 kg/chuyến) — nghi sai đơn vị tấn/kg', 'LOI',
-      db.all(`SELECT id, so_phieu, kl_hang_kg FROM phieu_can WHERE trang_thai='ACTIVE' AND (kl_hang_kg < 100 OR kl_hang_kg > 100000)`),
+    add('KL_BAT_THUONG', `Phiếu có KL ngoài khoảng hợp lý (dưới ${lim.lo} kg hoặc trên ${lim.hi} kg/chuyến) — nghi sai đơn vị tấn/kg`, 'LOI',
+      db.all(`SELECT id, so_phieu, kl_hang_kg FROM phieu_can WHERE trang_thai='ACTIVE' AND (kl_hang_kg < ? OR kl_hang_kg > ?)`, [lim.lo, lim.hi]),
       'Sửa KL của phiếu (kèm lý do) hoặc xóa mềm và nhập lại từ file đã sửa đơn vị.');
 
     // 2) chốt kỳ
