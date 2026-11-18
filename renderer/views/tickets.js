@@ -40,10 +40,11 @@
       // Đi từ Dashboard/báo cáo sang: gán điều kiện vào bộ lọc dùng chung (hiện thành chip, không lọc ngầm)
       if (params.chua_tinh_gia) App.state.filter.trang_thai = params.trang_thai_tinh_gia || 'CHUA_TINH'; else if (params.trang_thai_tinh_gia) App.state.filter.trang_thai = params.trang_thai_tinh_gia;
       const st = { offset: 0, limit: 100, sort: 'ngay_gio_can_1', dir: 'asc' };
-      const body = h('div', {}); const sel = new Set();
+      const body = h('div', {}); const sel = new Set(); const vers = {};
       const flt = () => App.cleanFilter(App.state.filter);
       const load = async () => {
         const d = await api('tickets.list', { filter: flt(), offset: st.offset, limit: st.limit, sort: st.sort, dir: st.dir });
+        d.rows.forEach((r) => { vers[r.id] = r.ver; });
         const pages = Math.max(1, Math.ceil(d.total / st.limit)); const page = Math.floor(st.offset / st.limit) + 1;
         App.clear(body).append(h('div', { class: 'card' },
           table({
@@ -69,7 +70,7 @@
       const approve = async (ids) => {
         if (!ids.length) return App.toast('Không có phiếu Nháp nào để duyệt');
         if (!(await App.confirmBox(`Duyệt ${ids.length} phiếu Nháp? Phiếu được duyệt sẽ vào Dashboard, Bảng kê, báo cáo và chốt kỳ.`))) return;
-        const r = await App.call('tickets.approve', { ids }, `Đã duyệt`);
+        const r = await App.call('tickets.approve', { ids, vers: Object.fromEntries(ids.filter((i) => vers[i] != null).map((i) => [i, vers[i]])) }, `Đã duyệt`);
         if (r && r.failed) App.toast(`Duyệt ${r.ok}/${r.total} phiếu. Không duyệt được ${r.failed}: ${r.results.filter((x) => !x.ok).slice(0, 3).map((x) => `${x.so_phieu || x.id} (${x.reason})`).join('; ')}`, 'warn');
         sel.clear(); App.refreshInfo(); load();
       };

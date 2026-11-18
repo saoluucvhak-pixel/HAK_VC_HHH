@@ -128,7 +128,7 @@ function createHandlers(app, env = {}) {
     'tickets.periods': () => app.reports.periods(),
     'tickets.list': ({ filter, ...o }) => app.reports.tickets(allStates(filter), o),
     'tickets.ids': ({ filter }) => { const { sql, params } = app.reports.where(allStates(filter)); return app.db.all(`SELECT p.id FROM phieu_can p WHERE ${sql}`, params).map((r) => r.id); },
-    'tickets.approve': ({ ids, note }) => app.tickets.approve(ids, note),
+    'tickets.approve': ({ ids, note, vers }) => app.tickets.approve(ids, note, vers),
     'tickets.removePreview': ({ ids }) => app.tickets.removePreview(ids),
     'tickets.remove': ({ ids, reason }) => app.tickets.remove(ids, reason),
     'tickets.get': ({ id }) => app.tickets.get(id),

@@ -8,7 +8,7 @@ const crypto = require('crypto');
 const { readWorkbook } = require('../excel/workbookReader');
 const { detectHeader, fold } = require('../excel/columnMapping');
 const { parseTickets } = require('../excel/ticketParser');
-const { limitsFrom } = require('../utils/weight');
+const { limitsFrom, weightProblem } = require('../utils/weight');
 const { duyetBat } = require('../utils/duyet');
 const { classify, businessKey, strongKey, fingerprint } = require('./DuplicateDetector');
 const { computeTicket } = require('./TransportCostEngine');
@@ -205,6 +205,10 @@ class TicketImportService {
     }
     const nd = noiDenId || p.noiDenId;
     require('./ChotKyService').ChotKyService.prototype.assertOpenForDates.call({ db: this.db }, (p.rows || []).filter((r) => r.phan_loai === 'NEW').map((r) => (r.ngay_gio_can_1 || '').slice(0, 10)));
+    // Cấu hình ngưỡng KL có thể đã đổi sau khi xem trước: kiểm lại các dòng sắp ghi theo ngưỡng HIỆN HÀNH
+    const lim = limitsFrom(this.settings);
+    const vi = (p.rows || []).filter((r) => (r.phan_loai === 'NEW' || r.phan_loai === 'KEY_CONFLICT') && weightProblem(r.kl_hang_kg, lim));
+    if (vi.length) throw new ValidationError(`Ngưỡng khối lượng đã thay đổi sau khi xem trước: ${vi.length} dòng không còn hợp lệ (vd dòng ${vi[0].source_row}, phiếu ${vi[0].so_phieu}: ${weightProblem(vi[0].kl_hang_kg, lim)}). Xem trước lại để cập nhật kết quả`);
     const chuaDuyet = duyetBat(this.settings);    // bật duyệt phiếu → phiếu mới là Nháp cho tới khi được duyệt
     const result = this.db.tx(() => {
       const c = p.counts;
@@ -388,6 +392,8 @@ class TicketImportService {
                        noi_xuat_goc=?, noi_xuat_id=?, business_key=?, strong_key=?, fingerprint=? WHERE id=?`,
         [o.ngay_gio_can_1, o.ngay_gio_can_2, o.bien_so_goc, o.bien_so, o.bien_so_chuan, o.can_lan_1, o.can_lan_2, o.kl_hang_kg, o.noi_xuat_goc, o.noi_xuat_id,
           o.business_key, o.strong_key, o.fingerprint, o.id]);
+        // Số liệu bị đổi lại → mọi lần duyệt trước đó không còn áp dụng: phiếu cần được duyệt lại
+        if (duyetBat(this.settings)) this.db.run(`UPDATE phieu_can SET trang_thai_duyet='NHAP', duyet_boi=NULL, duyet_luc=NULL, nhap_boi=? WHERE id=?`, [this.audit.actor() || null, o.id]);
       }
       for (const pr of this.db.all(`SELECT phieu_can_id FROM import_batch_row WHERE batch_id=? AND hanh_dong='PENDING_REVIEW' AND phieu_can_id IS NOT NULL`, [batchId])) {
         const left = this.db.get(`SELECT COUNT(*) n FROM import_batch_row WHERE phieu_can_id=? AND hanh_dong='PENDING_REVIEW' AND batch_id<>?`, [pr.phieu_can_id, batchId]).n;
