@@ -1,8 +1,13 @@
-## VC Cost 0.7.0 (schema SQLite 6)
+## VC Cost 0.7.1 (schema SQLite 6)
 
 Ứng dụng Electron + SQLite chạy offline cho HAK. Bộ cài: **Setup** (cài theo người dùng, dữ liệu ở `%APPDATA%\VCCost`) và **Portable** (dữ liệu cạnh file `.exe`, thư mục `VCCost-data`). Bộ cài **chưa ký số** — Windows SmartScreen có thể cảnh báo; kiểm tra SHA-256 bên dưới trước khi cài.
 
-### Điểm chính
+### Mới trong 0.7.1 (so với 0.7.0)
+- **Ngưỡng khối lượng hợp lý mỗi chuyến chỉnh được** ở Cài đặt (mặc định vẫn 100–100.000 kg); áp dụng thống nhất cho nhập, sửa trực tiếp, duyệt xung đột và kiểm tra toàn vẹn.
+- **Tùy chọn "File có nhiều khối"** ở bước ghép cột (mặc định tắt): đọc tiếp các khối dưới mỗi dòng "Tổng cộng", đối chiếu tổng KL bằng tổng các dòng Tổng cộng.
+- Không đổi cấu trúc CSDL (schema 6): nâng cấp từ 0.7.0 không cần migration.
+
+### Điểm chính (từ 0.7.0)
 - Phân quyền tùy chọn (mặc định 1 người dùng; bật được 4 vai trò, nhật ký ghi tên đăng nhập).
 - Sao lưu `PRE_MIGRATION` nhất quán (kể cả giao dịch còn trong WAL), khôi phục an toàn có quay lui, xuất bản sao ra thư mục riêng.
 - Toàn vẹn số liệu: hoàn tác không ghi đè, chống trùng lúc commit, chặn sửa/duyệt vào kỳ chốt và đợt khóa, xử lý hàng loạt có kết quả từng phiếu.
@@ -11,7 +16,7 @@
 - Kiểm tra toàn vẹn dữ liệu chỉ đọc (`npm run integrity`, nút ở màn Backup).
 - Định dạng số theo chuẩn HAK; đối chiếu V.47: 2.035 phiếu, 38.563.700 kg, tổng bốn bảng kê 5.512.904.418 đ.
 
-Chi tiết và biên bản nghiệm thu: `CHANGELOG.md`, `docs/NGHIEM_THU_0.7.0.md`.
+Chi tiết và biên bản nghiệm thu: `CHANGELOG.md`, `docs/NGHIEM_THU_0.7.0.md` (biên bản nghiệm thu 0.7.0; 0.7.1 nghiệm thu bằng CI Windows: cài mới, nâng cấp từ DB cũ, thư mục tùy chỉnh, Portable).
 
 ### Nâng cấp từ bản cũ
 1. Đóng VC Cost. Sao chép thư mục dữ liệu (`%APPDATA%\VCCost`, hoặc `VCCost-data` cạnh file Portable) ra nơi an toàn.
