@@ -65,7 +65,16 @@ SHA-256 đúng các tệp đã nghiệm thu (run 44222167023, commit `edd781d`):
 383a7f37818604ce207537c5172eba1c2bb978eb50f9cc34a9669e6e3a23f063  VC-Cost-0.8.0-Portable.exe
 da40a6779ee4961106e8e24ab10b5e3722b5444fb07d6af1445dfa67a8b4a9ae  VC-Cost-0.8.0-Setup.exe
 ```
-Lưu ý: các bản sửa #7–#9 được thêm **sau** commit `edd781d` nên chưa nằm trong bộ cài của run này; bộ cài phải được build và nghiệm thu lại trên commit cuối. Bản phát hành chính thức phải được nghiệm thu lại bằng một run trên **commit của `main` sau khi gộp** (squash tạo commit khác `edd781d`); SHA-256 chính thức là của run đó và sẽ được ghi vào ghi chú phát hành.
+Các bản sửa #7–#9 được thêm sau commit `edd781d` (nên không có trong run 44222167023, nhưng có trong run 44225922070). Bản phát hành chính thức phải được nghiệm thu lại bằng một run trên **commit của `main` sau khi gộp** (squash tạo commit khác `edd781d`); SHA-256 chính thức là của run đó và sẽ được ghi vào ghi chú phát hành.
+
+**Run bộ cài trên commit cuối của nhánh (đã gồm các bản sửa #1–#9)**: [44225922070](https://github.com/saoluucvhak-pixel/HAK_VC_HHH/actions/runs/44225922070), commit `46e017a`, thành công: test Windows 2 driver, đóng gói, smoke, build Setup+Portable, nghiệm thu 4/4 ca (cài mới 2.035 phiếu; nâng từ v4 → schema 7 có `PRE_MIGRATION`+`AUTO`; thư mục dữ liệu tùy chỉnh 2.035; Portable 2.035). Cả 4 ca: `version=0.8.0`, `schema=7`, `driver=better-sqlite3`, `problems=[]`, integrity 0 lỗi, import lại 2.035 phiếu = trùng hoàn toàn / 0 ghi mới, chốt kỳ 1.046 phiếu, PDF `%PDF-`, Excel `PK`, sao lưu → khôi phục an toàn.
+
+SHA-256 các tệp của run này (thay thế run 44222167023 ở trên — run đó chỉ còn là bằng chứng trung gian):
+```
+641ed5ddb49861ea2b30fb1becd03ae0963d11669e5e0e8cd36e6cc07e2ddda5  VC-Cost-0.8.0-Portable.exe
+5c49c26024e901836d5048145aced9addeca6253ece32a66f5f7a394ace6400b  VC-Cost-0.8.0-Setup.exe
+```
+Lưu ý: squash khi gộp PR tạo commit khác `46e017a`, nên bản phát hành chính thức phải được build và nghiệm thu lại trên commit của `main`; SHA-256 chính thức là của run đó và sẽ ghi vào ghi chú phát hành.
 
 ## 6. Dependency, ký số, thông tin tệp
 - `npm audit`: 9 advisory mức cao, **đều** từ `picomatch` qua `electron-builder` (công cụ build, không đóng gói vào ứng dụng; chưa có bản sửa upstream) — như 0.7.x.
