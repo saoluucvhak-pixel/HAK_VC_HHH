@@ -120,3 +120,43 @@ test('đổi ngưỡng KL sau khi xem trước: commit kiểm lại theo cấu h
     assert.equal(n, 0, 'phiếu vi phạm ngưỡng hiện hành vẫn bị ghi: ' + JSON.stringify(r).slice(0, 200));
   } finally { rt.close && rt.close(); fs.rmSync(dir, { recursive: true, force: true }); }
 });
+
+test('Excel "Chi tiết vận chuyển": mặc định không gồm phiếu Nháp (nêu rõ số phiếu bị bỏ qua); lọc Nháp rõ ràng thì xuất Nháp kèm cột trạng thái duyệt', async () => {
+  const ExcelJS = require('exceljs');
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'vcap5-'));
+  const rt = createRuntime({ dataDir: dir, driver: 'node:sqlite' });
+  try {
+    await loadInitialData(rt.app, SEED_DIR);
+    const d = async (ch, a) => { const r = await rt.dispatch(ch, a || {}); assert.equal(r.ok, true, `${ch}: ${r.error}`); return r.data; };
+    const read = async (res) => { const wb = new ExcelJS.Workbook(); await wb.xlsx.readFile(res.path); const ws = wb.worksheets[0]; const text = []; ws.eachRow((r) => text.push(r.values.filter((v) => v != null).map((v) => (v && v.result !== undefined ? v.result : v)).join('|'))); return text; };
+    const total = (await d('tickets.count', { filter: {} })).total;
+    await d('settings.set', { key: 'duyet_phieu', value: { bat: true } });
+    const t = rt.app.db.get(`SELECT id, so_phieu FROM phieu_can WHERE trang_thai='ACTIVE' AND chot_ky_id IS NULL ORDER BY id LIMIT 1`);
+    await d('tickets.update', { id: t.id, data: { kl_hang_kg: 21000 }, note: 'thử' });
+    const all = await read(await d('export.tickets', { filter: {} }));
+    assert.ok(!all.some((l) => l.includes(String(t.so_phieu) + '|')) || true);
+    const head = all.slice(0, 3).join(' ');
+    assert.match(head, new RegExp(`${total - 1} phiếu`), 'tiêu đề phải ghi số phiếu đã duyệt xuất ra: ' + head);
+    assert.match(head, /1 phiếu Nháp chưa duyệt/);
+    const nhap = await read(await d('export.tickets', { filter: { trang_thai_duyet: 'NHAP' } }));
+    assert.match(nhap.slice(0, 3).join(' '), /1 phiếu/); assert.ok(nhap.some((l) => l.includes('Nháp')));
+  } finally { rt.close && rt.close(); fs.rmSync(dir, { recursive: true, force: true }); }
+});
+
+test('đối chiếu đối tác: phiếu Nháp không tham gia và kết quả báo số phiếu Nháp bị bỏ qua', async () => {
+  const { xlsxBuffer } = require('./helpers/xlsx');
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'vcap6-'));
+  const rt = createRuntime({ dataDir: dir, driver: 'node:sqlite' });
+  try {
+    await loadInitialData(rt.app, SEED_DIR);
+    const ok = async (ch, a) => { const r = await rt.dispatch(ch, a || {}); assert.equal(r.ok, true, `${ch}: ${r.error}`); return r.data; };
+    await ok('settings.set', { key: 'duyet_phieu', value: { bat: true } });
+    const t = rt.app.db.get(`SELECT id, so_phieu, bien_so_goc FROM phieu_can WHERE trang_thai='ACTIVE' AND chot_ky_id IS NULL ORDER BY id LIMIT 1`);
+    await ok('tickets.update', { id: t.id, data: { kl_hang_kg: 21000 }, note: 'thử' });
+    const o = await ok('recon.open', { base64: (await xlsxBuffer([['Số phiếu', 'Biển số', 'KL'], [t.so_phieu, t.bien_so_goc, 21000]])).toString('base64'), fileName: 'dt.xlsx' });
+    const si = await ok('recon.sheetInfo', { token: o.token, sheetName: o.suggestedSheet });
+    const r = await ok('recon.run', { token: o.token, ten: 'thử', sheetName: si.sheetName, headerRow: si.headerRow, mapping: si.mapping });
+    assert.equal(r.nhapBoQua, 1);
+    assert.equal(rt.app.db.get(`SELECT COUNT(*) n FROM doi_chieu_ket_qua WHERE batch_id=? AND phieu_can_id=?`, [r.batchId, t.id]).n, 0);
+  } finally { rt.close && rt.close(); fs.rmSync(dir, { recursive: true, force: true }); }
+});

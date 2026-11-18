@@ -154,6 +154,8 @@ class ReconciliationService {
     const B = parseB(p.wb.aoa(sheetName), Number(headerRow), mapping).map((b, idx) => ({ ...b, idx }));
     if (!B.length) throw new ValidationError('Không đọc được dòng dữ liệu nào của đối tác');
     const A = this._loadA({ don_vi_id, dot_id, tu_ngay, den_ngay });
+    // phiếu Nháp chưa duyệt không tham gia đối chiếu: báo số lượng để người dùng không hiểu nhầm là "thiếu bên mình"
+    const nhapBoQua = this.reports.count({ don_vi_id, dot_id, tu_ngay, den_ngay, trang_thai_duyet: 'NHAP' }).kept;
     const res = matchRows(A, B, { tolKg: Number(tolKg), tolMoney: Number(tolMoney) });
     return this.db.tx(() => {
       const batchId = this.db.run(`INSERT INTO doi_chieu_batch(ten, loai_chung_tu, don_vi_van_chuyen_id, dot_van_chuyen_id, tu_ngay, den_ngay, tham_so_json, trang_thai) VALUES (?,?,?,?,?,?,?, 'DA_CHAY')`,
@@ -171,7 +173,7 @@ class ReconciliationService {
       const bad = res.length - (counts.KHOP || 0);
       if (bad) this.alerts.open('UNMATCHED_RECONCILIATION', 'doi_chieu_batch', batchId, counts, `Lô đối chiếu "${ten}": ${bad}/${res.length} dòng không khớp`);
       this.audit.log('RECONCILE', 'doi_chieu_batch', batchId, null, { ten, counts, A: A.length, B: B.length });
-      return { batchId, counts, soA: A.length, soB: B.length };
+      return { batchId, counts, soA: A.length, soB: B.length, nhapBoQua };
     });
   }
 

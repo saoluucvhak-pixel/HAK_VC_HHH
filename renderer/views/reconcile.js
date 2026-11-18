@@ -62,7 +62,7 @@
         h('p', { class: 'muted' }, 'Khớp theo Số phiếu; nếu file không có số phiếu thì khớp theo Biển số + Ngày + KL. Chỉ so các cột mà file đối tác có.')) : null),
       h('div', { class: 'row end' }, h('button', { class: 'btn', 'data-act': 'run', disabled: !S.info, onclick: async () => {
         const r = await call('recon.run', { token: S.o.token, ten: f.ten.value.trim(), don_vi_id: f.dv.value || null, dot_id: f.dot.value || null, tu_ngay: f.tu.value || null, den_ngay: f.den.value || null, sheetName: S.sheet, headerRow: S.headerRow, mapping: S.mapping, tolKg: Number(f.kg.value), tolMoney: Number(f.tien.value) });
-        if (!r) return; App.toast(`Đã đối chiếu ${r.soA} phiếu hệ thống với ${r.soB} dòng đối tác`); const b = (await api('recon.batches')).find((x) => x.id === r.batchId); App.clear(v); await results(v, b);
+        if (!r) return; App.toast(`Đã đối chiếu ${r.soA} phiếu hệ thống với ${r.soB} dòng đối tác${r.nhapBoQua ? ` (không gồm ${r.nhapBoQua} phiếu Nháp chưa duyệt — duyệt xong mới đối chiếu được)` : ''}`); const b = (await api('recon.batches')).find((x) => x.id === r.batchId); App.clear(v); await results(v, b);
       } }, 'Chạy đối chiếu')));
     };
     async function sheet() { S.info = await api('recon.sheetInfo', { token: S.o.token, sheetName: S.sheet }); S.mapping = { ...S.info.mapping }; S.headerRow = S.info.headerRow; }

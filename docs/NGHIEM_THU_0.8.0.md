@@ -13,6 +13,9 @@
 | 3 | **Phiếu đổi sau khi được chọn vẫn bị duyệt** (duyệt áp lên số liệu người duyệt chưa thấy). | Trung bình | `src/services/TicketService.js:126` + `ReportService.tickets` trả `ver`; giao diện gửi `vers` — phiếu đã đổi bị từ chối, nêu rõ lý do (so cả khi sửa hai lần trong cùng một giây). | `tests/approval.test.js` (duyệt kèm phiên bản) |
 | 4 | **Đổi ngưỡng KL sau khi xem trước**: commit vẫn ghi phiếu vi phạm ngưỡng hiện hành (dùng kết quả preview). | Trung bình | `src/services/TicketImportService.js:211` — commit kiểm lại dòng NEW/KEY_CONFLICT theo ngưỡng hiện hành, báo số dòng + ví dụ, yêu cầu xem trước lại. | `tests/approval-scope.test.js` #4 |
 | 5 | Duyệt không kiểm KL: phiếu có KL ngoài ngưỡng hiện hành vẫn duyệt được. | Thấp | `src/services/TicketService.js:127` — chặn duyệt, yêu cầu sửa KL. | `tests/approval.test.js` (KL ngoài ngưỡng) |
+| 7 | **Excel "Chi tiết vận chuyển" cộng cả phiếu Nháp** (tiêu đề ghi "2035 phiếu" gồm Nháp, không có cột nào phân biệt). | Cao | `src/ipc/handlers.js` (`export.tickets`) mặc định chỉ xuất phiếu Đã duyệt, tiêu đề nêu "không gồm N phiếu Nháp chưa duyệt"; chỉ xuất Nháp khi lọc Nháp rõ ràng; `src/excel/exporters.js` thêm cột "Duyệt". | `tests/approval-scope.test.js` #5 |
+| 8 | Đối chiếu đối tác bỏ phiếu Nháp mà không báo → Nháp hiện như "thiếu bên mình". | Trung bình | `ReconciliationService.run` trả `nhapBoQua`; giao diện nêu trong thông báo kết quả. | `tests/approval-scope.test.js` #6 |
+| 9 | Bộ lọc "Nháp" còn lưu khi duyệt đã tắt → danh sách trống không rõ lý do. | Thấp | `renderer/filters.js` bỏ bộ lọc này khi duyệt tắt. | (giao diện, qua UI smoke) |
 | 6 | Chưa có hồi quy giao diện cho luồng duyệt (nhãn Nháp, Dashboard loại Nháp, duyệt bằng nút). | Thấp | `tests/ui-smoke.mjs` thêm khối "duyệt phiếu". | UI smoke |
 
 ## 2. Bảng trạng thái phiếu (khi bật duyệt phiếu)
@@ -32,15 +35,17 @@ Thấy phiếu Nháp: **chỉ** Phiếu cân (`tickets.count/list/ids`) và `exp
 Đối chiếu cross-screen sau nhập/sửa/xóa/hoàn tác/chuyển đợt/đổi giá/chốt/khôi phục/khởi động lại: `tests/handover-matrix.test.js` (V.47) đạt. Mốc V.47: 2.035 phiếu, 38.563.700 kg, tổng Excel-compat 5.512.904.418,24 đ, tổng bốn bảng kê 5.512.904.418 đ — khẳng định trong `integration`, `consistency`, `handover-matrix` (đạt).
 
 ## 4. Chống trùng và toàn vẹn
-- Các hồi quy chống trùng hiện có (số 0 đầu, alias nơi xuất, trùng trong file/nhiều file/hai preview, commit lặp, VOID, hoàn tác không ghi đè) đều đạt trong 168 test; không phát hiện lỗi mới ở nhóm này.
+- Các hồi quy chống trùng hiện có (số 0 đầu, alias nơi xuất, trùng trong file/nhiều file/hai preview, commit lặp, VOID, hoàn tác không ghi đè) đều đạt trong 170 test; không phát hiện lỗi mới ở nhóm này.
 - `npm run integrity` trên DB nạp V.47: **không có lỗi toàn vẹn**; thêm kiểm tra `NHAP_KHI_TAT_DUYET`. CI Windows chạy tích hợp trên bản cài: `integrity.ok=true, loi=0` cả 4 ca.
+- Số theo vùng: "17.000"/"17.000,0"/"17 000" đọc đúng 17.000 kg; "17,000" (kiểu Anh) bị đọc 17 kg nhưng bị chặn bởi ngưỡng KL tối thiểu. Số phiếu "00123"/"0123" giữ nguyên số 0 đầu.
+- Hiệu năng (42.735 phiếu = ~21× V.47, node:sqlite): count 18 ms, danh sách trang 1 20 ms, Dashboard 197 ms, Bảng kê 264 ms, preview chốt kỳ 285 ms, kiểm tra toàn vẹn 168 ms — không có truy vấn tải toàn bộ phiếu hay lặp bất thường.
 - **Chưa xác minh**: bản sao dữ liệu thật (chưa được cung cấp).
 
 ## 5. Kết quả kiểm thử
 | Hạng mục | Kết quả |
 |---|---|
-| `npm test` node:sqlite | 168/168 đạt |
-| `VCCOST_DRIVER=better-sqlite3 npm test` | 168/168 đạt |
+| `npm test` node:sqlite | 170/170 đạt |
+| `VCCOST_DRIVER=better-sqlite3 npm test` | 170/170 đạt |
 | UI smoke (Chromium, gồm luồng duyệt) | không lỗi |
 | CI Linux (PR #25) và Windows (PR/`edd781d`) | thành công |
 | Run bộ cài Windows [44222167023](https://github.com/saoluucvhak-pixel/HAK_VC_HHH/actions/runs/44222167023) (commit `edd781d`) | thành công: test 2 driver, đóng gói, smoke, build Setup+Portable, nghiệm thu 4 ca |
@@ -60,7 +65,7 @@ SHA-256 đúng các tệp đã nghiệm thu (run 44222167023, commit `edd781d`):
 383a7f37818604ce207537c5172eba1c2bb978eb50f9cc34a9669e6e3a23f063  VC-Cost-0.8.0-Portable.exe
 da40a6779ee4961106e8e24ab10b5e3722b5444fb07d6af1445dfa67a8b4a9ae  VC-Cost-0.8.0-Setup.exe
 ```
-Lưu ý: bản phát hành chính thức phải được nghiệm thu lại bằng một run trên **commit của `main` sau khi gộp** (squash tạo commit khác `edd781d`); SHA-256 chính thức là của run đó và sẽ được ghi vào ghi chú phát hành.
+Lưu ý: các bản sửa #7–#9 được thêm **sau** commit `edd781d` nên chưa nằm trong bộ cài của run này; bộ cài phải được build và nghiệm thu lại trên commit cuối. Bản phát hành chính thức phải được nghiệm thu lại bằng một run trên **commit của `main` sau khi gộp** (squash tạo commit khác `edd781d`); SHA-256 chính thức là của run đó và sẽ được ghi vào ghi chú phát hành.
 
 ## 6. Dependency, ký số, thông tin tệp
 - `npm audit`: 9 advisory mức cao, **đều** từ `picomatch` qua `electron-builder` (công cụ build, không đóng gói vào ứng dụng; chưa có bản sửa upstream) — như 0.7.x.
@@ -77,4 +82,4 @@ Lưu ý: bản phát hành chính thức phải được nghiệm thu lại bằ
 - **Dùng duyệt phiếu**: Cài đặt → "Duyệt từng phiếu" → Lưu. Phiếu mới/sửa là Nháp (nhãn vàng), duyệt ở Phiếu cân (chọn → "Duyệt phiếu đã chọn", hoặc "Duyệt tất cả Nháp theo lọc") hoặc từ bước "Duyệt phiếu Nháp" ở Dashboard. Tắt chỉ được khi không còn Nháp.
 
 ## 9. Kết luận
-**Bàn giao có điều kiện.** Căn cứ: 168/168 test hai driver, UI smoke, integrity 0 lỗi, run bộ cài Windows đạt 4/4 ca nghiệm thu. Điều kiện: (a) nghiệm thu lại bộ cài trên commit `main` sau gộp PR #25 và dùng đúng các tệp đó để phát hành; (b) các mục chưa xác minh ở mục 7 (đặc biệt dữ liệu thật, ký số) được chủ sản phẩm chấp nhận. Chưa phát hành: chờ bạn duyệt biên bản và xác nhận.
+**Bàn giao có điều kiện.** Căn cứ: 168/170 test hai driver, UI smoke, integrity 0 lỗi, run bộ cài Windows đạt 4/4 ca nghiệm thu. Điều kiện: (a) nghiệm thu lại bộ cài trên commit `main` sau gộp PR #25 và dùng đúng các tệp đó để phát hành; (b) các mục chưa xác minh ở mục 7 (đặc biệt dữ liệu thật, ký số) được chủ sản phẩm chấp nhận. Chưa phát hành: chờ bạn duyệt biên bản và xác nhận.

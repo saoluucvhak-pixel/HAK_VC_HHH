@@ -183,8 +183,11 @@ function createHandlers(app, env = {}) {
     'template.tickets': async () => writeExport(await require('../excel/templates').ticketTemplate({ locations: app.db.all(`SELECT ten FROM dia_diem WHERE trang_thai='ACTIVE' ORDER BY ten`).map((x) => x.ten) }), 'MAU_Import_Phieu_can.xlsx'),
     'template.vehicles': async () => writeExport(await require('../excel/templates').vehicleTemplate({ carriers: app.db.all(`SELECT ma FROM don_vi_van_chuyen WHERE trang_thai='ACTIVE' ORDER BY ma`).map((x) => x.ma) }), 'MAU_Import_Danh_sach_xe.xlsx'),
     'export.tickets': async ({ filter }) => {
-      const all = app.reports.tickets(allStates(filter), { offset: 0, limit: 10_000_000 });
-      return writeExport(await exporters.ticketsWorkbook(all, filter), `ChiTietVanChuyen_${stamp()}.xlsx`);
+      // Đầu ra số liệu: mặc định chỉ phiếu Đã duyệt; chỉ xuất Nháp khi người dùng lọc Nháp rõ ràng. Nêu số phiếu Nháp bị bỏ qua.
+      const f = filter || {}; const wantNhap = f.trang_thai_duyet === 'NHAP' || f.trang_thai_duyet === 'DA_DUYET';
+      const all = app.reports.tickets(wantNhap ? allStates(f) : { ...f }, { offset: 0, limit: 10_000_000 });
+      const nhapBoQua = wantNhap ? 0 : app.reports.count({ ...f, trang_thai_duyet: 'NHAP' }).kept;
+      return writeExport(await exporters.ticketsWorkbook(all, filter, { nhapBoQua }), `ChiTietVanChuyen_${stamp()}.xlsx`);
     },
     // Bảng kê (Excel in/ký + PDF) và báo cáo tổng hợp
     'export.statement': async ({ filter, reconBatchId }) => { const d = documents.statementDoc(app, filter || {}, { reconBatchId }); return writeExport(await exporters.statementWorkbook(d), `${d.file}_${stamp()}.xlsx`); },
