@@ -9,6 +9,7 @@ const { buildStatement } = require('./StatementService');
 const { normalizePlate } = require('../utils/plate');
 const { asIds, oneId } = require('../utils/filterIds');
 const { fold } = require('../excel/columnMapping');
+const { ticketVersionSql } = require('../utils/duyet');
 
 const MONEY = ['don_gia', 'tien_truoc_vat', 'tien_vat', 'tong_tien'];
 const conv = (r) => { for (const k of MONEY) if (k in r) r[k] = fromDb(r[k]); return r; };
@@ -45,6 +46,12 @@ class ReportService {
     return { sql: w.join(' AND '), params: p };
   }
 
+  /** Báo cáo/chứng từ luôn giới hạn phiếu đã duyệt, kể cả khi bộ lọc yêu cầu Nháp hoặc mọi trạng thái. */
+  approvedWhere(f = {}, alias = 'p') {
+    const scope = this.where(f, alias);
+    return { sql: `${scope.sql} AND ${alias}.trang_thai_duyet='DA_DUYET'`, params: scope.params };
+  }
+
   /** Tìm kiếm không phân biệt dấu/hoa-thường: số phiếu, biển số (gõ kiểu nào cũng được), tên nơi xuất (kể cả tên gọi khác). */
   _search(q, alias, add) {
     const like = `%${q}%`, parts = [`${alias}.so_phieu LIKE ?`, `${alias}.bien_so LIKE ?`, `${alias}.noi_xuat_goc LIKE ?`], params = [like, like, like];
@@ -60,8 +67,8 @@ class ReportService {
   }
 
   /** Số dòng khớp bộ lọc / tổng số phiếu đang hoạt động (cho dòng "Hiển thị x / y dòng"). */
-  count(f = {}) {
-    const { sql, params } = this.where(f);
+  count(f = {}, { approvedOnly = false } = {}) {
+    const { sql, params } = approvedOnly ? this.approvedWhere(f) : this.where(f);
     return { kept: this.db.get(`SELECT COUNT(*) n FROM phieu_can p WHERE ${sql}`, params).n, total: this.db.get(`SELECT COUNT(*) n FROM phieu_can WHERE trang_thai='ACTIVE'`).n };
   }
 
@@ -86,21 +93,21 @@ class ReportService {
   }
 
   /** Chi tiết vận chuyển (phân trang phía SQL). */
-  tickets(f = {}, { offset = 0, limit = 100, sort = 'ngay_gio_can_1', dir = 'asc' } = {}) {
-    const { sql, params } = this.where(f);
+  tickets(f = {}, { offset = 0, limit = 100, sort = 'ngay_gio_can_1', dir = 'asc', approvedOnly = false } = {}) {
+    const { sql, params } = approvedOnly ? this.approvedWhere(f) : this.where(f);
     const col = SORTABLE.has(sort) ? (sort === 'don_vi' ? 'd.ma' : `p.${sort}`) : 'p.ngay_gio_can_1';
     const base = `FROM phieu_can p LEFT JOIN don_vi_van_chuyen d ON d.id=p.don_vi_van_chuyen_id LEFT JOIN tuyen_van_chuyen t ON t.id=p.tuyen_id
                   LEFT JOIN dot_van_chuyen dt ON dt.id=p.dot_van_chuyen_id WHERE ${sql}`;
     const tot = this.db.get(`SELECT COUNT(*) n, SUM(p.kl_hang_kg) kg, SUM(p.tien_truoc_vat) tien_truoc_vat, SUM(p.tien_vat) tien_vat, SUM(p.tong_tien) tong_tien ${base}`, params);
     const rows = this.db.all(`SELECT p.id, p.so_phieu, p.ngay_can, p.ngay_gio_can_1, p.ngay_gio_can_2, p.bien_so, d.ma AS don_vi, p.noi_xuat, p.noi_xuat_goc, p.noi_den,
         t.ma_tuyen AS tuyen, p.tuyen_id, p.don_vi_tinh, p.can_lan_1, p.can_lan_2, p.kl_hang_kg, p.kl_hang_tan, p.don_gia, p.tien_truoc_vat, p.ty_le_vat, p.tien_vat, p.tong_tien,
-        dt.ma_dot AS dot, p.trang_thai_tinh_gia, p.trang_thai_doi_chieu, p.xe_tra_ve, p.chot_ky_id, p.ghi_chu, p.bang_gia_id, p.trang_thai_duyet, (p.updated_at || '|' || COALESCE(p.kl_hang_kg,'') || '|' || COALESCE(p.tong_tien,'')) AS ver
+        dt.ma_dot AS dot, p.trang_thai_tinh_gia, p.trang_thai_doi_chieu, p.xe_tra_ve, p.chot_ky_id, p.ghi_chu, p.bang_gia_id, p.trang_thai_duyet, ${ticketVersionSql('p')} AS ver
         ${base} ORDER BY ${col} ${dir === 'desc' ? 'DESC' : 'ASC'}, p.id LIMIT ${Number(limit)} OFFSET ${Number(offset)}`, params).map(conv);
     return { total: tot.n, totals: { so_chuyen: tot.n, tong_kg: tot.kg || 0, tien_truoc_vat: fromDb(tot.tien_truoc_vat) || 0, tien_vat: fromDb(tot.tien_vat) || 0, tong_tien: fromDb(tot.tong_tien) || 0 }, rows };
   }
 
   _group(f, keySql, labelSql, extraJoin = '') {
-    const { sql, params } = this.where(f);
+    const { sql, params } = this.approvedWhere(f);
     return this.db.all(`SELECT ${keySql} AS k, ${labelSql} AS label, COUNT(*) so_chuyen, COUNT(DISTINCT p.bien_so_chuan) so_xe,
         SUM(p.kl_hang_kg) tong_kg, SUM(p.kl_hang_kg)/1000.0 tong_tan, group_concat(DISTINCT p.don_gia) don_gia_list,
         SUM(p.tien_truoc_vat) tien_truoc_vat, SUM(p.tien_vat) tien_vat, SUM(p.tong_tien) tong_tien,
@@ -111,7 +118,7 @@ class ReportService {
   }
 
   byVehicle(f = {}) {
-    const { sql, params } = this.where(f);
+    const { sql, params } = this.approvedWhere(f);
     return this.db.all(`SELECT p.bien_so_chuan k, MIN(p.bien_so) label, group_concat(DISTINCT d.ma) don_vi, COUNT(*) so_chuyen,
         SUM(p.kl_hang_kg) tong_kg, SUM(p.kl_hang_kg)/1000.0 tong_tan, group_concat(DISTINCT p.don_gia) don_gia_list,
         SUM(p.tien_truoc_vat) tien_truoc_vat, SUM(p.tien_vat) tien_vat, SUM(p.tong_tien) tong_tien,
@@ -137,7 +144,7 @@ class ReportService {
 
   /** Timeline 1 xe (MASTER_PROMPT XVIII). */
   timeline(bienSo, { tu_ngay, den_ngay } = {}) {
-    const { sql, params } = this.where({ bien_so: bienSo, tu_ngay, den_ngay });
+    const { sql, params } = this.approvedWhere({ bien_so: bienSo, tu_ngay, den_ngay });
     const rows = this.db.all(`SELECT p.id, p.so_phieu, p.ngay_can, p.ngay_gio_can_1, p.ngay_gio_can_2, p.bien_so, p.noi_xuat, p.noi_xuat_goc, p.noi_den,
         p.can_lan_1, p.can_lan_2, p.kl_hang_kg, p.kl_hang_tan, p.don_gia, p.tien_truoc_vat, p.tien_vat, p.tong_tien, d.ma don_vi
         FROM phieu_can p LEFT JOIN don_vi_van_chuyen d ON d.id=p.don_vi_van_chuyen_id WHERE ${sql}`, params).map(conv);
@@ -148,7 +155,7 @@ class ReportService {
   statement(f) {
     const dvId = f ? oneId(f.don_vi_id) : null;
     if (dvId === null) throw new Error('Cần chọn đúng một đơn vị vận chuyển');
-    const { sql, params } = this.where(f);
+    const { sql, params } = this.approvedWhere(f);
     const rows = this.db.all(`SELECT p.kl_hang_kg, p.don_gia, p.tuyen_id, p.don_vi_tinh, p.ty_le_vat AS vat_percent, p.bien_so, p.trang_thai_tinh_gia AS status
                               FROM phieu_can p WHERE ${sql}`, params).map(conv);
     const routes = new Map(this.db.all('SELECT id, ma_tuyen FROM tuyen_van_chuyen').map((t) => [t.id, t.ma_tuyen]));
@@ -159,24 +166,24 @@ class ReportService {
   }
 
   statements(f = {}) {
-    const ids = this.db.all(`SELECT DISTINCT p.don_vi_van_chuyen_id id FROM phieu_can p WHERE ${this.where(f).sql} AND p.don_vi_van_chuyen_id IS NOT NULL`, this.where(f).params);
+    const ids = this.db.all(`SELECT DISTINCT p.don_vi_van_chuyen_id id FROM phieu_can p WHERE ${this.approvedWhere(f).sql} AND p.don_vi_van_chuyen_id IS NOT NULL`, this.approvedWhere(f).params);
     return ids.map((x) => this.statement({ ...f, don_vi_id: x.id }));
   }
 
   dashboard(f = {}) {
     const pf = { ...f, da_tinh_gia: true }; // số liệu chính: CHỈ phiếu đã tính giá (khớp Bảng kê)
-    const { sql, params } = this.where(pf);
+    const { sql, params } = this.approvedWhere(pf);
     const k = this.db.get(`SELECT COUNT(*) so_chuyen, COALESCE(SUM(kl_hang_kg),0) tong_kg, COALESCE(SUM(tien_truoc_vat),0) tien_truoc_vat, COALESCE(SUM(tien_vat),0) tien_vat,
         COALESCE(SUM(tong_tien),0) tong_tien, COUNT(DISTINCT bien_so_chuan) so_xe, COUNT(DISTINCT don_vi_van_chuyen_id) so_don_vi,
         SUM(CASE WHEN chot_ky_id IS NOT NULL THEN 1 ELSE 0 END) da_chot
       FROM phieu_can p WHERE ${sql}`, params);
     for (const m of ['tien_truoc_vat', 'tien_vat', 'tong_tien']) k[m] = fromDb(k[m]);
     // Phiếu CHƯA tính giá (cùng bộ lọc): đếm, KL, theo từng lý do
-    const u = this.where({ ...f, chua_tinh_gia: true });
+    const u = this.approvedWhere({ ...f, chua_tinh_gia: true });
     const un = this.db.get(`SELECT COUNT(*) so_chuyen, COALESCE(SUM(kl_hang_kg),0) tong_kg FROM phieu_can p WHERE ${u.sql}`, u.params);
     const unBy = this.db.all(`SELECT CASE WHEN p.trang_thai_tinh_gia IN ('OK','LOCKED') THEN 'THIEU_DU_LIEU_GIA' ELSE p.trang_thai_tinh_gia END trang_thai, COUNT(*) so_chuyen, COALESCE(SUM(kl_hang_kg),0) tong_kg
                               FROM phieu_can p WHERE ${u.sql} GROUP BY 1 ORDER BY 2 DESC`, u.params);
-    const w = this.where(f);
+    const w = this.approvedWhere(f);
     const o = this.db.get(`SELECT SUM(CASE WHEN trang_thai_doi_chieu IN ('CHUA_DOI_CHIEU','LECH') THEN 1 ELSE 0 END) can_doi_chieu FROM phieu_can p WHERE ${w.sql}`, w.params);
     k.can_doi_chieu = o.can_doi_chieu || 0;
     k.chua_tinh = { so_chuyen: un.so_chuyen, tong_kg: un.tong_kg, theo_trang_thai: unBy };

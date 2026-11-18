@@ -273,6 +273,17 @@ const App = (() => {
     if (views[kind]) return [views[kind], { arg }];
     return [null, {}];
   }
+  // Các lần đổi lọc cùng màn dựng riêng, chỉ kết quả mới nhất được gắn vào trang.
+  function latestRender(target, render) {
+    let sequence = 0;
+    return async () => {
+      const request = ++sequence;
+      const host = h('div');
+      clear(target).append(h('div', { class: 'empty' }, 'Đang tải…'));
+      await render(host);
+      if (request === sequence) clear(target).append(host);
+    };
+  }
   let navSeq = 0;
   async function go(id, params = {}) {
     current = id; renderNav();
@@ -296,5 +307,5 @@ const App = (() => {
 
   async function start() { await refreshAuth(); if (auth.enabled && !auth.user) { renderNav(); showLogin(); return; } await refreshInfo(); await go('dashboard'); }
 
-  return { h, clear, bindNum, fmt, tag, api, call, pickFile, saveExport, exportXlsx, toast, modal, confirmBox, promptBox, table, register, viewId: () => current, go, reload, start, refreshInfo, refreshAuth, can, get auth() { return auth; }, logout, state, pageHead, STATUS_TAG, get info() { return info; } };
+  return { h, clear, bindNum, fmt, tag, api, call, pickFile, saveExport, exportXlsx, toast, modal, confirmBox, promptBox, table, register, latestRender, viewId: () => current, go, reload, start, refreshInfo, refreshAuth, can, get auth() { return auth; }, logout, state, pageHead, STATUS_TAG, get info() { return info; } };
 })();

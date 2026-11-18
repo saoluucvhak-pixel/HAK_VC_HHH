@@ -140,7 +140,7 @@ class ReconciliationService {
   _p(token) { const p = this.previews.get(token); if (!p) throw new ValidationError('Phiên đối chiếu đã hết hạn — chọn lại file'); return p; }
 
   _loadA({ don_vi_id, dot_id, tu_ngay, den_ngay }) {
-    const { sql, params } = this.reports.where({ don_vi_id, dot_id, tu_ngay, den_ngay });
+    const { sql, params } = this.reports.approvedWhere({ don_vi_id, dot_id, tu_ngay, den_ngay });
     return this.db.all(`SELECT p.id, p.so_phieu, p.bien_so, p.bien_so_chuan, p.ngay_can, p.kl_hang_kg, p.don_gia, p.tien_truoc_vat, p.tien_vat, p.tong_tien FROM phieu_can p WHERE ${sql}`, params)
       .map((r) => ({ ...r, don_gia: fromDb(r.don_gia), tien_truoc_vat: fromDb(r.tien_truoc_vat), tien_vat: fromDb(r.tien_vat), tong_tien: fromDb(r.tong_tien) }));
   }
@@ -205,7 +205,8 @@ class ReconciliationService {
     const batch = this.db.get(`SELECT b.*, d.ma don_vi FROM doi_chieu_batch b LEFT JOIN don_vi_van_chuyen d ON d.id=b.don_vi_van_chuyen_id WHERE b.id=?`, [batchId]);
     if (!batch) throw new ValidationError('Không tìm thấy lô đối chiếu');
     const raw = this.db.all(`SELECT k.ket_qua, pc.kl_hang_kg a_kl, b.kl_hang_kg b_kl, COALESCE(pc.bien_so_chuan, b.bien_so_chuan, b.bien_so_goc) bs, COALESCE(pc.bien_so, b.bien_so_goc, b.bien_so_chuan) bs_show
-      FROM doi_chieu_ket_qua k LEFT JOIN phieu_can pc ON pc.id=k.phieu_can_id LEFT JOIN doi_chieu_dong_b b ON b.id=k.dong_b_id WHERE k.batch_id=?`, [batchId]);
+      FROM doi_chieu_ket_qua k LEFT JOIN phieu_can pc ON pc.id=k.phieu_can_id AND pc.trang_thai='ACTIVE' AND pc.trang_thai_duyet='DA_DUYET'
+      LEFT JOIN doi_chieu_dong_b b ON b.id=k.dong_b_id WHERE k.batch_id=? AND (pc.id IS NOT NULL OR b.id IS NOT NULL)`, [batchId]);
     let tolKg = 0; try { tolKg = Number((() => { const j = JSON.parse(batch.tham_so_json || '{}') || {}; return j.tolKg ?? j.dungSaiKg ?? 0; })()); } catch (e) { /* mặc định 0 */ }
     const m = new Map();
     for (const r of raw) {

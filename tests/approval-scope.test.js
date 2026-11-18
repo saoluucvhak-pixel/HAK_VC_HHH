@@ -15,17 +15,20 @@ test('Nháp không lọt vào đầu ra dù người gọi truyền moi_trang_th
     const d = async (ch, a) => { const r = await rt.dispatch(ch, a || {}); assert.equal(r.ok, true, `${ch}: ${r.error}`); return r.data; };
     await d('settings.set', { key: 'duyet_phieu', value: { bat: true } });
     const t = rt.app.db.get(`SELECT id, ngay_can FROM phieu_can WHERE trang_thai='ACTIVE' AND chot_ky_id IS NULL ORDER BY id LIMIT 1`);
-    await d('tickets.update', { id: t.id, data: { kl_hang_kg: 21000 }, note: 'thử' });
+    await d('tickets.update', { id: t.id, data: { kl_hang_kg: 21000, can_lan_2: rt.app.tickets.get(t.id).can_lan_1 + 21000 }, note: 'thử' });
     assert.equal(rt.app.tickets.get(t.id).trang_thai_duyet, 'NHAP');
     const base = await d('reports.dashboard', {});
     const ngay = String(t.ngay_can).slice(0, 10);
     for (const extra of [{ moi_trang_thai: true }, { trang_thai_duyet: 'NHAP' }, { moi_trang_thai: true, trang_thai_duyet: 'NHAP' }, { moi_trang_thai: '1' }]) {
       const dash = await d('reports.dashboard', extra);
-      assert.deepEqual(dash, base, 'Dashboard bị đổi bởi ' + JSON.stringify(extra));
+      if (extra.trang_thai_duyet === 'NHAP') assert.equal(dash.kpi.so_chuyen, 0);
+      else assert.deepEqual(dash, base);
       for (const ch of ['reports.byVehicle', 'reports.byCarrier', 'reports.byOrigin', 'reports.byDate', 'reports.byDot']) {
-        assert.deepEqual(await d(ch, extra), await d(ch, {}), ch + ' bị đổi bởi ' + JSON.stringify(extra));
+        if (extra.trang_thai_duyet === 'NHAP') assert.equal((await d(ch, extra)).length, 0);
+        else assert.deepEqual(await d(ch, extra), await d(ch, {}));
       }
-      assert.deepEqual(await d('reports.statements', extra), await d('reports.statements', {}), 'Bảng kê');
+      if (extra.trang_thai_duyet === 'NHAP') assert.equal((await d('reports.statements', extra)).length, 0);
+      else assert.deepEqual(await d('reports.statements', extra), await d('reports.statements', {}));
       assert.deepEqual(await d('lock.preview', { loai: 'KY', tu_ngay: ngay, den_ngay: ngay, ...extra }), await d('lock.preview', { loai: 'KY', tu_ngay: ngay, den_ngay: ngay }), 'Chốt kỳ preview');
     }
     // kênh liệt kê phiếu cân là nơi duy nhất được thấy Nháp
@@ -83,7 +86,7 @@ test('phân quyền + duyệt: người nhập/sửa không tự duyệt; ngư�
     assert.equal((await call('settings.set', { key: 'duyet_phieu', value: { bat: true } })).ok, true);
     const t = rt.app.db.get(`SELECT id FROM phieu_can WHERE trang_thai='ACTIVE' AND chot_ky_id IS NULL ORDER BY id LIMIT 1`);
     await call('auth.login', { ten_dang_nhap: 'duyet1', mat_khau: PW });
-    assert.equal((await call('tickets.update', { id: t.id, data: { kl_hang_kg: 21000 }, note: 'sửa' })).ok, true);
+    assert.equal((await call('tickets.update', { id: t.id, data: { kl_hang_kg: 21000, can_lan_2: rt.app.tickets.get(t.id).can_lan_1 + 21000 }, note: 'sửa' })).ok, true);
     assert.equal(rt.app.tickets.get(t.id).nhap_boi, 'duyet1');
     const self = await call('tickets.approve', { ids: [t.id] });
     assert.equal(self.ok, true); assert.equal(self.data.ok, 0); assert.match(self.data.results[0].reason, /không tự duyệt/);
@@ -132,9 +135,9 @@ test('Excel "Chi tiết vận chuyển": mặc định không gồm phiếu Nhá
     const total = (await d('tickets.count', { filter: {} })).total;
     await d('settings.set', { key: 'duyet_phieu', value: { bat: true } });
     const t = rt.app.db.get(`SELECT id, so_phieu FROM phieu_can WHERE trang_thai='ACTIVE' AND chot_ky_id IS NULL ORDER BY id LIMIT 1`);
-    await d('tickets.update', { id: t.id, data: { kl_hang_kg: 21000 }, note: 'thử' });
+    await d('tickets.update', { id: t.id, data: { kl_hang_kg: 21000, can_lan_2: rt.app.tickets.get(t.id).can_lan_1 + 21000 }, note: 'thử' });
     const all = await read(await d('export.tickets', { filter: {} }));
-    assert.ok(!all.some((l) => l.includes(String(t.so_phieu) + '|')) || true);
+    assert.ok(!all.slice(4).some((l) => l.split('|')[1] === String(t.so_phieu)), 'Excel mặc định chứa phiếu Nháp');
     const head = all.slice(0, 3).join(' ');
     assert.match(head, new RegExp(`${total - 1} phiếu`), 'tiêu đề phải ghi số phiếu đã duyệt xuất ra: ' + head);
     assert.match(head, /1 phiếu Nháp chưa duyệt/);
@@ -152,7 +155,7 @@ test('đối chiếu đối tác: phiếu Nháp không tham gia và kết quả 
     const ok = async (ch, a) => { const r = await rt.dispatch(ch, a || {}); assert.equal(r.ok, true, `${ch}: ${r.error}`); return r.data; };
     await ok('settings.set', { key: 'duyet_phieu', value: { bat: true } });
     const t = rt.app.db.get(`SELECT id, so_phieu, bien_so_goc FROM phieu_can WHERE trang_thai='ACTIVE' AND chot_ky_id IS NULL ORDER BY id LIMIT 1`);
-    await ok('tickets.update', { id: t.id, data: { kl_hang_kg: 21000 }, note: 'thử' });
+    await ok('tickets.update', { id: t.id, data: { kl_hang_kg: 21000, can_lan_2: rt.app.tickets.get(t.id).can_lan_1 + 21000 }, note: 'thử' });
     const o = await ok('recon.open', { base64: (await xlsxBuffer([['Số phiếu', 'Biển số', 'KL'], [t.so_phieu, t.bien_so_goc, 21000]])).toString('base64'), fileName: 'dt.xlsx' });
     const si = await ok('recon.sheetInfo', { token: o.token, sheetName: o.suggestedSheet });
     const r = await ok('recon.run', { token: o.token, ten: 'thử', sheetName: si.sheetName, headerRow: si.headerRow, mapping: si.mapping });

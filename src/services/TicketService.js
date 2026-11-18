@@ -8,7 +8,7 @@ const EDITABLE = ['ngay_gio_can_1', 'ngay_gio_can_2', 'bien_so', 'can_lan_1', 'c
 const FINANCIAL = EDITABLE.filter((k) => k !== 'ghi_chu'); // phiếu đã chốt: chỉ còn sửa được ghi chú
 const { parseDateTime } = require('../utils/datetime');
 const { weightProblem, limitsFrom } = require('../utils/weight');
-const { duyetBat } = require('../utils/duyet');
+const { duyetBat, ticketVersionSql } = require('../utils/duyet');
 
 class TicketService {
   constructor(db, { audit, cost, auth = null }) { Object.assign(this, { db, audit, cost, auth }); }
@@ -16,7 +16,7 @@ class TicketService {
   get(id) { return this.db.get('SELECT * FROM phieu_can WHERE id=?', [id]); }
 
   update(id, data, note) {
-    if (!note) throw new ValidationError('Cần ghi lý do sửa phiếu');
+    if (!String(note || '').trim()) throw new ValidationError('Cần ghi lý do sửa phiếu');
     return this.db.tx(() => {
       const old = this.get(id);
       if (!old || old.trang_thai !== 'ACTIVE') throw new ValidationError('Không tìm thấy phiếu');
@@ -39,9 +39,10 @@ class TicketService {
       if (ch.ngay_gio_can_1 && ch.ngay_gio_can_1.slice(0, 10) !== (old.ngay_gio_can_1 || '').slice(0, 10)) {
         require('./ChotKyService').ChotKyService.prototype.assertOpenForDates.call({ db: this.db }, [ch.ngay_gio_can_1.slice(0, 10)]);
       }
-      const t1 = ch.ngay_gio_can_1 ?? old.ngay_gio_can_1, t2 = ch.ngay_gio_can_2 ?? old.ngay_gio_can_2;
+      const t1 = Object.hasOwn(ch, 'ngay_gio_can_1') ? ch.ngay_gio_can_1 : old.ngay_gio_can_1;
+      const t2 = Object.hasOwn(ch, 'ngay_gio_can_2') ? ch.ngay_gio_can_2 : old.ngay_gio_can_2;
       if (('ngay_gio_can_1' in ch || 'ngay_gio_can_2' in ch) && t1 && t2 && t2 < t1) throw new ValidationError('Giờ cân 2 phải sau giờ cân 1');
-      for (const k of ['can_lan_1', 'can_lan_2']) if (k in ch && ch[k] !== null && !(Number(ch[k]) >= 0)) throw new ValidationError('Trọng lượng cân không được âm');
+      for (const k of ['can_lan_1', 'can_lan_2']) if (k in ch && ch[k] !== null && (!Number.isFinite(Number(ch[k])) || Number(ch[k]) < 0)) throw new ValidationError('Trọng lượng cân phải là số hữu hạn và không được âm');
       if (ch.dot_van_chuyen_id) {
         const d = this.db.get('SELECT trang_thai FROM dot_van_chuyen WHERE id=?', [ch.dot_van_chuyen_id]);
         if (!d) throw new ValidationError('Đợt không tồn tại');
@@ -51,8 +52,14 @@ class TicketService {
         if (!isValidPlate(ch.bien_so)) throw new ValidationError('Biển số không hợp lệ');
         ch.bien_so_chuan = normalizePlate(ch.bien_so); ch.bien_so = displayPlate(ch.bien_so);
       }
-      if ('kl_hang_kg' in ch && !(Number(ch.kl_hang_kg) > 0)) throw new ValidationError('KL phải > 0');
+      if ('kl_hang_kg' in ch && (!Number.isFinite(Number(ch.kl_hang_kg)) || !(Number(ch.kl_hang_kg) > 0))) throw new ValidationError('KL phải là số hữu hạn > 0');
       if ('kl_hang_kg' in ch) { const wp = weightProblem(ch.kl_hang_kg, limitsFrom(this.cost && this.cost.settings)); if (wp) throw new ValidationError(wp); }
+      if (['kl_hang_kg', 'can_lan_1', 'can_lan_2'].some((k) => k in ch)) {
+        const weights = { ...old, ...ch };
+        if (weights.can_lan_1 !== null && weights.can_lan_2 !== null && Math.abs(Math.abs(weights.can_lan_1 - weights.can_lan_2) - weights.kl_hang_kg) > 0.5) {
+          throw new ValidationError('KL hàng phải khớp |Cân lần 1 − Cân lần 2|');
+        }
+      }
       if ('xe_tra_ve' in ch) ch.xe_tra_ve = ch.xe_tra_ve ? 1 : 0;
       // Bật duyệt phiếu: sửa số liệu → phiếu về Nháp, người sửa gần nhất không tự duyệt được (cần duyệt lại)
       if (duyetBat(this.cost && this.cost.settings) && Object.keys(ch).some((k) => FINANCIAL.includes(k))) { ch.trang_thai_duyet = 'NHAP'; ch.duyet_boi = null; ch.duyet_luc = null; ch.nhap_boi = this.audit.actor() || null; }
@@ -123,7 +130,7 @@ class TicketService {
       try {
         if (!t || t.trang_thai !== 'ACTIVE') throw new ValidationError('Phiếu không còn hiệu lực');
         if (t.trang_thai_duyet !== 'NHAP') throw new ValidationError('Phiếu đã được duyệt');
-        if (vers && vers[id] != null && vers[id] !== this.db.get("SELECT (updated_at || '|' || COALESCE(kl_hang_kg,'') || '|' || COALESCE(tong_tien,'')) v FROM phieu_can WHERE id=?", [id]).v) throw new ValidationError('Phiếu đã thay đổi sau khi bạn chọn — tải lại danh sách và xem lại trước khi duyệt');
+        if (vers && vers[id] !== this.db.get(`SELECT ${ticketVersionSql()} v FROM phieu_can WHERE id=?`, [id]).v) throw new ValidationError('Phiếu đã thay đổi sau khi bạn chọn — tải lại danh sách và xem lại trước khi duyệt');
         { const wp = weightProblem(t.kl_hang_kg, limitsFrom(this.cost && this.cost.settings)); if (wp) throw new ValidationError(`${wp} — sửa khối lượng trước khi duyệt`); }
         if (authOn && actor && t.nhap_boi === actor) throw new ValidationError('Người nhập/sửa phiếu không tự duyệt phiếu của mình — cần người khác duyệt');
         if (t.dot_van_chuyen_id) { const d = this.db.get('SELECT trang_thai FROM dot_van_chuyen WHERE id=?', [t.dot_van_chuyen_id]); if (d && d.trang_thai === 'KHOA') throw new ValidationError('Phiếu thuộc đợt đã khóa'); }

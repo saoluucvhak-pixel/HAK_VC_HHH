@@ -1,6 +1,6 @@
 # VC Cost — Quản lý · Tính toán · Đối chiếu chi phí vận chuyển (offline)
 
-Phiên bản **0.8.0** (schema 7) — ứng dụng desktop (Electron, chạy offline, dữ liệu SQLite cục bộ) cho HAK Group: import phiếu cân, tính cước vận chuyển, lập Bảng kê, chốt kỳ, đối chiếu với đối tác. Engine tính giá được kiểm chứng khớp với file Excel mẫu PRINCE OF NATURE V.47 (`docs/EXCEL_VS_APP_VALIDATION.md`).
+Phiên bản **0.8.1** (schema 7) — ứng dụng desktop (Electron, chạy offline, dữ liệu SQLite cục bộ) cho HAK Group: import phiếu cân, tính cước vận chuyển, lập Bảng kê, chốt kỳ, đối chiếu với đối tác. Engine tính giá được kiểm chứng khớp với file Excel mẫu PRINCE OF NATURE V.47 (`docs/EXCEL_VS_APP_VALIDATION.md`).
 
 Lịch sử thay đổi: `CHANGELOG.md`.
 

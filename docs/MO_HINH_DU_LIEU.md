@@ -1,6 +1,6 @@
-# Mô hình dữ liệu cha–con và truy vết (schema v6)
+# Mô hình dữ liệu cha–con và truy vết (schema v7)
 
-Nguồn: `src/database/migrations/001…006`, `PRAGMA foreign_key_list` trên DB mới migrate. Khóa ngoại bật (`PRAGMA foreign_keys = ON`).
+Nguồn: `src/database/migrations/001…007`, `PRAGMA foreign_key_list` trên DB mới migrate. Khóa ngoại bật (`PRAGMA foreign_keys = ON`).
 
 ## Quan hệ chính
 ```
@@ -38,3 +38,8 @@ Mọi truy vấn tổng hợp (Dashboard, Bảng kê, nhóm báo cáo, Phiếu c
 
 ## Kiểm tra toàn vẹn (chỉ đọc)
 `npm run integrity -- <file.db>` hoặc nút "Kiểm tra toàn vẹn" ở màn Backup (kênh `system.integrity`): khóa ngoại; phiếu trùng số phiếu + nơi xuất (ví dụ do lỗi cũ nhập hai lần với tên nơi xuất khác chữ); phiếu trùng biển số + giờ cân; chốt kỳ mồ côi / thiếu snapshot / lệch số liệu; lô lệch bộ đếm; dòng chờ của lô đã hoàn tác; cảnh báo mồ côi; tiền lệch; KL lệch |Cân 1 − Cân 2|. **Không tự gộp, xóa hay sửa** — người dùng quyết định từng trường hợp. Không cần migration schema cho phần này.
+
+## Duyệt phiếu từ schema 7
+`phieu_can.trang_thai_duyet` nhận `NHAP` hoặc `DA_DUYET`, kèm `nhap_boi`, `duyet_boi`, `duyet_luc`. Phiếu cũ mặc định Đã duyệt. Khi bật quy trình, nhập/sửa/hoàn tác cập nhật số liệu đưa phiếu về Nháp để xác nhận lại. Người sửa gần nhất cần người khác duyệt khi bật phân quyền.
+
+Danh sách và Excel dữ liệu nhập có cả Nháp theo bộ lọc, có cột trạng thái. Dashboard, tổng hợp, bảng kê, đối chiếu và biểu mẫu ký luôn giao phạm vi bộ lọc với điều kiện Đã duyệt ở backend. Bộ lọc Nháp cho kết quả rỗng tại những đầu ra này. Smart Filter dùng phạm vi đếm tương ứng với từng màn.

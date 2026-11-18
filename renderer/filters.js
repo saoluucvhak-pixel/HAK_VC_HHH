@@ -83,12 +83,22 @@
   async function filterBar(onChange, { fields = ['tu_ngay', 'den_ngay', 'dot_id', 'don_vi_id'], filter = App.state.filter, screenId = App.viewId() } = {}) {
     const [opts, periods] = await Promise.all([loadOptions(), api('tickets.periods').catch(() => [])]);
     let info = { kept: 0, total: 0 }, tb = null;
+    const approvedOnly = screenId !== 'tickets';
+    let countRequest = 0;
     const quick = ['q'];
     if (fields.some((f) => f === 'tu_ngay' || f === 'den_ngay' || f === 'period')) quick.push('period');
     LIST_KEYS.forEach((k) => { if (fields.includes(k)) quick.push(k); });
     const fieldCfg = LIST_KEYS.map((k) => ({ key: k, type: 'multi', label: DEFS[k].label, options: () => opts[k], withNone: false, match: () => true }));
     fieldCfg.push({ key: 'trang_thai', type: 'enum', label: 'Trạng thái tính giá', options: () => (App.info && App.info.duyetBat ? [...DUYET_STATES, ...PRICE_STATES] : PRICE_STATES), match: () => true });
-    const refreshInfo = async () => { try { info = await api('tickets.count', { filter: cleanFilter(filter) }); } catch (e) { /* giữ số cũ */ } if (tb) tb.refresh(); };
+    const refreshInfo = async () => {
+      const request = ++countRequest;
+      try {
+        const result = await api('tickets.count', { filter: cleanFilter(filter), approvedOnly });
+        if (request !== countRequest) return;
+        info = result;
+      } catch (e) { /* giữ số cũ */ }
+      if (tb) tb.refresh();
+    };
     const cfg = {
       screenId, fields: fieldCfg, quickFields: quick, advancedFields: ['q', 'period', ...LIST_KEYS, 'trang_thai'],
       searchPlaceholder: '🔍 Tìm số phiếu, biển số, nơi xuất…', qCommit: false,
@@ -99,6 +109,7 @@
       labelOf: (k) => (DEFS[k] ? DEFS[k].label : k),
     };
     tb = UI.mount(cfg);
+    if (approvedOnly && App.info && App.info.duyetBat) tb.el.append(h('p', { class: 'muted small' }, 'Số liệu báo cáo và chứng từ chỉ gồm phiếu đã duyệt.'));
     refreshInfo();
     tb.el.refreshInfo = refreshInfo;   // màn hình gọi lại sau khi dữ liệu đổi (xóa/import…)
     return tb.el;

@@ -15,21 +15,14 @@ const forms = require('../print/forms');
 const formHtml = require('../print/formHtml');
 const formXlsx = require('../excel/forms');
 
-/**
- * Phạm vi phiếu Nháp do BACKEND quyết định, không do người gọi: `moi_trang_thai` là cờ nội bộ, còn `trang_thai_duyet`
- * (lọc Nháp/Đã duyệt) chỉ có nghĩa ở các kênh liệt kê phiếu cân. Ở mọi kênh khác (Dashboard, báo cáo, bảng kê, biểu mẫu,
- * xuất Excel/PDF, đối chiếu, chốt kỳ) hai khóa này bị loại trước khi vào service — kể cả trong bộ lọc lưu từ bản cũ.
- */
-const DUYET_LIST_CHANNELS = new Set(['tickets.count', 'tickets.list', 'tickets.ids', 'export.tickets']);
+/** Cờ mở rộng là nội bộ; trạng thái lọc vẫn được giữ để báo cáo giao với phạm vi Đã duyệt. */
 const stripScope = (channel, args) => {
-  if (!args || typeof args !== 'object' || Array.isArray(args)) return args;
-  const keep = DUYET_LIST_CHANNELS.has(channel);
-  const clean = (o) => {
-    if (!o || typeof o !== 'object' || Array.isArray(o)) return o;
-    const c = { ...o }; delete c.moi_trang_thai; if (!keep) delete c.trang_thai_duyet; return c;
+  const clean = (value) => {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return value;
+    const out = { ...value }; delete out.moi_trang_thai; return out;
   };
   const out = clean(args);
-  if (out.filter) out.filter = clean(out.filter);
+  if (out && out.filter) out.filter = clean(out.filter);
   return out;
 };
 
@@ -124,7 +117,7 @@ function createHandlers(app, env = {}) {
 
     // ---------------- phiếu & báo cáo
     'workflow.todo': () => ({ ...app.reports.todo(), cho_xu_ly: app.imports.pendingReviews().length, canh_bao_mo: app.alerts.countOpen() }),
-    'tickets.count': ({ filter }) => app.reports.count(allStates(filter)),
+    'tickets.count': ({ filter, approvedOnly = false }) => app.reports.count(allStates(filter), { approvedOnly }),
     'tickets.periods': () => app.reports.periods(),
     'tickets.list': ({ filter, ...o }) => app.reports.tickets(allStates(filter), o),
     'tickets.ids': ({ filter }) => { const { sql, params } = app.reports.where(allStates(filter)); return app.db.all(`SELECT p.id FROM phieu_can p WHERE ${sql}`, params).map((r) => r.id); },
@@ -183,12 +176,13 @@ function createHandlers(app, env = {}) {
     'template.tickets': async () => writeExport(await require('../excel/templates').ticketTemplate({ locations: app.db.all(`SELECT ten FROM dia_diem WHERE trang_thai='ACTIVE' ORDER BY ten`).map((x) => x.ten) }), 'MAU_Import_Phieu_can.xlsx'),
     'template.vehicles': async () => writeExport(await require('../excel/templates').vehicleTemplate({ carriers: app.db.all(`SELECT ma FROM don_vi_van_chuyen WHERE trang_thai='ACTIVE' ORDER BY ma`).map((x) => x.ma) }), 'MAU_Import_Danh_sach_xe.xlsx'),
     'export.tickets': async ({ filter }) => {
-      // Đầu ra số liệu: mặc định chỉ phiếu Đã duyệt; chỉ xuất Nháp khi người dùng lọc Nháp rõ ràng. Nêu số phiếu Nháp bị bỏ qua.
-      const f = filter || {}; const wantNhap = f.trang_thai_duyet === 'NHAP' || f.trang_thai_duyet === 'DA_DUYET';
-      const all = app.reports.tickets(wantNhap ? allStates(f) : { ...f }, { offset: 0, limit: 10_000_000 });
-      const nhapBoQua = wantNhap ? 0 : app.reports.count({ ...f, trang_thai_duyet: 'NHAP' }).kept;
-      return writeExport(await exporters.ticketsWorkbook(all, filter, { nhapBoQua }), `ChiTietVanChuyen_${stamp()}.xlsx`);
+      const f = filter || {};
+      const explicitState = f.trang_thai_duyet === 'NHAP' || f.trang_thai_duyet === 'DA_DUYET';
+      const all = app.reports.tickets(explicitState ? allStates(f) : f, { offset: 0, limit: 10_000_000 });
+      const nhapBoQua = explicitState ? 0 : app.reports.count({ ...f, trang_thai_duyet: 'NHAP' }).kept;
+      return writeExport(await exporters.ticketsWorkbook(all, filter, { nhapBoQua, labels: documents.filterLabels(app, f) }), `ChiTietVanChuyen_${stamp()}.xlsx`);
     },
+
     // Bảng kê (Excel in/ký + PDF) và báo cáo tổng hợp
     'export.statement': async ({ filter, reconBatchId }) => { const d = documents.statementDoc(app, filter || {}, { reconBatchId }); return writeExport(await exporters.statementWorkbook(d), `${d.file}_${stamp()}.xlsx`); },
     'export.statementPdf': async ({ filter, reconBatchId }) => { const d = documents.statementDoc(app, filter || {}, { reconBatchId }); return writePdf(templates.statementHtml(d), `${d.file}_${stamp()}.pdf`); },

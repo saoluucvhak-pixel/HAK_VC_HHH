@@ -297,23 +297,50 @@ console.log('app.info', JSON.stringify(info.data.counts));
   ck((await page.locator('[data-user]').count()) === 0, 'tắt phân quyền: không còn ô người dùng');
 }
 
-// ---- duyệt phiếu: bật → sửa một phiếu → Nháp hiện trên danh sách, không vào Dashboard → duyệt bằng giao diện
+// Duyệt phiếu: cùng bộ lọc Nháp, màn nhập thấy phiếu còn bảng kê và số đếm báo cáo bằng 0.
 {
-  const ck = (ok, msg) => { if (!ok) errors.push('duyệt phiếu: ' + msg); };
-  const api = async (c, a) => (await (await fetch('http://127.0.0.1:5191/api/' + c, { method: 'POST', body: JSON.stringify(a || {}) })).json());
-  const before = (await api('reports.dashboard', {})).data.kpi.so_chuyen;
-  await api('settings.set', { key: 'duyet_phieu', value: { bat: true } });
-  const t = (await api('tickets.list', { filter: {}, limit: 1 })).data.rows[0];
-  const u = await api('tickets.update', { id: t.id, data: { ghi_chu: 'x', kl_hang_kg: t.kl_hang_kg + 1000 }, note: 'ui' }); ck(u.ok, 'sửa phiếu: ' + u.error);
-  ck((await api('reports.dashboard', {})).data.kpi.so_chuyen === before - 1, 'Dashboard phải loại phiếu Nháp');
-  await page.evaluate(() => App.refreshInfo()); await nav('tickets');
-  ck((await page.locator('table.t .tag.warn', { hasText: 'Nháp' }).count()) >= 1, 'danh sách phải hiện nhãn Nháp');
-  ck((await page.locator('[data-act=approve-selected]').count()) === 1, 'phải có nút duyệt khi bật duyệt phiếu');
-  await shot('30-duyet-nhap');
-  await page.click('[data-act=approve-filtered]'); await page.waitForSelector('.modal'); await page.click('.modal .btn:not(.ghost)'); await page.waitForTimeout(800);
-  ck((await api('reports.dashboard', {})).data.kpi.so_chuyen === before, 'sau duyệt Dashboard phải đủ lại');
-  await api('settings.set', { key: 'duyet_phieu', value: { bat: false } });
+  await page.evaluate(async () => {
+    await App.api('settings.set', { key: 'duyet_phieu', value: { bat: true } });
+    const data = await App.api('tickets.list', { filter: { chua_chot: true }, limit: 1 });
+    const t = await App.api('tickets.get', { id: data.rows[0].id });
+    await App.api('tickets.update', { id: t.id, data: { xe_tra_ve: t.xe_tra_ve ? 0 : 1 }, note: 'UI kiểm tra duyệt lại' });
+    await App.refreshInfo();
+    Object.keys(App.state.filter).forEach((k) => delete App.state.filter[k]);
+    Object.assign(App.state.filter, { trang_thai: 'NHAP', don_vi_id: [t.don_vi_van_chuyen_id] });
+  });
+  await nav('tickets');
+  await page.waitForSelector('[data-act=approve-filtered]');
+  await page.waitForFunction(() => /Hiển thị 1\s*\//.test(document.body.innerText));
+  await shot('41-phieu-nhap');
+  await nav('statements');
+  await page.waitForFunction(() => /Hiển thị 0\s*\//.test(document.body.innerText));
+  if (!(await page.textContent('body')).includes('Số liệu báo cáo và chứng từ chỉ gồm phiếu đã duyệt.')) errors.push('thiếu phạm vi đã duyệt trên bảng kê');
+  await shot('42-bang-ke-chan-nhap');
+  await nav('tickets');
+  await page.click('[data-act=approve-filtered]');
+  await page.click('.modal .btn:not(.ghost)');
+  await page.waitForFunction(() => /Hiển thị 0\s*\//.test(document.body.innerText));
+  await page.evaluate(async () => {
+    await App.api('settings.set', { key: 'duyet_phieu', value: { bat: false } });
+    Object.keys(App.state.filter).forEach((k) => delete App.state.filter[k]);
+  });
 }
+
+// Đổi lọc cùng màn: phản hồi rỗng về muộn phải bị bỏ qua sau phản hồi mới.
+await nav('dashboard');
+await page.route('**/api/reports.dashboard', async (route) => {
+  const data = route.request().postDataJSON();
+  if (data.search === 'NO-MATCH-RELEASE') await new Promise((resolve) => setTimeout(resolve, 800));
+  await route.continue();
+});
+const delayed = page.waitForRequest((r) => r.url().endsWith('/api/reports.dashboard') && r.postDataJSON().search === 'NO-MATCH-RELEASE');
+await page.fill('[data-sf-q]', 'NO-MATCH-RELEASE');
+await delayed;
+await page.fill('[data-sf-q]', '');
+await page.waitForFunction(() => document.querySelector('.kpi b')?.textContent === '2.035');
+await page.waitForTimeout(1100);
+if (await page.textContent('.kpi b') !== '2.035') errors.push('phản hồi bộ lọc cũ ghi đè Dashboard');
+await page.unroute('**/api/reports.dashboard');
 
 console.log('errors:', errors.length ? errors : 'none');
 await browser.close(); srv.close();

@@ -2,7 +2,7 @@
 
 Chạy: `npm test` (node:test). Kiểm chứng Excel: `npm run validate -- "<file.xlsx>"`.
 
-## 0. Bộ kiểm thử hiện hành (v0.7.0 — 145 test, chạy cả node:sqlite và better-sqlite3)
+## 0. Bộ kiểm thử hiện hành (v0.8.0 — kiểm thử schema 7, chạy cả node:sqlite và better-sqlite3)
 | Nhóm | File |
 |---|---|
 | Engine tính cước, làm tròn, giá dầu, xe theo ngày | engine.test.js, integration.test.js |
@@ -54,3 +54,9 @@ Chạy: `npm test` (node:test). Kiểm chứng Excel: `npm run validate -- "<fil
 
 ## Đối chiếu (v0.4.0)
 `tests/reconciliation.test.js`: matchRows (khớp, lệch nhiều cột, thiếu A/B, trùng B, khớp biển số+ngày+KL, nhiều ứng viên) và end-to-end: bảng kê HAK dựng từ hệ thống + 4 lỗi cài sẵn → 104 khớp, 1 lệch KL, 1 lệch đơn giá, 1 thiếu bên A, 1 thiếu bên B; bảng kê HAK vẫn 416.454.167 đ (đối chiếu không sửa phiếu).
+
+## Hồi quy phát hành 0.8.0
+- `release-approval.test.js`: API và file Excel chặn Nháp trên chứng từ, bộ lọc mở rộng, số đếm màn nhập/báo cáo, khối lượng sửa trực tiếp, cấu hình đổi sau preview, tự duyệt bị chặn.
+- `integrity-fixes.test.js`: hoàn tác cập nhật sau duyệt đưa phiếu về Nháp và xóa xác nhận cũ.
+- UI smoke: Nháp hiện ở màn nhập; cùng bộ lọc cho 0 phiếu ở bảng kê, trạng thái duyệt lại thành công.
+- Windows CI: nâng DB schema 4 và 6 lên 7; quy trình duyệt trên bản đã đóng gói; năm ca Setup/Portable cùng checksum.

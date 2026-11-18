@@ -1,5 +1,12 @@
 # CHANGELOG
 
+## 0.8.1 — 18/11/2026 (schema 7)
+- Báo cáo và chứng từ chỉ nhận phiếu đã duyệt ở backend, kể cả bộ lọc Nháp/mọi trạng thái. Dashboard, tổng hợp, bảng kê, đối chiếu và biểu mẫu ký dùng cùng phạm vi. Danh sách Phiếu cân vẫn xem được Nháp; Excel dữ liệu có cột trạng thái duyệt.
+- Bộ đếm Smart Filter theo đúng phạm vi màn nhập hoặc báo cáo; phản hồi dữ liệu/đếm cũ được bỏ qua khi đổi lọc nhanh; số đếm được làm mới sau duyệt/xóa. Bảng con giữ đúng loại dữ liệu khi chuyển tab. Màn báo cáo nêu phạm vi đã duyệt.
+- Sửa trực tiếp kiểm tra KL = |Cân 1 − Cân 2| như import, chặn số không hữu hạn/lý do trắng; xóa giờ cân 2 được xét đúng. Commit kiểm lại quy tắc khối lượng nếu cấu hình thay đổi sau preview.
+- Hoàn tác cập nhật số liệu khi bật duyệt đưa phiếu về Nháp, xóa xác nhận cũ. Bổ sung hồi quy qua API, Excel, biểu mẫu và giao diện thật.
+
+
 ## 0.8.0 — 18/11/2026 (schema 7)
 - **Nghiệm thu 0.8.0** (`docs/NGHIEM_THU_0.8.0.md`): backend là nơi quyết định phạm vi phiếu Nháp (tham số `moi_trang_thai`/`trang_thai_duyet` từ người gọi bị loại ở mọi kênh ngoài liệt kê phiếu cân); hoàn tác batch đưa phiếu về Nháp khi khôi phục số liệu cũ; duyệt kèm phiên bản phiếu (phiếu đổi sau khi chọn thì không duyệt); import kiểm lại ngưỡng KL hiện hành lúc commit; duyệt chặn phiếu KL ngoài ngưỡng.
 - **Duyệt từng phiếu (tùy chọn, mặc định TẮT)**: Cài đặt → "Duyệt từng phiếu". Khi BẬT, phiếu mới nhập (hoặc vừa sửa số liệu / xử lý xung đột cập nhật) là **Nháp**; chỉ khi được duyệt mới vào Dashboard, Bảng kê, báo cáo, đối chiếu và chốt kỳ. Phiếu hiện có = Đã duyệt nên TẮT thì hành vi y như cũ. Duyệt theo lô (`tickets.approve`, quyền "duyệt"), kết quả từng phiếu, ghi nhật ký; khi bật phân quyền, người nhập/sửa không tự duyệt phiếu của mình. Không tắt được khi còn Nháp; chốt kỳ bị chặn khi còn Nháp trong phạm vi; kiểm tra toàn vẹn thêm `NHAP_KHI_TAT_DUYET`. Migration 007 (thêm cột, dữ liệu cũ giữ nguyên).

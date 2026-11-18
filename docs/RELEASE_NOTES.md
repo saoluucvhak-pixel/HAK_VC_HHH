@@ -1,35 +1,24 @@
-## VC Cost 0.8.0 (schema SQLite 7)
+# VC Cost 0.8.1 — schema SQLite 7
 
-Ứng dụng Electron + SQLite chạy offline cho HAK. Bộ cài: **Setup** (cài theo người dùng, dữ liệu ở `%APPDATA%\VCCost`) và **Portable** (dữ liệu cạnh file `.exe`, thư mục `VCCost-data`). Bộ cài **chưa ký số** — Windows SmartScreen có thể cảnh báo; kiểm tra SHA-256 bên dưới trước khi cài.
+Ứng dụng quản lý chi phí vận chuyển offline cho HAK. Bản vá tích hợp trên 0.8.0, giữ schema 7, hoàn thiện phạm vi báo cáo, sửa dữ liệu và xử lý phản hồi bộ lọc.
 
-### Mới trong 0.8.0 (so với 0.7.1)
-- **Duyệt từng phiếu (tùy chọn, mặc định TẮT)**: bật ở Cài đặt. Phiếu mới nhập/vừa sửa là Nháp, chưa vào Dashboard, Bảng kê, báo cáo, đối chiếu, chốt kỳ cho tới khi được duyệt. Phiếu hiện có tính là Đã duyệt nên bật/tắt không làm đổi số liệu cũ.
-- Sửa lỗi nghiệm thu: phạm vi Nháp do backend quyết định; hoàn tác batch đưa phiếu về Nháp; duyệt kèm phiên bản; commit import kiểm lại ngưỡng KL.
-- **Nâng cấp**: migration 007 (schema 6 → 7) chỉ thêm cột, dữ liệu cũ giữ nguyên; tự tạo bản sao lưu `PRE_MIGRATION` trước khi nâng.
+## Thay đổi
+- Khi bật duyệt, phiếu mới hoặc vừa sửa là Nháp. Phiếu vào số liệu sau khi được duyệt; tài khoản nhập/sửa cần người khác duyệt khi bật phân quyền.
+- Backend bảo vệ Dashboard, tổng hợp, bảng kê, đối chiếu và biểu mẫu ký theo trạng thái đã duyệt. Bộ lọc Nháp cho kết quả rỗng ở các đầu ra này; mở rộng trạng thái vẫn giữ phạm vi đã duyệt.
+- Màn Phiếu cân xem được Nháp. Excel mặc định chỉ xuất Đã duyệt, có ghi số Nháp bị bỏ qua; lọc Nháp rõ ràng thì xuất dữ liệu Nháp kèm trạng thái.
+- Giữ kiểm tra phiên bản trước khi duyệt của 0.8.0; phiên bản bao gồm toàn bộ nội dung cần duyệt và tác vụ hàng loạt lấy đủ phiên bản các phiếu.
+- Bộ đếm lọc theo đúng màn nhập/báo cáo; phản hồi đếm cũ được bỏ qua khi đổi lọc nhanh.
+- Sửa trực tiếp đối chiếu KL hàng với hai số cân, kiểm tra số hữu hạn và lý do; xóa giờ cân 2 được xử lý đúng.
+- Ghi import kiểm lại ngưỡng khối lượng hiện hành. Hoàn tác cập nhật số liệu khi bật duyệt đưa phiếu về Nháp để xác nhận lại.
 
-### Mới trong 0.7.1 (so với 0.7.0)
-- **Ngưỡng khối lượng hợp lý mỗi chuyến chỉnh được** ở Cài đặt (mặc định vẫn 100–100.000 kg); áp dụng thống nhất cho nhập, sửa trực tiếp, duyệt xung đột và kiểm tra toàn vẹn.
-- **Tùy chọn "File có nhiều khối"** ở bước ghép cột (mặc định tắt): đọc tiếp các khối dưới mỗi dòng "Tổng cộng", đối chiếu tổng KL bằng tổng các dòng Tổng cộng.
-- Không đổi cấu trúc CSDL (schema 6): nâng cấp từ 0.7.0 không cần migration.
+## Nâng cấp
+1. Trong app cũ, tạo bản sao lưu và xuất sang thư mục riêng. Ghi lại đường dẫn dữ liệu đang dùng, rồi đóng app.
+2. Cài Setup mới hoặc dùng Portable với đúng thư mục dữ liệu.
+3. Schema 6 nâng lên 7, các phiếu cũ mang trạng thái Đã duyệt. Ứng dụng tạo PRE_MIGRATION trước khi nâng schema; duyệt phiếu mặc định tắt.
+4. Nếu bật duyệt, mở Phiếu cân và lọc Nháp để xử lý. Báo cáo và chứng từ có ghi phạm vi đã duyệt.
+5. Đối chiếu cùng bộ lọc sau nâng cấp. Giữ PRE_MIGRATION để phục hồi nếu cần dùng lại bản cũ phù hợp schema.
 
-### Điểm chính (từ 0.7.0)
-- Phân quyền tùy chọn (mặc định 1 người dùng; bật được 4 vai trò, nhật ký ghi tên đăng nhập).
-- Sao lưu `PRE_MIGRATION` nhất quán (kể cả giao dịch còn trong WAL), khôi phục an toàn có quay lui, xuất bản sao ra thư mục riêng.
-- Toàn vẹn số liệu: hoàn tác không ghi đè, chống trùng lúc commit, chặn sửa/duyệt vào kỳ chốt và đợt khóa, xử lý hàng loạt có kết quả từng phiếu.
-- Logic khối lượng: chặn KL sai đơn vị tấn/kg, đối chiếu tổng KL với dòng "Tổng cộng" của file, cảnh báo dữ liệu nằm dưới dòng tổng.
-- Giao diện: chế độ Sáng/Tối, bộ lọc thông minh, "Việc cần làm" nêu phạm vi, phản hồi chậm không ghi đè màn đang mở.
-- Kiểm tra toàn vẹn dữ liệu chỉ đọc (`npm run integrity`, nút ở màn Backup).
-- Định dạng số theo chuẩn HAK; đối chiếu V.47: 2.035 phiếu, 38.563.700 kg, tổng bốn bảng kê 5.512.904.418 đ.
+## Kiểm tra và giới hạn
+Bộ cài được lấy từ Windows CI sau các bước kiểm thử, cài mới, nâng schema 4/6 lên 7, thư mục tùy chỉnh và Portable. Mỗi bộ cài có SHA-256 kèm theo.
 
-Chi tiết và biên bản nghiệm thu: `CHANGELOG.md`, `docs/NGHIEM_THU_0.7.0.md` (biên bản nghiệm thu 0.7.0; 0.7.1 nghiệm thu bằng CI Windows: cài mới, nâng cấp từ DB cũ, thư mục tùy chỉnh, Portable).
-
-### Nâng cấp từ bản cũ
-1. Đóng VC Cost. Sao chép thư mục dữ liệu (`%APPDATA%\VCCost`, hoặc `VCCost-data` cạnh file Portable) ra nơi an toàn.
-2. Chạy bộ cài mới (Setup cài đè; Portable chép file mới). Dữ liệu cũ được giữ.
-3. Lần mở đầu, nếu CSDL cũ cần nâng cấp, ứng dụng tự tạo bản sao `PRE_MIGRATION` (màn **Backup**, nhãn "Trước nâng cấp") rồi mới nâng cấp. Nếu không tạo/kiểm tra được bản sao, ứng dụng **dừng và không nâng cấp**.
-
-### Khôi phục khi nâng cấp lỗi
-Mở màn **Backup** → chọn bản "Trước nâng cấp" → **Khôi phục** (ứng dụng tạo bản "Trước khôi phục" trước khi thay thế; lỗi thì tự quay về dữ liệu ban đầu). Quên mật khẩu quản trị khi đã bật phân quyền: chạy với biến môi trường `VCCOST_RESET_AUTH=1` một lần.
-
-### Chưa có trong bản này
-Ký số bộ cài; logo/icon thương hiệu riêng (đang dùng icon Electron mặc định); trạng thái Nháp → Duyệt từng phiếu.
+Bộ cài chưa ký số. Tại lần kiểm tra dependency, runtime có 0 cảnh báo; cây công cụ build còn 9 mục high từ picomatch (GHSA-fc5q-39xc-vjpf), chờ bản vá upstream. Kết quả nghiệm thu dùng fixture và DB thử.
