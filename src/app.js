@@ -42,7 +42,7 @@ function createApp({ dbFile = ':memory:', driver = null, backupFn = null, user =
   const imports = new TicketImportService(db, { audit, alerts, cost, settings });
   const vehicleImport = new VehicleImportService(db, { audit, catalog, cost });
   const fuelImport = new (require('./services/FuelImportService').FuelImportService)(db, { audit });
-  const tickets = new TicketService(db, { audit, cost });
+  const tickets = new TicketService(db, { audit, cost, auth });
   const reports = new ReportService(db, settings);
   const recon = new ReconciliationService(db, { audit, alerts, reports });
   const lock = new ChotKyService(db, { audit, reports });

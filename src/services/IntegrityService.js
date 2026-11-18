@@ -32,6 +32,11 @@ class IntegrityService {
       db.all(`SELECT id, so_phieu, kl_hang_kg FROM phieu_can WHERE trang_thai='ACTIVE' AND (kl_hang_kg < ? OR kl_hang_kg > ?)`, [lim.lo, lim.hi]),
       'Sửa KL của phiếu (kèm lý do) hoặc xóa mềm và nhập lại từ file đã sửa đơn vị.');
 
+    const bat = (() => { const r = db.get(`SELECT value_json FROM settings WHERE key='duyet_phieu'`); try { return !!(r && JSON.parse(r.value_json).bat); } catch (e) { return false; } })();
+    add('NHAP_KHI_TAT_DUYET', 'Phiếu Nháp chưa duyệt trong khi duyệt phiếu đang TẮT (không vào mọi số liệu)', 'LOI',
+      bat ? [] : db.all(`SELECT id, so_phieu, ngay_gio_can_1, nhap_boi FROM phieu_can WHERE trang_thai='ACTIVE' AND trang_thai_duyet='NHAP'`),
+      'Bật lại duyệt phiếu để duyệt các phiếu này, hoặc xóa mềm nếu nhập nhầm.');
+
     // 2) chốt kỳ
     add('CHOT_MO_COI', 'Phiếu mang chot_ky_id không tồn tại', 'LOI', db.all(`SELECT p.id, p.so_phieu, p.chot_ky_id FROM phieu_can p LEFT JOIN chot_ky k ON k.id=p.chot_ky_id WHERE p.chot_ky_id IS NOT NULL AND k.id IS NULL`));
     add('CHOT_DA_MO_KHOA', 'Phiếu còn gắn với kỳ đã mở khóa', 'LOI', db.all(`SELECT p.id, p.so_phieu, p.chot_ky_id FROM phieu_can p JOIN chot_ky k ON k.id=p.chot_ky_id WHERE k.trang_thai<>'DA_CHOT'`));

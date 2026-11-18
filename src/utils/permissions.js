@@ -18,7 +18,7 @@ const BY_PERM = {
   nhap: ['cost.recalc', 'alerts.setStatus', 'catalog.create', 'catalog.update', 'catalog.remove', 'import.open', 'import.check', 'import.sheetInfo', 'import.preview', 'import.previewRows',
     'import.commit', 'import.issuesXlsx', 'import.cancel', 'vehicles.importPreview', 'vehicles.importCommit', 'tickets.update', 'tickets.remove', 'recon.open', 'recon.sheetInfo', 'recon.run',
     'price.previewFuel', 'price.createFuelPeriod', 'fuel.importPreview', 'backup.now', 'backup.export'],
-  duyet: ['import.resolve', 'import.resolveMany', 'import.undo', 'lock.create', 'lock.unlock', 'recon.resolve', 'recon.weight', 'price.approveFuel', 'price.removeFuelPeriod', 'price.remove',
+  duyet: ['tickets.approve', 'import.resolve', 'import.resolveMany', 'import.undo', 'lock.create', 'lock.unlock', 'recon.resolve', 'recon.weight', 'price.approveFuel', 'price.removeFuelPeriod', 'price.remove',
     'price.createVersion', 'price.applySheet', 'fuel.importCommit'],
   admin: ['settings.set', 'seed.loadSample', 'initial.load', 'backup.restore', 'auth.disable', 'auth.users', 'auth.createUser', 'auth.updateUser', 'auth.resetPassword'],
 };

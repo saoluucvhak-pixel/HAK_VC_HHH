@@ -8,9 +8,10 @@ const EDITABLE = ['ngay_gio_can_1', 'ngay_gio_can_2', 'bien_so', 'can_lan_1', 'c
 const FINANCIAL = EDITABLE.filter((k) => k !== 'ghi_chu'); // phiếu đã chốt: chỉ còn sửa được ghi chú
 const { parseDateTime } = require('../utils/datetime');
 const { weightProblem, limitsFrom } = require('../utils/weight');
+const { duyetBat } = require('../utils/duyet');
 
 class TicketService {
-  constructor(db, { audit, cost }) { Object.assign(this, { db, audit, cost }); }
+  constructor(db, { audit, cost, auth = null }) { Object.assign(this, { db, audit, cost, auth }); }
 
   get(id) { return this.db.get('SELECT * FROM phieu_can WHERE id=?', [id]); }
 
@@ -53,6 +54,8 @@ class TicketService {
       if ('kl_hang_kg' in ch && !(Number(ch.kl_hang_kg) > 0)) throw new ValidationError('KL phải > 0');
       if ('kl_hang_kg' in ch) { const wp = weightProblem(ch.kl_hang_kg, limitsFrom(this.cost && this.cost.settings)); if (wp) throw new ValidationError(wp); }
       if ('xe_tra_ve' in ch) ch.xe_tra_ve = ch.xe_tra_ve ? 1 : 0;
+      // Bật duyệt phiếu: sửa số liệu → phiếu về Nháp, người sửa gần nhất không tự duyệt được (cần duyệt lại)
+      if (duyetBat(this.cost && this.cost.settings) && Object.keys(ch).some((k) => FINANCIAL.includes(k))) { ch.trang_thai_duyet = 'NHAP'; ch.duyet_boi = null; ch.duyet_luc = null; ch.nhap_boi = this.audit.actor() || null; }
       const merged = { ...old, ...ch, noi_xuat: old.noi_xuat_goc, bien_so: ch.bien_so || old.bien_so_goc };
       ch.business_key = businessKey(merged); ch.strong_key = strongKey(merged); ch.fingerprint = fingerprint(merged);
       const cols = Object.keys(ch);
@@ -104,6 +107,34 @@ class TicketService {
       this.cost.syncTimeAlerts([...plates]);
       return { deleted: c.ok.length, da_tinh_gia: c.priced };
     });
+  }
+
+  /**
+   * Duyệt phiếu Nháp (chỉ khi bật duyệt phiếu). Mỗi phiếu một giao dịch, trả kết quả từng ID, không dừng ở lỗi đầu.
+   * Không duyệt: phiếu không còn hiệu lực/đã duyệt; ngày thuộc kỳ đã chốt; thuộc đợt đã khóa; (khi bật phân quyền) phiếu do chính người duyệt nhập/sửa gần nhất.
+   */
+  approve(ids, note = null) {
+    if (!duyetBat(this.cost && this.cost.settings)) throw new ValidationError('Chưa bật duyệt phiếu (Cài đặt)');
+    if (!Array.isArray(ids) || !ids.length) throw new ValidationError('Chưa chọn phiếu nào');
+    const actor = this.audit.actor() || null; const authOn = !!(this.auth && this.auth.enabled());
+    const results = [];
+    for (const id of [...new Set(ids.map(Number))]) {
+      const t = this.get(id); const base = { id, so_phieu: t ? t.so_phieu : null };
+      try {
+        if (!t || t.trang_thai !== 'ACTIVE') throw new ValidationError('Phiếu không còn hiệu lực');
+        if (t.trang_thai_duyet !== 'NHAP') throw new ValidationError('Phiếu đã được duyệt');
+        if (authOn && actor && t.nhap_boi === actor) throw new ValidationError('Người nhập/sửa phiếu không tự duyệt phiếu của mình — cần người khác duyệt');
+        if (t.dot_van_chuyen_id) { const d = this.db.get('SELECT trang_thai FROM dot_van_chuyen WHERE id=?', [t.dot_van_chuyen_id]); if (d && d.trang_thai === 'KHOA') throw new ValidationError('Phiếu thuộc đợt đã khóa'); }
+        this.db.tx(() => {
+          require('./ChotKyService').ChotKyService.prototype.assertOpenForDates.call({ db: this.db }, [(t.ngay_gio_can_1 || '').slice(0, 10)]);
+          this.db.run(`UPDATE phieu_can SET trang_thai_duyet='DA_DUYET', duyet_boi=?, duyet_luc=strftime('%Y-%m-%dT%H:%M:%S','now','localtime') WHERE id=?`, [actor, id]);
+          this.audit.log('APPROVE_TICKET', 'phieu_can', id, { trang_thai_duyet: 'NHAP' }, { trang_thai_duyet: 'DA_DUYET' }, note);
+        });
+        results.push({ ...base, ok: true });
+      } catch (e) { results.push({ ...base, ok: false, reason: e.message }); }
+    }
+    const ok = results.filter((x) => x.ok).length;
+    return { total: results.length, ok, failed: results.length - ok, results };
   }
 
   /** Chuyển nhiều phiếu sang đợt khác. */
