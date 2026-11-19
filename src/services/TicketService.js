@@ -8,7 +8,7 @@ const EDITABLE = ['ngay_gio_can_1', 'ngay_gio_can_2', 'bien_so', 'can_lan_1', 'c
 const FINANCIAL = EDITABLE.filter((k) => k !== 'ghi_chu'); // phiếu đã chốt: chỉ còn sửa được ghi chú
 const { parseDateTime } = require('../utils/datetime');
 const { weightProblem, limitsFrom } = require('../utils/weight');
-const { duyetBat, ticketVersionSql } = require('../utils/duyet');
+const { duyetBat, duyetTuDuyet, ticketVersionSql } = require('../utils/duyet');
 
 class TicketService {
   constructor(db, { audit, cost, auth = null }) { Object.assign(this, { db, audit, cost, auth }); }
@@ -132,12 +132,12 @@ class TicketService {
         if (t.trang_thai_duyet !== 'NHAP') throw new ValidationError('Phiếu đã được duyệt');
         if (vers && vers[id] !== this.db.get(`SELECT ${ticketVersionSql()} v FROM phieu_can WHERE id=?`, [id]).v) throw new ValidationError('Phiếu đã thay đổi sau khi bạn chọn — tải lại danh sách và xem lại trước khi duyệt');
         { const wp = weightProblem(t.kl_hang_kg, limitsFrom(this.cost && this.cost.settings)); if (wp) throw new ValidationError(`${wp} — sửa khối lượng trước khi duyệt`); }
-        if (authOn && actor && t.nhap_boi === actor) throw new ValidationError('Người nhập/sửa phiếu không tự duyệt phiếu của mình — cần người khác duyệt');
+        if (authOn && actor && t.nhap_boi === actor) { if (!duyetTuDuyet(this.cost && this.cost.settings)) throw new ValidationError('Người nhập/sửa phiếu không tự duyệt phiếu của mình — cần một người có quyền Duyệt khác. Nếu chỉ có một người dùng, bật "Cho phép tự duyệt" ở Cài đặt → Duyệt từng phiếu'); }
         if (t.dot_van_chuyen_id) { const d = this.db.get('SELECT trang_thai FROM dot_van_chuyen WHERE id=?', [t.dot_van_chuyen_id]); if (d && d.trang_thai === 'KHOA') throw new ValidationError('Phiếu thuộc đợt đã khóa'); }
         this.db.tx(() => {
           require('./ChotKyService').ChotKyService.prototype.assertOpenForDates.call({ db: this.db }, [(t.ngay_gio_can_1 || '').slice(0, 10)]);
           this.db.run(`UPDATE phieu_can SET trang_thai_duyet='DA_DUYET', duyet_boi=?, duyet_luc=strftime('%Y-%m-%dT%H:%M:%S','now','localtime') WHERE id=?`, [actor, id]);
-          this.audit.log('APPROVE_TICKET', 'phieu_can', id, { trang_thai_duyet: 'NHAP' }, { trang_thai_duyet: 'DA_DUYET' }, note);
+          this.audit.log('APPROVE_TICKET', 'phieu_can', id, { trang_thai_duyet: 'NHAP' }, { trang_thai_duyet: 'DA_DUYET', tu_duyet: !!(authOn && actor && t.nhap_boi === actor) }, note);
         });
         results.push({ ...base, ok: true });
       } catch (e) { results.push({ ...base, ok: false, reason: e.message }); }

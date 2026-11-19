@@ -11,7 +11,10 @@ const need = (cond, msg) => { if (!cond) throw new ValidationError(msg); };
  * (Trước đây nhận mọi khóa/giá trị: vd số bản sao lưu giữ lại = "abc" làm xóa sạch bản sao lưu tự động, làm tròn NaN → bỏ làm tròn âm thầm.)
  */
 const VALIDATORS = {
-  duyet_phieu(v) { need(isObj(v) && typeof v.bat === 'boolean', 'Duyệt phiếu: bat phải là true/false'); },
+  duyet_phieu(v) {
+    need(isObj(v) && typeof v.bat === 'boolean', 'Duyệt phiếu: bat phải là true/false');
+    need(v.cho_tu_duyet === undefined || typeof v.cho_tu_duyet === 'boolean', 'Duyệt phiếu: cho_tu_duyet phải là true/false');
+  },
   kl_hop_ly(v) {
     need(isObj(v), 'Ngưỡng khối lượng phải là đối tượng');
     need(numIn(v.min_kg, 0, 1_000_000) && numIn(v.max_kg, 1, 10_000_000), 'Ngưỡng KL: tối thiểu 0–1.000.000 kg, tối đa 1–10.000.000 kg');

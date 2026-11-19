@@ -72,7 +72,7 @@ function createRuntime({ dataDir, version = 'dev', driver = null, autoInit = fal
     try {
       return { ok: true, data: await h(args || {}) };
     } catch (e) {
-      if (e.name !== 'ValidationError') log(`Lỗi ${channel}: ${e.stack}`);
+      if (e.name !== 'ValidationError' && e.name !== 'ConfirmRequired') log(`Lỗi ${channel}: ${e.stack}`);
       return { ok: false, error: e.message, type: e.name };
     }
   };

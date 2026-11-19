@@ -110,6 +110,15 @@ const App = (() => {
     return r.data;
   }
   /** Gọi API, lỗi → toast, trả null. */
+  /** Như call(), nhưng nếu máy chủ trả "cần xác nhận" (ConfirmRequired) thì hỏi người dùng rồi gọi lại với xac_nhan=true. */
+  async function callConfirm(channel, args, okMsg, title = 'Cần xác nhận') {
+    try { const d = await api(channel, args); if (okMsg) toast(okMsg); return d; }
+    catch (e) {
+      if (e.type !== 'ConfirmRequired') { toast(e.message, true); return null; }
+      if (!(await confirmBox(title, e.message, 'Vẫn tiếp tục'))) return null;
+      try { const d = await api(channel, { ...(args || {}), xac_nhan: true }); if (okMsg) toast(okMsg); return d; } catch (e2) { toast(e2.message, true); return null; }
+    }
+  }
   async function call(channel, args, okMsg) {
     try { const d = await api(channel, args); if (okMsg) toast(okMsg); return d; } catch (e) { toast(e.message, true); return null; }
   }
@@ -341,5 +350,5 @@ const App = (() => {
 
   async function start() { await refreshAuth(); if (auth.enabled && !auth.user) { renderNav(); showLogin(); return; } await refreshInfo(); await go('dashboard'); }
 
-  return { h, clear, bindNum, fmt, tag, api, call, pickFile, canWrite, applyPerms, actionAllowed, saveExport, exportXlsx, toast, modal, confirmBox, promptBox, table, register, latestRender, viewId: () => current, go, reload, start, refreshInfo, refreshAuth, can, get auth() { return auth; }, logout, state, pageHead, STATUS_TAG, get info() { return info; } };
+  return { h, clear, bindNum, fmt, tag, api, call, callConfirm, pickFile, canWrite, applyPerms, actionAllowed, saveExport, exportXlsx, toast, modal, confirmBox, promptBox, table, register, latestRender, viewId: () => current, go, reload, start, refreshInfo, refreshAuth, can, get auth() { return auth; }, logout, state, pageHead, STATUS_TAG, get info() { return info; } };
 })();

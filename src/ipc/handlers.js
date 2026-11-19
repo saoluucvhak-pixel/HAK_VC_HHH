@@ -33,7 +33,7 @@ const PRICE_EDITABLE = ['ghi_chu', 'trang_thai'];
 
 function createHandlers(app, env = {}) {
   const { exportsDir = null, importsDir = null, seedDir = null, backup = null } = env;
-  const { duyetBat } = require('../utils/duyet');
+  const { duyetBat, duyetTuDuyet, ConfirmRequired, coQuyenDuyet, soNguoiDuyet } = require('../utils/duyet');
   const allStates = (f) => ({ moi_trang_thai: true, ...(f || {}) });   // Phiếu cân thấy cả phiếu Nháp (trừ khi lọc theo trạng thái duyệt)
   const session = env.session || { get: () => null, set: () => {} };
   const { ROLE_PERMS, ROLE_LABEL, CHANNEL_PERM, TABLE_PERM } = require('../utils/permissions');
@@ -69,7 +69,13 @@ function createHandlers(app, env = {}) {
       alertsOpen: app.alerts.countOpen(), pendingReviews: app.imports.pendingReviews().length,
       duyetBat: duyetBat(app.settings), choDuyet: app.db.get(`SELECT COUNT(*) n FROM phieu_can WHERE trang_thai='ACTIVE' AND trang_thai_duyet='NHAP'`).n }),
     'settings.all': () => app.settings.all(),
-    'settings.set': ({ key, value }) => { app.settings.set(key, value); if (key === 'time_anomaly') app.cost.syncTimeAlerts(app.db.all('SELECT DISTINCT bien_so_chuan b FROM phieu_can').map((x) => x.b)); return { ok: true }; },
+    'settings.set': ({ key, value, xac_nhan }) => {
+      // Bật duyệt phiếu khi đã bật phân quyền mà còn < 2 người có quyền duyệt và chưa cho tự duyệt → phiếu có thể kẹt ở Nháp: hỏi xác nhận
+      if (key === 'duyet_phieu' && value && value.bat === true && !value.cho_tu_duyet && app.auth.enabled() && !xac_nhan && !duyetBat(app.settings)) {
+        const n = soNguoiDuyet(app.db);
+        if (n < 2) throw new ConfirmRequired(`Hiện chỉ có ${n} người có quyền duyệt. Người nhập/sửa phiếu không tự duyệt phiếu của mình nên phiếu có thể kẹt ở trạng thái Nháp. Hãy thêm người có quyền Duyệt, hoặc bật "Cho phép tự duyệt". Vẫn bật duyệt phiếu?`);
+      }
+      app.settings.set(key, value); if (key === 'time_anomaly') app.cost.syncTimeAlerts(app.db.all('SELECT DISTINCT bien_so_chuan b FROM phieu_can').map((x) => x.b)); return { ok: true }; },
     'seed.loadSample': () => {
       const f = path.join(seedDir, 'sample-v47.json');
       return app.seed.load(JSON.parse(fs.readFileSync(f, 'utf8')));
@@ -243,7 +249,18 @@ function createHandlers(app, env = {}) {
     'auth.disable': ({ mat_khau }) => { app.auth.disable(actor(), mat_khau); session.set(null); return authStatus(); },
     'auth.users': () => app.auth.list(),
     'auth.createUser': (o) => app.auth.createUser(actor(), o),
-    'auth.updateUser': ({ id, ...patch }) => app.auth.updateUser(actor(), id, patch),
+    'auth.updateUser': ({ id, xac_nhan, ...patch }) => {
+      // Khóa/hạ quyền người duyệt làm số người duyệt còn < 2 khi đang bật duyệt phiếu (không cho tự duyệt) → hỏi xác nhận
+      if (!xac_nhan && duyetBat(app.settings) && !duyetTuDuyet(app.settings)) {
+        const u = app.db.get('SELECT vai_tro, trang_thai FROM nguoi_dung WHERE id=?', [id]);
+        const next = { vai_tro: patch.vai_tro !== undefined ? patch.vai_tro : u && u.vai_tro, trang_thai: patch.trang_thai !== undefined ? patch.trang_thai : u && u.trang_thai };
+        if (u && coQuyenDuyet(u) && !coQuyenDuyet(next)) {
+          const con = soNguoiDuyet(app.db) - 1;
+          if (con < 2) throw new ConfirmRequired(`Sau thay đổi này chỉ còn ${con} người có quyền duyệt; người nhập/sửa phiếu không tự duyệt phiếu của mình nên phiếu có thể kẹt ở Nháp. Hãy bật "Cho phép tự duyệt" hoặc thêm người có quyền Duyệt. Vẫn tiếp tục?`);
+        }
+      }
+      return app.auth.updateUser(actor(), id, patch);
+    },
     'auth.resetPassword': ({ id, mat_khau }) => app.auth.resetPassword(actor(), id, mat_khau),
     'auth.changePassword': ({ cu, moi }) => { if (!actor()) throw new Error('Chưa bật phân quyền / chưa đăng nhập'); app.auth.changeOwnPassword(actor(), cu, moi); return { ok: true }; },
     'backup.export': ({ file, dir }) => (backup ? backup.exportTo(file, dir) : null),

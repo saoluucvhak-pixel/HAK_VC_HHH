@@ -403,6 +403,16 @@ await page.unroute('**/api/reports.dashboard');
   await page.evaluate(async (pw) => { await App.api('auth.disable', { mat_khau: pw }); await App.refreshAuth(); await App.refreshInfo(); }, PW);
 }
 
+// ---- 0.8.2: cài đặt "Cho phép tự duyệt" + nhãn "Tự duyệt"
+{
+  const ck = (ok, msg) => { if (!ok) errors.push('tự duyệt: ' + msg); };
+  await page.evaluate(() => document.querySelectorAll('.modal-bg, .modal-overlay, .overlay, .modal').forEach((m) => (m.closest('.modal-bg, .modal-overlay, .overlay') || m).remove()));
+  await nav('settings'); await page.waitForSelector('[data-f=duyet-tu]');
+  ck((await page.locator('[data-f=duyet-tu]').count()) === 1, 'phải có ô Cho phép tự duyệt');
+  const st = await page.evaluate(() => App.api('settings.all'));
+  ck(!st.duyet_phieu || !st.duyet_phieu.cho_tu_duyet, 'mặc định không cho tự duyệt');
+}
+
 console.log('errors:', errors.length ? errors : 'none');
 await browser.close(); srv.close();
 process.exit(errors.length ? 1 : 0);
