@@ -109,14 +109,23 @@ class BackupService {
     const sha = h(out);
     if (sha !== h(full)) { try { fs.unlinkSync(out); } catch { /* bỏ qua */ } throw new Error('Chép ra thư mục đích không khớp bản gốc (SHA-256) — đã hủy, hãy thử ổ khác'); }
     // Ghi mốc "xuất ra ổ khác gần nhất" CHỈ khi đã chép và đối chiếu SHA-256 thành công
-    try { if (this.settings && this.settings.set) this.settings.set('backup_export_last', { at: new Date().toISOString() }); } catch { /* không chặn việc xuất */ }
+    const at = new Date().toISOString();
+    try { if (this.settings && this.settings.set) this.settings.set('backup_export_last', { at }); } catch { /* không chặn việc xuất */ }
+    // Ghi thêm ra file cạnh các bản sao lưu: khôi phục một DB cũ không làm lùi mốc này
+    try { fs.writeFileSync(this._exportStatusFile(), JSON.stringify({ at, file: path.basename(out) })); } catch { /* không chặn việc xuất */ }
     return { path: out, size: fs.statSync(out).size, sha256: sha };
   }
+
+  _exportStatusFile() { return path.join(this.backupsDir, 'export-status.json'); }
 
   /** Mốc xuất ra ổ khác gần nhất và có cần nhắc không (quá `remindExportDays`, mặc định 7 ngày; chưa từng xuất cũng nhắc). */
   exportStatus() {
     const get = (k) => (this.settings && this.settings.get ? this.settings.get(k) : null);
-    const last = (get('backup_export_last') || {}).at || null;
+    let fileAt = null;
+    try { fileAt = JSON.parse(fs.readFileSync(this._exportStatusFile(), 'utf8')).at || null; } catch { /* chưa có file */ }
+    const valid = (x) => (x && !Number.isNaN(Date.parse(x)) ? x : null);
+    const cands = [valid((get('backup_export_last') || {}).at), valid(fileAt)].filter(Boolean);
+    const last = cands.length ? cands.sort((a, b) => Date.parse(b) - Date.parse(a))[0] : null;   // lấy mốc MỚI hơn trong DB và file
     const days = Number((get('backup') || {}).remindExportDays) || 7;
     const nhac = !last || Date.now() - Date.parse(last) > days * 24 * 3600 * 1000;
     return { last, remindDays: days, nhac };
