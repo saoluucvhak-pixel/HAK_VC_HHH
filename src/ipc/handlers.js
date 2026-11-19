@@ -127,6 +127,7 @@ function createHandlers(app, env = {}) {
     },
     'import.cancel': ({ token }) => app.imports.cancel(token),
     'import.pending': () => app.imports.pendingReviews(),
+    'import.pendingGroups': () => app.imports.pendingGroups(),
     'import.resolve': ({ id, action, note }) => app.imports.resolveReview(id, action, note),
     'import.resolveMany': ({ ids, action, note, batchId }) => app.imports.resolveMany(ids, action, note, { batchId }),
     'import.batches': () => app.imports.listBatches(),

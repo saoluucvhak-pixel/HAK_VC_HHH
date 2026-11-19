@@ -14,7 +14,7 @@ const { classify, businessKey, strongKey, fingerprint } = require('./DuplicateDe
 const { computeTicket } = require('./TransportCostEngine');
 const { ValidationError } = require('./CatalogService');
 
-const COUNT_KEYS = ['total', 'valid', 'new', 'exact', 'conflict', 'inFile', 'error', 'unknownVehicle', 'unknownLocation', 'noPrice', 'multiplePrice'];
+const COUNT_KEYS = ['total', 'valid', 'new', 'exact', 'conflict', 'pendingAlready', 'inFile', 'error', 'unknownVehicle', 'unknownLocation', 'noPrice', 'multiplePrice'];
 
 // Cảnh báo của phiếu MỚI cần người dùng xử lý trước khi phiếu vào được bảng kê: [vấn đề, cách xử lý]
 const ISSUE_WARN = {
@@ -150,17 +150,20 @@ class TicketImportService {
       }
       const calc = computeTicket({ ...r, noi_xuat_id: nx, noi_den_id: nd }, ctx);
       if (c.status === 'IN_FILE_DUPLICATE' && c.differs) r.errors.push(`Trùng số phiếu + nơi xuất với dòng ${rows[c.firstIdx].source_row} trong file nhưng nội dung khác — kiểm tra file nguồn`);
-      const phanLoai = r.errors.length ? 'ERROR' : c.status;
+      let phanLoai = r.errors.length ? 'ERROR' : c.status;
+      // Dòng xung đột mà phiếu đã có dòng chờ kiểm tra với CÙNG dữ liệu → không mở thêm dòng chờ
+      let pendingBatch = null;
+      if (phanLoai === 'KEY_CONFLICT') { const same = this._pendingSame(c.existingId, c.fp); if (same) { phanLoai = 'PENDING_ALREADY'; pendingBatch = same.batch_id; } }
       counts.total++;
       if (!r.errors.length) counts.valid++;
-      ({ NEW: () => counts.new++, EXACT_DUPLICATE: () => counts.exact++, KEY_CONFLICT: () => counts.conflict++, IN_FILE_DUPLICATE: () => counts.inFile++, ERROR: () => counts.error++ })[phanLoai]();
+      ({ NEW: () => counts.new++, EXACT_DUPLICATE: () => counts.exact++, KEY_CONFLICT: () => counts.conflict++, PENDING_ALREADY: () => counts.pendingAlready++, IN_FILE_DUPLICATE: () => counts.inFile++, ERROR: () => counts.error++ })[phanLoai]();
       if (phanLoai === 'NEW') {
         if (calc.warnings.includes('UNKNOWN_VEHICLE') || calc.warnings.includes('UNKNOWN_CARRIER')) counts.unknownVehicle++;
         if (calc.warnings.includes('UNKNOWN_LOCATION')) counts.unknownLocation++;
         if (calc.warnings.includes('NO_PRICE')) counts.noPrice++;
         if (calc.warnings.includes('MULTIPLE_PRICE')) counts.multiplePrice++;
       }
-      return { ...r, idx: i, noi_xuat_id: nx, noi_den_id: nd, phan_loai: phanLoai, existingId: c.existingId || null, diffs: c.diffs || null,
+      return { ...r, idx: i, noi_xuat_id: nx, noi_den_id: nd, phan_loai: phanLoai, existingId: c.existingId || null, diffs: c.diffs || null, pendingBatch,
         engine_status: calc.status, warnings: calc.warnings, don_vi_van_chuyen_id: calc.don_vi_van_chuyen_id, don_gia: calc.don_gia,
         tien_truoc_vat: calc.tien_truoc_vat, tong_tien: calc.tong_tien, key: c.key, fp: c.fp };
     });
@@ -181,7 +184,7 @@ class TicketImportService {
     let rows = p.rows || [];
     if (filter) {
       const f = {
-        new: (r) => r.phan_loai === 'NEW', exact: (r) => r.phan_loai === 'EXACT_DUPLICATE', conflict: (r) => r.phan_loai === 'KEY_CONFLICT',
+        pendingAlready: (r) => r.phan_loai === 'PENDING_ALREADY', new: (r) => r.phan_loai === 'NEW', exact: (r) => r.phan_loai === 'EXACT_DUPLICATE', conflict: (r) => r.phan_loai === 'KEY_CONFLICT',
         inFile: (r) => r.phan_loai === 'IN_FILE_DUPLICATE', error: (r) => r.phan_loai === 'ERROR', valid: (r) => r.phan_loai !== 'ERROR',
         unknownVehicle: (r) => r.phan_loai === 'NEW' && (r.warnings.includes('UNKNOWN_VEHICLE') || r.warnings.includes('UNKNOWN_CARRIER')),
         unknownLocation: (r) => r.phan_loai === 'NEW' && r.warnings.includes('UNKNOWN_LOCATION'),
@@ -215,7 +218,7 @@ class TicketImportService {
       const batchId = this.db.run(`INSERT INTO import_batch(loai, file_name, file_hash, sheet_name, header_row, mapping_json, total_rows, dot_van_chuyen_id, user_note)
                                    VALUES ('PHIEU_CAN',?,?,?,?,?,?,?,?)`,
       [p.wb.fileName, p.wb.hash, p.sheetName, p.headerRow + 1, JSON.stringify(p.mapping), c.total, dot || null, note]).id;
-      let inserted = 0, dup = 0, conflict = 0, err = 0;
+      let inserted = 0, dup = 0, conflict = 0, err = 0, pendingSkipped = 0;
       for (const r of p.rows) {
         const raw = JSON.stringify({ so_phieu: r.so_phieu, ngay_gio_can_1: r.ngay_gio_can_1, ngay_gio_can_2: r.ngay_gio_can_2, bien_so: r.bien_so_goc,
           can_lan_1: r.can_lan_1, can_lan_2: r.can_lan_2, kl_hang_kg: r.kl_hang_kg, noi_xuat: r.noi_xuat, noi_den: r.noi_den, cong_ty_vc: r.cong_ty_vc_nguon });
@@ -237,6 +240,11 @@ class TicketImportService {
           inserted++;
         } else if (r.phan_loai === 'EXACT_DUPLICATE' || r.phan_loai === 'IN_FILE_DUPLICATE') {
           this._row(batchId, r, r.phan_loai, 'SKIP', r.existingId, raw); dup++;
+        } else if (r.phan_loai === 'PENDING_ALREADY' || (r.phan_loai === 'KEY_CONFLICT' && this._pendingSame(r.existingId, r.fp))) {
+          // kiểm tra lại ngay trong transaction (phòng hai bản xem trước cùng dòng): đã chờ kiểm tra thì chỉ ghi nhận, không mở dòng chờ/cảnh báo mới
+          const same = this._pendingSame(r.existingId, r.fp);
+          const note = same ? `đã chờ kiểm tra ở lô #${same.batch_id}` : 'đã chờ kiểm tra ở lô trước';
+          this._row(batchId, { ...r, diffs: r.diffs }, 'PENDING_ALREADY', 'SKIP', r.existingId, raw, null, [note]); dup++; pendingSkipped++;
         } else if (r.phan_loai === 'KEY_CONFLICT') {
           const old = this.db.get('SELECT * FROM phieu_can WHERE id=?', [r.existingId]);
           this._row(batchId, r, 'KEY_CONFLICT', 'PENDING_REVIEW', r.existingId, raw, old);
@@ -249,10 +257,20 @@ class TicketImportService {
       this.db.run('UPDATE import_batch SET inserted_rows=?, duplicate_rows=?, conflict_rows=?, error_rows=? WHERE id=?', [inserted, dup, conflict, err, batchId]);
       this.audit.log('IMPORT', 'import_batch', batchId, null, { file: p.wb.fileName, sheet: p.sheetName, inserted, dup, conflict, err });
       const calc = this.cost.recalc({ batchId });
-      return { batchId, inserted, duplicate: dup, conflict, error: err, calculated: calc.count };
+      return { batchId, inserted, duplicate: dup, conflict, error: err, pendingAlready: pendingSkipped, calculated: calc.count };
     });
     this.previews.delete(token);
     return { ...result, fileBuffer: p.wb.buffer, fileName: p.wb.fileName };
+  }
+
+  /** Phiếu đã có dòng "Cần kiểm tra" (lô đã commit, chưa xử lý) với đúng dữ liệu mới này chưa? Trả dòng đó hoặc null. */
+  _pendingSame(phieuId, fp) {
+    if (!phieuId || !fp) return null;
+    for (const x of this.db.all(`SELECT r.id, r.batch_id, r.raw_json FROM import_batch_row r JOIN import_batch b ON b.id=r.batch_id
+                                 WHERE r.hanh_dong='PENDING_REVIEW' AND r.phieu_can_id=? AND b.trang_thai='COMMITTED' ORDER BY r.id`, [phieuId])) {
+      try { if (fingerprint(this._parseRaw(JSON.parse(x.raw_json))) === fp) return x; } catch (e) { /* dòng hỏng: bỏ qua */ }
+    }
+    return null;
   }
 
   _row(batchId, r, phanLoai, hanhDong, phieuId, raw, old = null, errors = null) {
@@ -283,6 +301,17 @@ class TicketImportService {
                         FROM import_batch_row r JOIN import_batch b ON b.id=r.batch_id LEFT JOIN phieu_can p ON p.id=r.phieu_can_id
                         WHERE r.hanh_dong='PENDING_REVIEW' AND b.trang_thai='COMMITTED' ORDER BY r.id`)
       .map((x) => ({ ...x, raw: JSON.parse(x.raw_json), diffs: JSON.parse(x.diffs_json || '[]') }));
+  }
+
+  /** Hàng chờ nhóm theo phiếu: nhiều dòng chờ (số liệu khác nhau) cho cùng một phiếu nằm chung một nhóm. */
+  pendingGroups() {
+    const groups = new Map();
+    for (const r of this.pendingReviews()) {
+      const key = r.phieu_can_id === null || r.phieu_can_id === undefined ? `row-${r.id}` : r.phieu_can_id;
+      if (!groups.has(key)) groups.set(key, { phieu_can_id: r.phieu_can_id, so_phieu: r.so_phieu, bien_so: r.bien_so, kl_hang_kg: r.kl_hang_kg, noi_xuat_goc: r.noi_xuat_goc, chot_ky_id: r.chot_ky_id, rows: [] });
+      groups.get(key).rows.push(r);
+    }
+    return [...groups.values()];
   }
 
   _parseRaw(raw) {

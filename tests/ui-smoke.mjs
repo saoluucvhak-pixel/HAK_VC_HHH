@@ -413,6 +413,38 @@ await page.unroute('**/api/reports.dashboard');
   ck(!st.duyet_phieu || !st.duyet_phieu.cho_tu_duyet, 'mặc định không cho tự duyệt');
 }
 
+// ---- 0.8.2: Cần kiểm tra — số liệu khác cho cùng phiếu thì NHÓM theo phiếu (k/n); nhập lại cùng dòng không nhân dòng chờ
+{
+  const ck = (ok, msg) => { if (!ok) errors.push('cần kiểm tra: ' + msg); };
+  const res = await page.evaluate(async () => {
+    const cand = (await App.api('tickets.list', { filter: { chua_chot: true }, limit: 200 })).rows.find((x) => x.ngay_gio_can_1 && x.ngay_gio_can_2 && x.can_lan_1 !== null && x.can_lan_1 !== undefined);
+    const t = cand;
+    const f = (iso) => `${iso.slice(8, 10)}/${iso.slice(5, 7)}/${iso.slice(0, 4)} ${iso.slice(11, 19)}`;
+    const get = await App.api('tickets.get', { id: t.id });
+    const mkRow = (extra) => [get.so_phieu, get.bien_so_goc, get.noi_xuat_goc, f(get.ngay_gio_can_1), f(get.ngay_gio_can_2), get.can_lan_1, get.can_lan_1 + 15000 + extra, 15000 + extra];
+    const H = ['Số phiếu', 'Biển số', 'Nơi xuất', 'Giờ cân 1', 'Giờ cân 2', 'Cân 1', 'Cân 2', 'KL hàng'];
+    const csv = (rows) => btoa(unescape(encodeURIComponent('\ufeff' + [H, ...rows].map((r) => r.join(';')).join('\r\n'))));
+    const run = async (rows, name) => {
+      const o = await App.api('import.open', { base64: csv(rows), fileName: name });
+      const si = await App.api('import.sheetInfo', { token: o.token, sheetName: o.suggestedSheet });
+      const pv = await App.api('import.preview', { token: o.token, sheetName: si.sheetName, headerRow: si.headerRow, mapping: si.mapping });
+      await App.api('import.commit', { token: o.token }); return pv.counts;
+    };
+    const c1 = await run([mkRow(0)], 'x1.csv'); const c2 = await run([mkRow(0)], 'x2.csv'); const c3 = await run([mkRow(1000)], 'x3.csv');
+    const g = (await App.api('import.pendingGroups')).find((x) => x.phieu_can_id === t.id);
+    return { c1, c2, c3, n: g ? g.rows.length : 0, so_phieu: get.so_phieu };
+  });
+  ck(res.c1.conflict === 1, 'lần 1 phải là 1 dòng xung đột, thực tế ' + JSON.stringify(res.c1));
+  ck(res.c2.pendingAlready === 1 && res.c2.conflict === 0, 'lần 2 (cùng dữ liệu) phải là "đã chờ kiểm tra", thực tế ' + JSON.stringify(res.c2));
+  ck(res.c3.conflict === 1, 'lần 3 (số liệu khác) phải mở dòng chờ mới');
+  ck(res.n === 2, 'nhóm phải có đúng 2 dòng chờ, thực tế ' + res.n);
+  await page.evaluate(() => document.querySelectorAll('.modal-bg, .modal-overlay, .overlay, .modal').forEach((m) => (m.closest('.modal-bg, .modal-overlay, .overlay') || m).remove()));
+  await nav('review'); await page.waitForSelector('[data-review] [data-group]');
+  ck((await page.locator('[data-review] [data-group]').count()) === 2, 'màn Cần kiểm tra phải đánh dấu 2 dòng cùng phiếu (1/2, 2/2)');
+  ck((await page.locator('[data-review] [data-group]:has-text("1/2"), [data-review] [data-group]:has-text("2/2")').count()) === 2, 'nhãn nhóm k/n');
+  await shot('33-can-kiem-tra-nhom');
+}
+
 console.log('errors:', errors.length ? errors : 'none');
 await browser.close(); srv.close();
 process.exit(errors.length ? 1 : 0);

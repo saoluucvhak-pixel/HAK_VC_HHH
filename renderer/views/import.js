@@ -99,7 +99,7 @@
           `Phiếu mới: ${kgf(T.new_kg || 0)}, tạm tính trước VAT ${fmt.money(T.new_truoc_vat || 0)} đ.`));
         root.append(h('div', { class: 'grid g6', style: { marginBottom: '12px' } },
           chip(null, 'Tổng dòng', c.total), chip('new', 'Mới', c.new), chip('exact', 'Trùng hoàn toàn', c.exact), chip('conflict', 'Trùng khóa – khác', c.conflict, c.conflict ? 'warn' : ''), chip('inFile', 'Trùng trong file', c.inFile), chip('error', 'Lỗi', c.error, c.error ? 'warn' : '')),
-        h('div', { class: 'grid g4', style: { marginBottom: '12px' } }, chip('unknownVehicle', 'Xe chưa xác định', c.unknownVehicle, c.unknownVehicle ? 'warn' : ''), chip('unknownLocation', 'Nơi xuất chưa rõ', c.unknownLocation, c.unknownLocation ? 'warn' : ''),
+        h('div', { class: 'grid g6', style: { marginBottom: '12px' } }, chip('pendingAlready', 'Đã chờ kiểm tra (không mở thêm)', c.pendingAlready, ''), chip('unknownVehicle', 'Xe chưa xác định', c.unknownVehicle, c.unknownVehicle ? 'warn' : ''), chip('unknownLocation', 'Nơi xuất chưa rõ', c.unknownLocation, c.unknownLocation ? 'warn' : ''),
           chip('noPrice', 'Chưa có đơn giá', c.noPrice, c.noPrice ? 'warn' : ''), chip('multiplePrice', 'Xung đột giá', c.multiplePrice, c.multiplePrice ? 'warn' : '')),
         h('div', { class: 'card' }, table({
           columns: [{ key: 'idx', label: 'Dòng', render: (r) => r.source_row || r.idx + 1, num: true }, { key: 'phan_loai', label: 'Phân loại', render: (r) => h('span', { class: `tag ${PHAN_LOAI[r.phan_loai]}` }, App.STATUS_TAG[r.phan_loai][1]) },
@@ -111,7 +111,7 @@
         h('div', { class: 'row end' }, h('button', { class: 'btn ghost', onclick: () => { S.step = 2; draw(); } }, '‹ Quay lại'),
           (c.error + c.conflict + c.unknownVehicle + c.unknownLocation + c.noPrice + c.multiplePrice) > 0 ? h('button', { class: 'btn ghost', 'data-act': 'issues', title: 'Excel liệt kê từng dòng cần xử lý kèm lý do và cách xử lý — sửa rồi import lại, dòng đã đúng không bị trùng', onclick: () => App.exportXlsx('import.issuesXlsx', { token: S.open.token }) }, '⬇ Tải các dòng cần xử lý (Excel)') : null,
           h('button', { class: 'btn', 'data-act': 'commit', disabled: c.new + c.conflict === 0, onclick: async () => {
-            if (!(await App.confirmBox('Xác nhận import', `Ghi ${c.new} phiếu mới. ${c.conflict} dòng trùng khóa sẽ vào "Cần kiểm tra", ${c.exact + c.inFile} dòng trùng bị bỏ qua, ${c.error} dòng lỗi không được ghi. Hệ thống sẽ tự backup trước khi ghi.`, 'Import'))) return;
+            if (!(await App.confirmBox('Xác nhận import', `Ghi ${c.new} phiếu mới. ${c.conflict} dòng trùng khóa sẽ vào "Cần kiểm tra"${c.pendingAlready ? `, ${c.pendingAlready} dòng đã chờ kiểm tra từ lô trước (không mở thêm)` : ''}, ${c.exact + c.inFile} dòng trùng bị bỏ qua, ${c.error} dòng lỗi không được ghi. Hệ thống sẽ tự backup trước khi ghi.`, 'Import'))) return;
             const r = await call('import.commit', { token: S.open.token, dotId: S.dotId || null, noiDenId: S.noiDenId || null }); if (!r) return; S.result = r; S.step = 4; if (r.copyWarning) App.toast(r.copyWarning, true); draw();
           } }, `Import ${c.new} phiếu mới`)));
       }
@@ -165,6 +165,10 @@
    * Không bao giờ tự ghi đè: mỗi lựa chọn là một hành động có chủ đích (cập nhật bắt buộc ghi lý do).
    */
   function reviewCard(rows, onDone, { batchId = null } = {}) {
+    // Nhóm theo phiếu: nhiều dòng chờ (số liệu khác nhau) cho cùng một phiếu đứng liền nhau và đánh dấu "k/n"
+    const nOf = {}; rows.forEach((r) => { nOf[r.phieu_can_id] = (nOf[r.phieu_can_id] || 0) + 1; });
+    const seq = {};
+    rows = [...rows].sort((a, b) => (a.phieu_can_id - b.phieu_can_id) || (a.id - b.id)).map((r) => ({ ...r, _n: nOf[r.phieu_can_id], _k: (seq[r.phieu_can_id] = (seq[r.phieu_can_id] || 0) + 1) }));
     const FIELD = { ngay_gio_can_1: 'Cân 1', ngay_gio_can_2: 'Cân 2', bien_so: 'Biển số', can_lan_1: 'Cân lần 1', can_lan_2: 'Cân lần 2', kl_hang_kg: 'KL (kg)', noi_xuat: 'Nơi xuất' };
     const resolve = async (r, a, note) => call('import.resolve', { id: r.id, action: a, note });
     const act = (r, a, label, cls) => ({ label, cls, onClick: async () => {
@@ -197,14 +201,14 @@
         h('button', { class: 'btn ghost sm', 'data-act': 'bulk-keep', onclick: () => bulk('KEEP_OLD', 'Giữ dữ liệu cũ cho tất cả') }, 'Giữ cũ tất cả'),
         h('button', { class: 'btn ghost sm', 'data-act': 'bulk-ignore', onclick: () => bulk('IGNORE', 'Bỏ qua tất cả dòng mới') }, 'Bỏ qua tất cả'),
         h('button', { class: 'btn amber sm', 'data-act': 'bulk-update', onclick: () => bulk('UPDATE', 'Cập nhật tất cả theo file mới') }, 'Cập nhật tất cả theo file mới')) : null,
-      table({ columns: [{ key: 'so_phieu', label: 'Số phiếu', mono: true }, { key: 'bien_so', label: 'Biển số đang lưu', mono: true }, { key: 'kl_hang_kg', label: 'KL đang lưu', fmt: 'kg' }, { key: 'file_name', label: 'File nguồn' }, { key: 'source_row', label: 'Dòng', num: true },
+      table({ columns: [{ key: 'so_phieu', label: 'Số phiếu', mono: true }, { key: '_n', label: 'Nhóm', render: (r) => (r._n > 1 ? h('span', { class: 'tag amber', 'data-group': String(r.phieu_can_id), title: 'Nhiều dòng file cùng nhắm vào một phiếu — xử lý lần lượt' }, `${r._k}/${r._n} cùng phiếu`) : '') }, { key: 'bien_so', label: 'Biển số đang lưu', mono: true }, { key: 'kl_hang_kg', label: 'KL đang lưu', fmt: 'kg' }, { key: 'file_name', label: 'File nguồn' }, { key: 'source_row', label: 'Dòng', num: true },
         { key: 'diffs', label: 'Khác biệt', render: (r) => (r.diffs || []).map((d) => FIELD[d.field] || d.field).join(', ') }, { key: 'x', label: '', render: (r) => h('button', { class: 'btn sm', onclick: (e) => { e.stopPropagation(); show(r); } }, 'Xem & xử lý') }],
       rows, empty: '🎉 Không có phiếu nào cần kiểm tra', onRow: show }));
   }
 
   App.register('review', {
     async render(v) {
-      const rows = await api('import.pending');
+      const groups = await api('import.pendingGroups'); const rows = groups.flatMap((g) => g.rows);
       v.append(App.pageHead('Cần kiểm tra', 'Phiếu cùng số phiếu + nơi xuất nhưng dữ liệu khác — không bao giờ tự ghi đè'), reviewCard(rows, () => { App.refreshInfo(); App.reload(); }));
     },
   });

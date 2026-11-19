@@ -10,7 +10,7 @@ const ROLE_LABEL = { XEM: 'Chỉ xem & xuất báo cáo', NHAP: 'Người nhập
 const PUBLIC = new Set(['auth.status', 'auth.login', 'auth.enable']);
 const BY_PERM = {
   xem: ['app.info', 'settings.all', 'audit.list', 'alerts.list', 'alerts.types', 'catalog.config', 'catalog.list', 'catalog.get', 'catalog.options', 'import.batches', 'import.batchRows',
-    'import.pending', 'workflow.todo', 'tickets.count', 'tickets.periods', 'tickets.list', 'tickets.ids', 'tickets.removePreview', 'tickets.get', 'tickets.explain', 'reports.byVehicle',
+    'import.pending', 'import.pendingGroups', 'workflow.todo', 'tickets.count', 'tickets.periods', 'tickets.list', 'tickets.ids', 'tickets.removePreview', 'tickets.get', 'tickets.explain', 'reports.byVehicle',
     'reports.byCarrier', 'reports.byOrigin', 'reports.byDate', 'reports.byDot', 'reports.timeline', 'reports.statement', 'reports.statements', 'reports.dashboard', 'recon.batches',
     'recon.results', 'lock.list', 'lock.preview', 'price.fuelPeriods', 'price.sheet', 'price.calc', 'price.previewApply', 'template.tickets', 'template.vehicles', 'export.tickets', 'export.statement',
     'export.statementPdf', 'export.report', 'export.reportPdf', 'export.timeline', 'export.priceSheet', 'export.priceSheetPdf', 'export.tauSummary', 'export.tauSummaryPdf', 'export.detail',
