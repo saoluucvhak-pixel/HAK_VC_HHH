@@ -60,7 +60,7 @@ function createRuntime({ dataDir, version = 'dev', driver = null, autoInit = fal
     if (typeof h !== 'function') return { ok: false, error: `Kênh không tồn tại: ${channel}` };
     // Phân quyền (chỉ khi được bật): chưa đăng nhập chỉ gọi được kênh công khai; còn lại theo vai trò; từ chối theo mặc định với kênh chưa khai báo
     if (rt.app.auth.enabled()) {
-      const perm = permissionFor(channel);
+      const perm = permissionFor(channel, args);
       if (perm !== 'public') {
         const u = rt.session.get();
         if (u && sess.last && Date.now() - sess.last > idleMs) { rt.session.set(null); return { ok: false, error: 'Phiên đăng nhập đã hết hạn do không hoạt động — hãy đăng nhập lại', type: 'AuthRequired' }; }

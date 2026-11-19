@@ -25,7 +25,22 @@ const BY_PERM = {
 const CHANNEL_PERM = new Map();
 for (const [perm, list] of Object.entries(BY_PERM)) for (const c of list) CHANNEL_PERM.set(c, perm);
 
-const permissionFor = (channel) => (PUBLIC.has(channel) ? 'public' : CHANNEL_PERM.get(channel) || 'admin');
+/**
+ * Quyền THEO BẢNG cho catalog.create/update/remove: bảng ảnh hưởng trực tiếp tới tiền cần quyền cao hơn mặc định ('nhap').
+ * Bảng giá và giá dầu = 'duyet' (cùng mức với price.createVersion, price.applySheet, fuel.importCommit). Bảng khác giữ 'nhap'.
+ */
+const TABLE_PERM = { bang_gia_van_chuyen: 'duyet', gia_dau: 'duyet' };
+const TABLE_CHANNELS = new Set(['catalog.create', 'catalog.update', 'catalog.remove']);
+const RANK = { xem: 1, nhap: 2, duyet: 3, admin: 4 };
+
+const permissionFor = (channel, args) => {
+  if (PUBLIC.has(channel)) return 'public';
+  const base = CHANNEL_PERM.get(channel) || 'admin';
+  if (TABLE_CHANNELS.has(channel) && args && typeof args.table === 'string' && Object.hasOwn(TABLE_PERM, args.table)) {
+    return RANK[TABLE_PERM[args.table]] > RANK[base] ? TABLE_PERM[args.table] : base;
+  }
+  return base;
+};
 const roleAllows = (role, perm) => perm === 'public' || (ROLE_PERMS[role] || []).includes(perm);
 
-module.exports = { ROLE_PERMS, ROLE_LABEL, PUBLIC, CHANNEL_PERM, permissionFor, roleAllows };
+module.exports = { ROLE_PERMS, ROLE_LABEL, PUBLIC, CHANNEL_PERM, TABLE_PERM, TABLE_CHANNELS, permissionFor, roleAllows };
