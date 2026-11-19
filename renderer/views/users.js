@@ -21,7 +21,18 @@
             h('div', { class: 'row gap-s' }, field('Tên đăng nhập (quản trị)', ten), field('Họ và tên', ht), field('Mật khẩu', mk)),
             h('button', { class: 'btn', 'data-act': 'enable-auth', onclick: async () => {
               if (!(await confirmBox('Bật phân quyền', 'Từ lần mở sau mọi người phải đăng nhập. Hãy nhớ mật khẩu quản trị (quên mật khẩu: xem hướng dẫn khôi phục trong README). Tiếp tục?', 'Bật', ''))) return;
-              if (await call('auth.enable', { ten_dang_nhap: ten.value.trim(), ho_ten: ht.value.trim(), mat_khau: mk.value }, 'Đã bật phân quyền')) { await App.refreshAuth(); await App.refreshInfo(); draw(); }
+              const args = { ten_dang_nhap: ten.value.trim(), ho_ten: ht.value.trim(), mat_khau: mk.value };
+              const done = async () => { toast('Đã bật phân quyền'); await App.refreshAuth(); await App.refreshInfo(); draw(); };
+              try { await api('auth.enable', args); return done(); }
+              catch (e) {
+                if (e.type !== 'ConfirmRequired') return toast(e.message, true);
+                // Duyệt phiếu đã bật mà sau khi bật phân quyền chỉ có 1 người duyệt: chọn bật luôn "Cho phép tự duyệt" hoặc vẫn bật như cũ
+                const choice = await new Promise((res) => modal({ title: 'Chỉ có một người duyệt', onClose: () => res(null), body: h('p', {}, e.message),
+                  actions: [{ label: 'Hủy', primary: false, onClick: () => res(null) }, { label: 'Vẫn bật (không tự duyệt)', cls: 'ghost', onClick: () => res('xac_nhan') },
+                    { label: 'Bật kèm "Cho phép tự duyệt"', onClick: () => res('bat_tu_duyet') }] }));
+                if (!choice) return;
+                try { await api('auth.enable', { ...args, [choice]: true }); return done(); } catch (e2) { return toast(e2.message, true); }
+              }
             } }, 'Bật phân quyền'));
           return;
         }

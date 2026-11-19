@@ -247,22 +247,27 @@ const App = (() => {
     commit: 'import.commit', preview: 'import.preview', 'bulk-update': 'import.resolveMany', 'bulk-keep': 'import.resolveMany', 'bulk-ignore': 'import.resolveMany',
     'undo': 'import.undo', 'undo-batch': 'import.undo', 'lock-create': 'lock.create', 'lock-unlock': 'lock.unlock',
     newversion: 'price.createVersion', apply: 'price.applySheet', delprice: 'price.remove', newperiod: 'price.createFuelPeriod', delperiod: 'price.removeFuelPeriod',
-    importfuel: 'fuel.importCommit', recalc: 'cost.recalc', backup: 'backup.now', 'export-backup': 'backup.export', 'restore-backup': 'backup.restore',
+    importfuel: 'fuel.importCommit', delfuel: 'catalog.remove', addfuel: 'catalog.create', recalc: 'cost.recalc', backup: 'backup.now', 'export-backup': 'backup.export', 'restore-backup': 'backup.restore',
     run: 'recon.run', 'alert-set': 'alerts.setStatus', 'tpl-tickets': 'template.tickets', 'tpl-vehicles': 'template.vehicles',
     seed: 'seed.loadSample', initial: 'initial.load', 'add-user': 'auth.createUser', 'disable-auth': 'auth.disable', 'save-rounding': 'settings.set', 'save-kl': 'settings.set',
     'save-duyet': 'settings.set', 'save-company': 'settings.set', 'save-backup': 'settings.set',
   };
   const RANK = Object.fromEntries(PERMS.map((p, i) => [p, i]));
-  const actionAllowed = (act) => {
+  /** Nút gọi catalog.* có thể khai data-table: quyền theo bảng (auth.tablePerm, vd gia_dau = duyet) được ưu tiên nếu cao hơn quyền kênh. */
+  const actionAllowed = (act, table = null) => {
     if (!auth.enabled) return true; const ch = ACTION_CHANNEL[act]; if (!ch) return true;
-    const need = (auth.channelPerm || {})[ch]; return !need || can(need);
+    let need = (auth.channelPerm || {})[ch];
+    const tp = table && auth.tablePerm && Object.hasOwn(auth.tablePerm, table) ? auth.tablePerm[table] : null;
+    if (tp && (!need || RANK[tp] > RANK[need])) need = tp;
+    return !need || can(need);
   };
+  const elAllowed = (el) => actionAllowed(el.getAttribute('data-act'), el.getAttribute('data-table'));
   /** Ẩn mọi nút ghi dữ liệu mà vai trò hiện tại không đủ quyền (gọi lại mỗi khi DOM đổi). */
   function applyPerms(root = document) {
     if (!auth.enabled) return;
-    root.querySelectorAll('[data-act]').forEach((el) => { if (!actionAllowed(el.getAttribute('data-act'))) { el.hidden = true; el.style.display = 'none'; el.setAttribute('aria-hidden', 'true'); } });
+    root.querySelectorAll('[data-act]').forEach((el) => { if (!elAllowed(el)) { el.hidden = true; el.style.display = 'none'; el.setAttribute('aria-hidden', 'true'); } });
   }
-  new MutationObserver((muts) => { if (!auth.enabled) return; for (const m of muts) for (const n of m.addedNodes) if (n.nodeType === 1) { if (n.hasAttribute('data-act') && !actionAllowed(n.getAttribute('data-act'))) { n.hidden = true; n.style.display = 'none'; } applyPerms(n); } })
+  new MutationObserver((muts) => { if (!auth.enabled) return; for (const m of muts) for (const n of m.addedNodes) if (n.nodeType === 1) { if (n.hasAttribute('data-act') && !elAllowed(n)) { n.hidden = true; n.style.display = 'none'; } applyPerms(n); } })
     .observe(document.documentElement, { childList: true, subtree: true });
   async function refreshAuth() { try { auth = await api('auth.status'); } catch (e) { /* bỏ qua */ } return auth; }
   let loginOpen = false;
