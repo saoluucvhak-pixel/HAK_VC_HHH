@@ -1,5 +1,12 @@
 # CHANGELOG
 
+## 0.8.3 — sửa lỗi lần kiểm tra thứ hai (schema 8, không có migration)
+- **P1 đổi trạng thái bảng giá đang dùng**: đưa bảng giá còn phiếu sử dụng ra khỏi ACTIVE (vd INACTIVE) phải xác nhận (`ConfirmRequired`). Câu hỏi nêu số phiếu chưa chốt sẽ được tính lại, số phiếu đã chốt giữ nguyên và chỉ cách mở lại giá cũ (nút 🗑 Xóa bảng giá). Trước đây chỉ một thao tác là làm 381 phiếu mất giá mà không cảnh báo. Khi bật duyệt phiếu, phiếu **đã duyệt** bị đổi tổng tiền được ghi audit `PRICE_RECALC_APPROVED` và mở cảnh báo cùng tên ở Trung tâm cảnh báo; phiếu không tự về Nháp.
+- **P2 hoàn tác lô gốc**: lô nhập lại có dòng `PENDING_ALREADY` (đã chờ kiểm tra ở lô trước) không còn làm mất xung đột khi lô gốc bị hoàn tác. Dòng mới nhất cùng dữ liệu được thăng cấp thành dòng "Cần kiểm tra" (audit `PENDING_PROMOTED`), cảnh báo trùng giữ nguyên, số đếm của lô được cập nhật.
+- **P2 bật phân quyền sau khi đã bật duyệt phiếu**: `auth.enable` cũng cảnh báo "chỉ còn 1 người có quyền duyệt", kèm lựa chọn bật luôn *Cho phép tự duyệt* (`bat_tu_duyet`). Tắt *Cho phép tự duyệt* khi chỉ có 1 người duyệt cũng phải xác nhận. Mọi điều kiện "đủ người duyệt" dồn về một hàm `canhBaoNguoiDuyet` (`src/utils/duyet.js`).
+- **P3**: ẩn nút xóa/thêm giá dầu với vai trò không đủ quyền (giao diện hiểu quyền theo bảng qua `data-table`); màn Backup hiện mốc xuất theo giờ địa phương; mốc "xuất ra ổ khác" ghi thêm vào `backups/export-status.json` nên khôi phục DB cũ không làm lùi mốc.
+- Chi tiết, ma trận lỗi → test: `docs/NGHIEM_THU_0.8.3.md`.
+
 ## 0.8.2 — sửa lỗi sau kiểm tra (schema 8)
 - **P0 quyền theo từng bảng**: `catalog.create/update/remove` với **bảng giá** và **giá dầu** cần quyền *Duyệt* (như `price.createVersion`, `fuel.importCommit`); người nhập không còn tạo được bảng giá riêng làm đổi tổng tiền. Các bảng khác giữ quyền *Nhập*. Máy chủ quyết định (`runtime.dispatch`), giao diện chỉ ẩn/hiện nút.
 - **P1 bảng giá một luồng**: thông số giá chỉ đổi qua "Phiên bản giá mới"; `catalog.update` bảng giá chỉ nhận ghi chú/trạng thái, `catalog.create` bảng giá trả lỗi hướng dẫn. "Áp dụng" (Bảng tính đơn giá) và "Duyệt kỳ giá dầu" hiện bảng xem trước (đóng giá cũ đến ngày nào, mở giá mới, số phiếu tính lại) và xác nhận trước khi ghi. Import giá dầu cùng mức quyền *Duyệt*.

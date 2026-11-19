@@ -1,6 +1,16 @@
-# VC Cost 0.8.2 — schema SQLite 8
+# VC Cost 0.8.3 — schema SQLite 8
 
-Ứng dụng quản lý chi phí vận chuyển offline cho HAK. Bản vá sau kiểm tra trên 0.8.1: sửa lỗi vượt quyền bảng giá, nút Duyệt khi bật phân quyền, kẹt duyệt ở chế độ 1 người, hàng chờ "Cần kiểm tra" bị nhân dòng, giao diện cha–con và độ tin cậy sao lưu.
+Ứng dụng quản lý chi phí vận chuyển offline cho HAK. Bản vá sau lần kiểm tra thứ hai trên 0.8.2. Không đổi cấu trúc CSDL (vẫn schema 8), cài đè lên 0.8.2 không cần nâng cấp dữ liệu.
+
+## Thay đổi trong 0.8.3
+- **Bảng giá**: đổi trạng thái một bảng giá đang có phiếu sử dụng phải xác nhận; hộp xác nhận nói rõ số phiếu sẽ được tính lại và số phiếu đã chốt giữ nguyên. Khi bật duyệt phiếu, phiếu đã duyệt bị đổi tiền được ghi nhật ký và báo ở Trung tâm cảnh báo.
+- **Nhập liệu**: hoàn tác một lần import không làm mất dòng "Cần kiểm tra" mà lần import sau còn đang dựa vào.
+- **Duyệt phiếu**: bật phân quyền khi duyệt phiếu đã bật mà chỉ có 1 người duyệt → cảnh báo và cho chọn bật luôn *Cho phép tự duyệt*.
+- **Giao diện & sao lưu**: ẩn nút giá dầu với vai trò không đủ quyền; mốc xuất sao lưu ra ổ khác hiện giờ địa phương và không bị lùi khi khôi phục dữ liệu cũ.
+
+
+## 0.8.2
+Bản vá sau kiểm tra trên 0.8.1: sửa lỗi vượt quyền bảng giá, nút Duyệt khi bật phân quyền, kẹt duyệt ở chế độ 1 người, hàng chờ "Cần kiểm tra" bị nhân dòng, giao diện cha–con và độ tin cậy sao lưu.
 
 ## Thay đổi trong 0.8.2
 - **Quyền theo bảng**: bảng giá và giá dầu chỉ người có quyền *Duyệt* mới thêm/sửa/xóa (trước đây quyền *Nhập* tạo được bảng giá riêng làm đổi tổng tiền). Thông số giá chỉ đổi qua "Phiên bản giá mới"; "Áp dụng" bảng tính đơn giá và duyệt kỳ giá dầu có xem trước tác động và xác nhận.

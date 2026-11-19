@@ -1,0 +1,33 @@
+# Biên bản nghiệm thu VC Cost 0.8.3 (schema 8)
+
+- Nền: `main` @ `74f9fbf` (app 0.8.2, schema 8, `npm test` 200/200). Nhánh làm việc: `claude/modest-feynman-ilumj0`.
+- Môi trường: Linux, Node 22, node:sqlite, Chromium/Playwright (UI smoke).
+- Dữ liệu kiểm tra: SQLite thử + fixture V.47 (2.035 phiếu). Không dùng dữ liệu thật.
+- Số test: **trước 200 → sau 210** (`npm test`, node:sqlite). `npm run test:ui` thêm 3 kiểm tra nút giá dầu theo quyền, kết quả `errors: none`.
+- Không có migration mới: cài đè lên 0.8.2 không đổi CSDL.
+- Kiểm chứng ngược (đột biến): trả `src/ipc/handlers.js` và `src/services/TicketImportService.js` về bản 0.8.2 → 6/10 test mới đỏ (các test P1 và P2); 4 test còn lại là test "không được hỏi thừa" / chặn quyền nên vẫn xanh như mong đợi. Khôi phục code → 10/10 xanh.
+
+## 1. Ma trận lỗi → sửa → test
+
+| # | Lỗi | Cách tái hiện (trên 0.8.2) | Sửa ở (file:dòng) | Test chứng minh | Kết quả |
+|---|---|---|---|---|---|
+| P1 | Đưa bảng giá **đang dùng** sang INACTIVE: không hỏi lại, phiếu chưa chốt thành "Chưa có đơn giá"; phiếu đã duyệt vẫn mang nhãn Đã duyệt dù tổng tiền đổi | `catalog.update {table:'bang_gia_van_chuyen', id:<bảng giá 381 phiếu dùng>, data:{trang_thai:'INACTIVE'}}` → `ok:true`, phiếu mẫu về `NO_PRICE`, không có cảnh báo/nhật ký riêng | `src/ipc/handlers.js:71` (`deactivatePrice`: `ConfirmRequired` nêu số phiếu tính lại / đã chốt, gợi ý nút Xóa bảng giá; tính lại đúng các phiếu chưa chốt; audit + cảnh báo `PRICE_RECALC_APPROVED` khi bật duyệt), `:131` (`catalog.update` bảng giá đi qua `deactivatePrice`); `src/services/AlertService.js:16` (loại cảnh báo mới, mức Trung bình); `renderer/views/catalog.js:66` (lưu bảng giá qua `App.callConfirm`) | `tests/kiem-tra-0.8.3.test.js` #1 (chưa xác nhận → `ConfirmRequired`, dữ liệu y nguyên; xác nhận → phiếu chưa chốt rời bảng giá, phiếu đã chốt không đổi), #2 (chỉ đổi ghi chú / bảng giá không phiếu dùng → không hỏi), #3 (bật duyệt: có audit đúng số phiếu, cảnh báo mở, phiếu không về Nháp), #4 (NHAP vẫn `Forbidden` kể cả gửi `xac_nhan`) | Đạt |
+| P2-a | Hoàn tác lô gốc làm mất dòng "Cần kiểm tra" của lô nhập lại (`PENDING_ALREADY`) | Lô A: 1 KEY_CONFLICT (PENDING_REVIEW); lô B nhập lại cùng dữ liệu → PENDING_ALREADY/SKIP; `import.undo` lô A → `import.pending` của phiếu = 0 dù lô B còn COMMITTED | `src/services/TicketImportService.js:274` (`_promotePendingAlready`: tìm dòng PENDING_ALREADY mới nhất cùng phiếu + cùng fingerprint ở lô COMMITTED khác → KEY_CONFLICT/PENDING_REVIEW, điền `old_json`, cập nhật `duplicate_rows`/`conflict_rows` của lô, audit `PENDING_PROMOTED`), `:454` (gọi trước khi đóng cảnh báo/đổi IGNORE) | `kiem-tra-0.8.3.test.js` #5 (sau hoàn tác A còn đúng 1 dòng chờ thuộc lô B, cảnh báo trùng vẫn mở, số đếm lô B = 1 xung đột; nhập lần 3 nhận ra "đã chờ"; hoàn tác C rồi B → 0 dòng chờ, cảnh báo đóng), #6 (dòng chờ đã xử lý Giữ cũ thì không thăng cấp) | Đạt |
+| P2-b | Bật duyệt phiếu **trước**, bật phân quyền **sau** với 1 quản trị → không cảnh báo, admin không tự duyệt được | `settings.set duyet_phieu {bat:true}` (chưa phân quyền) → `auth.enable` 1 admin → `ok`, `cho_tu_duyet` chưa bật | `src/utils/duyet.js:28` (`canhBaoNguoiDuyet` — điều kiện dùng chung); `src/ipc/handlers.js:287` (`auth.enable`: `ConfirmRequired`, `xac_nhan`, `bat_tu_duyet`), `:104` (`settings.set` dùng hàm chung; tắt "Cho phép tự duyệt" khi chỉ 1 người duyệt cũng hỏi), `:303` (`auth.updateUser` dùng hàm chung); `renderer/views/users.js:24` (hộp chọn: Hủy / Vẫn bật / Bật kèm "Cho phép tự duyệt") | `kiem-tra-0.8.3.test.js` #7 (chưa xác nhận → không bật; `xac_nhan` → bật, không tự duyệt), #8 (`bat_tu_duyet` → `cho_tu_duyet:true`, admin tự duyệt được, audit `tu_duyet:true`), #9 (tắt cho tự duyệt → hỏi; lưu lại khi đã bật → không hỏi). Test 0.8.2 `duyet-mot-nguoi.test.js` vẫn đạt (thông điệp giữ "1 người có quyền duyệt", "còn 1 người") | Đạt |
+| P3-1 | Nút 🗑 xóa giá dầu (và "+ Thêm giá") hiện với vai trò Nhập liệu (máy chủ chặn nhưng gây nhầm) | Đăng nhập NHAP → màn Giá dầu | `renderer/app.js:250` (`delfuel`/`addfuel` trong `ACTION_CHANNEL`), `:256–264` (`actionAllowed(act, table)` hiểu quyền theo bảng qua `data-table`); `renderer/views/catalog.js` (nút có `data-table="gia_dau"`) | `tests/ui-smoke.mjs` (NHAP: nút xóa giá dầu có trong DOM nhưng không hiện; "+ Thêm giá" không hiện) | Đạt |
+| P3-2 | Màn Backup hiện mốc xuất theo giờ UTC | Xuất 1 bản ra ổ khác, xem màn Backup | `renderer/views/system.js:54` (`toLocaleString('vi-VN')`) | Kiểm bằng mắt qua UI smoke (khối backup vẫn đạt) | Đạt |
+| P3-3 | Mốc "xuất ra ổ khác" lưu trong DB → khôi phục bản cũ làm lùi mốc, nhắc sai | Xuất → khôi phục bản sao lưu tạo trước lần xuất → `backup.exportStatus` về "chưa từng" | `src/services/BackupService.js:115` (ghi thêm `backups/export-status.json`), `:119–127` (lấy mốc mới hơn giữa DB và file) | `kiem-tra-0.8.3.test.js` #10 (sau khôi phục DB cũ, mốc không lùi, không nhắc; file trạng thái không lẫn vào danh sách bản sao lưu) | Đạt |
+
+## 2. Quyết định về quyền bảng danh mục (P3-4)
+
+Vai trò **Nhập liệu** vẫn sửa được `xe_don_vi_lich_su` (xe thuộc đơn vị nào), `dia_diem_alias` (tên gọi khác của địa điểm) và `tuyen_van_chuyen`. Các thay đổi này làm phiếu được tính lại (đổi đơn vị vận chuyển/tuyến → đổi bảng giá áp dụng), tức là **có ảnh hưởng tới tiền**.
+
+Giữ nguyên ở 0.8.3, lý do: đây là việc nhập danh mục hằng ngày của người nhập liệu (thêm xe mới, gán đơn vị, thêm tên gọi khác khi import báo "Nơi xuất chưa rõ"). Nâng lên *Duyệt* sẽ làm nghẽn luồng import. Rủi ro được kiểm soát bởi: (a) nhật ký sửa danh mục có tên người sửa; (b) mọi phiếu bị đổi đơn giá khi tính lại đều sinh cảnh báo `PRICE_CHANGED` (đơn giá cũ → mới) ở Trung tâm cảnh báo; (c) phiếu đã chốt kỳ không bị tính lại.
+
+**Cần chủ sản phẩm xác nhận.** Nếu muốn chặt hơn, chỉ cần thêm vào `TABLE_PERM` trong `src/utils/permissions.js`, ví dụ `xe_don_vi_lich_su: 'duyet'`. Giao diện tự ẩn nút theo bảng, không cần sửa thêm.
+
+## 3. Rủi ro còn lại / chưa làm
+
+- Đổi trạng thái bảng giá **không** tự mở lại bảng giá liền trước (khác nút Xóa bảng giá). Hộp xác nhận nêu rõ điều này và chỉ sang nút Xóa. Lý do: tự mở lại giá cũ sẽ làm hỏng trường hợp đặt INACTIVE tạm thời rồi bật lại (kiểm tra chồng lấn sẽ chặn bật lại).
+- Cảnh báo `PRICE_RECALC_APPROVED` chỉ sinh khi đổi **trạng thái bảng giá**. Các đường tính lại khác (phiên bản giá mới, kỳ giá dầu) đã có bước xem trước + xác nhận từ 0.8.2 và cảnh báo `PRICE_CHANGED` theo từng phiếu.
+- Chưa chạy lại nghiệm thu bộ cài Windows (`scripts/accept-windows.ps1`) cho 0.8.3; logic Electron không đổi ngoài giao diện.
