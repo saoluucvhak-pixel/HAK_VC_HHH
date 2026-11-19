@@ -9,6 +9,7 @@ const path = require('path');
 const { CATALOGS } = require('../models/catalogs');
 const { ALERT_DEF } = require('../services/AlertService');
 const { ValidationError } = require('../services/CatalogService');
+const { fromDb } = require('../utils/dbMoney');
 const exporters = require('../excel/exporters');
 const documents = require('../print/documents');
 const templates = require('../print/htmlTemplates');
@@ -33,7 +34,7 @@ const PRICE_EDITABLE = ['ghi_chu', 'trang_thai'];
 
 function createHandlers(app, env = {}) {
   const { exportsDir = null, importsDir = null, seedDir = null, backup = null } = env;
-  const { duyetBat, duyetTuDuyet, ConfirmRequired, coQuyenDuyet, soNguoiDuyet } = require('../utils/duyet');
+  const { duyetBat, duyetTuDuyet, ConfirmRequired, coQuyenDuyet, soNguoiDuyet, canhBaoNguoiDuyet } = require('../utils/duyet');
   const allStates = (f) => ({ moi_trang_thai: true, ...(f || {}) });   // Phiếu cân thấy cả phiếu Nháp (trừ khi lọc theo trạng thái duyệt)
   const session = env.session || { get: () => null, set: () => {} };
   const { ROLE_PERMS, ROLE_LABEL, CHANNEL_PERM, TABLE_PERM } = require('../utils/permissions');
@@ -62,6 +63,37 @@ function createHandlers(app, env = {}) {
   };
   const stamp = () => new Date().toISOString().slice(0, 16).replace(/[-:T]/g, '');
 
+  /**
+   * Sửa ghi chú/trạng thái bảng giá. Đưa bảng giá ĐANG DÙNG ra khỏi ACTIVE làm các phiếu chưa chốt được tính lại (có thể thành "Chưa có đơn giá")
+   * → phải xác nhận (ConfirmRequired, cùng mức cảnh báo với nút Xóa bảng giá). Khi bật duyệt phiếu: phiếu ĐÃ DUYỆT đổi tổng tiền được ghi audit
+   * PRICE_RECALC_APPROVED và mở cảnh báo ở Trung tâm cảnh báo (không tự đưa phiếu về Nháp).
+   */
+  const deactivatePrice = (id, data, xac_nhan) => app.db.tx(() => {
+    const rule = app.db.get(`SELECT * FROM ${PRICE_TABLE} WHERE id=?`, [id]);
+    const leaving = rule && rule.trang_thai === 'ACTIVE' && data && data.trang_thai !== undefined && data.trang_thai !== 'ACTIVE';
+    const used = leaving ? app.db.all(`SELECT id, so_phieu, tong_tien, trang_thai_duyet, chot_ky_id FROM phieu_can WHERE bang_gia_id=? AND trang_thai='ACTIVE'`, [id]) : [];
+    if (!used.length) return app.catalog.update(PRICE_TABLE, id, data);
+    const open = used.filter((t) => !t.chot_ky_id); const locked = used.length - open.length;
+    if (!xac_nhan) {
+      throw new ConfirmRequired(`Bảng giá ${rule.ma_bang_gia} đang được ${used.length} phiếu sử dụng. Đổi trạng thái sang "${data.trang_thai === 'INACTIVE' ? 'Ngừng' : data.trang_thai}" sẽ tính lại ${open.length} phiếu chưa chốt — `
+        + `phiếu không còn bảng giá hiệu lực khác sẽ thành "Chưa có đơn giá"${locked ? `; ${locked} phiếu đã chốt kỳ giữ nguyên` : ''}. Muốn mở lại bảng giá cũ liền trước thì dùng nút 🗑 Xóa bảng giá. Vẫn tiếp tục?`);
+    }
+    const approvedBefore = new Map(open.filter((t) => t.trang_thai_duyet === 'DA_DUYET').map((t) => [t.id, t.tong_tien]));
+    const out = app.catalog.update(PRICE_TABLE, id, data);
+    const ids = open.map((t) => t.id);
+    if (ids.length) app.cost.recalc({ ids });      // chắc chắn tính lại đúng các phiếu vừa dùng bảng giá này
+    if (duyetBat(app.settings) && approvedBefore.size) {
+      const changed = [...approvedBefore].map(([tid, truoc]) => ({ tid, truoc, sau: app.db.get('SELECT tong_tien FROM phieu_can WHERE id=?', [tid]).tong_tien })).filter((x) => x.truoc !== x.sau);
+      if (changed.length) {
+        const sum = (k) => fromDb(changed.reduce((a, x) => a + (Number(x[k]) || 0), 0));
+        const info = { ma_bang_gia: rule.ma_bang_gia, so_phieu: changed.length, tong_truoc: sum('truoc'), tong_sau: sum('sau'), phieu_ids: changed.slice(0, 200).map((x) => x.tid) };
+        app.audit.log('PRICE_RECALC_APPROVED', PRICE_TABLE, id, { tong_tien: info.tong_truoc, so_phieu: info.so_phieu }, { tong_tien: info.tong_sau, trang_thai: data.trang_thai }, `Đổi trạng thái bảng giá ${rule.ma_bang_gia}: ${info.so_phieu} phiếu đã duyệt đổi tổng tiền`);
+        app.alerts.open('PRICE_RECALC_APPROVED', PRICE_TABLE, id, info, `${info.so_phieu} phiếu ĐÃ DUYỆT đổi tổng tiền do đổi trạng thái bảng giá ${rule.ma_bang_gia}`);
+      }
+    }
+    return out;
+  });
+
   const handlers = {
     // ---------------- hệ thống
     'app.info': () => ({ version: env.version || 'dev', dataDir: env.dataDir || null, driver: app.db.driver, schema: app.db.get('SELECT MAX(version) v FROM schema_version').v,
@@ -70,10 +102,10 @@ function createHandlers(app, env = {}) {
       duyetBat: duyetBat(app.settings), choDuyet: app.db.get(`SELECT COUNT(*) n FROM phieu_can WHERE trang_thai='ACTIVE' AND trang_thai_duyet='NHAP'`).n }),
     'settings.all': () => app.settings.all(),
     'settings.set': ({ key, value, xac_nhan }) => {
-      // Bật duyệt phiếu khi đã bật phân quyền mà còn < 2 người có quyền duyệt và chưa cho tự duyệt → phiếu có thể kẹt ở Nháp: hỏi xác nhận
-      if (key === 'duyet_phieu' && value && value.bat === true && !value.cho_tu_duyet && app.auth.enabled() && !xac_nhan && !duyetBat(app.settings)) {
-        const n = soNguoiDuyet(app.db);
-        if (n < 2) throw new ConfirmRequired(`Hiện chỉ có ${n} người có quyền duyệt. Người nhập/sửa phiếu không tự duyệt phiếu của mình nên phiếu có thể kẹt ở trạng thái Nháp. Hãy thêm người có quyền Duyệt, hoặc bật "Cho phép tự duyệt". Vẫn bật duyệt phiếu?`);
+      // Bật duyệt phiếu (hoặc tắt "cho tự duyệt") khi đã bật phân quyền mà còn < 2 người có quyền duyệt → phiếu có thể kẹt ở Nháp: hỏi xác nhận
+      if (key === 'duyet_phieu' && value && value.bat === true && !xac_nhan && (!duyetBat(app.settings) || duyetTuDuyet(app.settings))) {
+        const m = canhBaoNguoiDuyet({ duyetBat: true, phanQuyen: app.auth.enabled(), tuDuyet: !!value.cho_tu_duyet, soSau: soNguoiDuyet(app.db), ngu_canh: 'khi bật duyệt phiếu' });
+        if (m) throw new ConfirmRequired(m);
       }
       app.settings.set(key, value); if (key === 'time_anomaly') app.cost.syncTimeAlerts(app.db.all('SELECT DISTINCT bien_so_chuan b FROM phieu_can').map((x) => x.b)); return { ok: true }; },
     'seed.loadSample': () => {
@@ -96,12 +128,11 @@ function createHandlers(app, env = {}) {
       if (table === PRICE_TABLE) throw new ValidationError('Không thêm bảng giá trực tiếp — dùng "+ Phiên bản giá mới" (Bảng giá) để đóng giá cũ và mở giá mới đúng ngày hiệu lực');
       return app.catalog.create(table, data, { parentId });
     },
-    'catalog.update': ({ table, id, data }) => {
-      if (table === PRICE_TABLE) {
-        const bad = Object.keys(data || {}).filter((k) => !PRICE_EDITABLE.includes(k));
-        if (bad.length) throw new ValidationError(`Bảng giá chỉ sửa được ghi chú và trạng thái (không sửa: ${bad.join(', ')}). Muốn đổi thông số giá, dùng "+ Phiên bản giá mới"`);
-      }
-      return app.catalog.update(table, id, data);
+    'catalog.update': ({ table, id, data, xac_nhan }) => {
+      if (table !== PRICE_TABLE) return app.catalog.update(table, id, data);
+      const bad = Object.keys(data || {}).filter((k) => !PRICE_EDITABLE.includes(k));
+      if (bad.length) throw new ValidationError(`Bảng giá chỉ sửa được ghi chú và trạng thái (không sửa: ${bad.join(', ')}). Muốn đổi thông số giá, dùng "+ Phiên bản giá mới"`);
+      return deactivatePrice(id, data, xac_nhan);
     },
     'catalog.remove': ({ table, id }) => app.catalog.remove(table, id),
 
@@ -253,18 +284,30 @@ function createHandlers(app, env = {}) {
     'auth.login': ({ ten_dang_nhap, mat_khau }) => { session.set(app.auth.login(ten_dang_nhap, mat_khau)); return authStatus(); },
     'auth.logout': () => { session.set(null); return authStatus(); },
     'auth.me': () => authStatus(),
-    'auth.enable': (o) => { session.set(app.auth.enable(o)); return authStatus(); },
+    'auth.enable': ({ xac_nhan, bat_tu_duyet, ...o }) => {
+      // Duyệt phiếu đã bật TRƯỚC khi bật phân quyền: sau khi bật chỉ có (các) quản trị → kiểm tra đủ người duyệt như khi bật duyệt phiếu
+      if (duyetBat(app.settings) && !duyetTuDuyet(app.settings) && !app.auth.enabled()) {
+        const ex = app.db.get('SELECT vai_tro, trang_thai FROM nguoi_dung WHERE ten_dang_nhap=?', [String(o.ten_dang_nhap || '')]);
+        const soSau = soNguoiDuyet(app.db) + (ex && coQuyenDuyet(ex) ? 0 : 1);
+        const m = canhBaoNguoiDuyet({ duyetBat: true, phanQuyen: true, tuDuyet: false, soSau, ngu_canh: 'khi bật phân quyền' });
+        if (m && !xac_nhan && !bat_tu_duyet) throw new ConfirmRequired(m);
+      }
+      const u = app.auth.enable(o);
+      // Chọn "bật luôn Cho phép tự duyệt" (chế độ 1 người có đăng nhập)
+      if (bat_tu_duyet && duyetBat(app.settings)) app.settings.set('duyet_phieu', { ...app.settings.get('duyet_phieu'), bat: true, cho_tu_duyet: true });
+      session.set(u); return authStatus();
+    },
     'auth.disable': ({ mat_khau }) => { app.auth.disable(actor(), mat_khau); session.set(null); return authStatus(); },
     'auth.users': () => app.auth.list(),
     'auth.createUser': (o) => app.auth.createUser(actor(), o),
     'auth.updateUser': ({ id, xac_nhan, ...patch }) => {
       // Khóa/hạ quyền người duyệt làm số người duyệt còn < 2 khi đang bật duyệt phiếu (không cho tự duyệt) → hỏi xác nhận
-      if (!xac_nhan && duyetBat(app.settings) && !duyetTuDuyet(app.settings)) {
+      if (!xac_nhan) {
         const u = app.db.get('SELECT vai_tro, trang_thai FROM nguoi_dung WHERE id=?', [id]);
         const next = { vai_tro: patch.vai_tro !== undefined ? patch.vai_tro : u && u.vai_tro, trang_thai: patch.trang_thai !== undefined ? patch.trang_thai : u && u.trang_thai };
         if (u && coQuyenDuyet(u) && !coQuyenDuyet(next)) {
-          const con = soNguoiDuyet(app.db) - 1;
-          if (con < 2) throw new ConfirmRequired(`Sau thay đổi này chỉ còn ${con} người có quyền duyệt; người nhập/sửa phiếu không tự duyệt phiếu của mình nên phiếu có thể kẹt ở Nháp. Hãy bật "Cho phép tự duyệt" hoặc thêm người có quyền Duyệt. Vẫn tiếp tục?`);
+          const m = canhBaoNguoiDuyet({ duyetBat: duyetBat(app.settings), phanQuyen: app.auth.enabled(), tuDuyet: duyetTuDuyet(app.settings), soSau: soNguoiDuyet(app.db) - 1, ngu_canh: 'thay đổi này' });
+          if (m) throw new ConfirmRequired(m);
         }
       }
       return app.auth.updateUser(actor(), id, patch);

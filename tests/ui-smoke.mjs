@@ -386,6 +386,11 @@ await page.unroute('**/api/reports.dashboard');
   await go('prices'); await page.waitForSelector('table.t tbody tr');
   ck((await visible('[data-act=newversion]')) === 0, 'vai trò NHAP không thấy "+ Phiên bản giá mới"');
   ck((await visible('[data-act=delprice]')) === 0, 'vai trò NHAP không thấy nút xóa bảng giá');
+  // 0.8.3: nút giá dầu theo quyền BẢNG (gia_dau = duyet): NHAP không thấy nút xóa/thêm giá dầu
+  await go('fuel'); await page.waitForSelector('[data-act=importfuel]', { state: 'attached' });
+  ck((await page.locator('[data-act=delfuel]').count()) > 0, 'màn Giá dầu phải có nút xóa giá dầu trong DOM (dữ liệu mẫu có giá dầu)');
+  ck((await visible('[data-act=delfuel]')) === 0, 'vai trò NHAP không thấy nút xóa giá dầu');
+  ck((await visible('[data-act=addfuel]')) === 0, 'vai trò NHAP không thấy nút "+ Thêm giá" dầu');
   // XEM: không thấy bất kỳ nút ghi dữ liệu
   await loginAs('xem1'); await go('tickets'); await page.waitForSelector('table.t tbody tr');
   for (const a of ['approve-selected', 'approve-filtered', 'del-selected', 'del-filtered']) ck((await visible(`[data-act=${a}]`)) === 0, 'vai trò XEM không được thấy ' + a);

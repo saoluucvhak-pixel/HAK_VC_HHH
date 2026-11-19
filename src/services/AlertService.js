@@ -13,6 +13,7 @@ const DEF = {
   INVALID_WEIGHT: ['CAO', 'Khối lượng không hợp lệ', 'Kiểm tra phiếu cân gốc'],
   INVALID_TIME: ['CAO', 'Thời gian cân không hợp lệ', 'Kiểm tra phiếu cân gốc'],
   TIME_ANOMALY: ['TRUNG_BINH', 'Thời gian cân/khoảng cách chuyến bất thường', 'Đối chiếu với trạm cân (chỉ cảnh báo, không kết luận)'],
+  PRICE_RECALC_APPROVED: ['TRUNG_BINH', 'Phiếu đã duyệt đổi tổng tiền do đổi trạng thái bảng giá', 'Xem lại các phiếu trong Phiếu cân; tạo bảng giá đúng bằng "+ Phiên bản giá mới" nếu đổi nhầm'],
   PRICE_CHANGED: ['THAP', 'Đơn giá phiếu thay đổi do tính lại', 'Thông tin'],
   UNMATCHED_RECONCILIATION: ['TRUNG_BINH', 'Dòng đối chiếu không khớp', 'Xem Kết quả đối chiếu'],
 };

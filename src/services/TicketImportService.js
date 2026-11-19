@@ -270,6 +270,20 @@ class TicketImportService {
     return { ...result, fileBuffer: p.wb.buffer, fileName: p.wb.fileName };
   }
 
+  /** Thay dòng chờ `pr` (thuộc lô `batchId` đang hoàn tác) bằng dòng PENDING_ALREADY cùng dữ liệu, mới nhất, của lô COMMITTED khác. Trả id dòng được thăng cấp hoặc null. */
+  _promotePendingAlready(pr, batchId) {
+    let fp; try { fp = fingerprint(this._parseRaw(JSON.parse(pr.raw_json))); } catch (e) { return null; }
+    const cands = this.db.all(`SELECT r.id, r.batch_id, r.raw_json FROM import_batch_row r JOIN import_batch b ON b.id=r.batch_id
+                               WHERE r.phieu_can_id=? AND r.phan_loai='PENDING_ALREADY' AND r.hanh_dong='SKIP' AND b.trang_thai='COMMITTED' AND r.batch_id<>? ORDER BY r.id DESC`, [pr.phieu_can_id, batchId]);
+    const hit = cands.find((x) => { try { return fingerprint(this._parseRaw(JSON.parse(x.raw_json))) === fp; } catch (e) { return false; } });
+    if (!hit) return null;
+    const old = this.db.get('SELECT * FROM phieu_can WHERE id=?', [pr.phieu_can_id]);
+    this.db.run(`UPDATE import_batch_row SET phan_loai='KEY_CONFLICT', hanh_dong='PENDING_REVIEW', old_json=?, errors_json=NULL WHERE id=?`, [old ? JSON.stringify(old) : null, hit.id]);
+    this.db.run('UPDATE import_batch SET duplicate_rows=MAX(duplicate_rows-1,0), conflict_rows=conflict_rows+1 WHERE id=?', [hit.batch_id]);
+    this.audit.log('PENDING_PROMOTED', 'import_batch_row', hit.id, { phan_loai: 'PENDING_ALREADY' }, { phan_loai: 'KEY_CONFLICT', hanh_dong: 'PENDING_REVIEW' }, `Hoàn tác lô #${batchId}: chuyển dòng chờ kiểm tra sang dòng #${hit.id}`);
+    return hit.id;
+  }
+
   /** Phiếu đã có dòng "Cần kiểm tra" (lô đã commit, chưa xử lý) với đúng dữ liệu mới này chưa? Trả dòng đó hoặc null. */
   _pendingSame(phieuId, fp) {
     if (!phieuId || !fp) return null;
@@ -434,7 +448,10 @@ class TicketImportService {
           this.db.run(`UPDATE phieu_can SET trang_thai_duyet='NHAP', nhap_boi=?, duyet_boi=NULL, duyet_luc=NULL WHERE id=?`, [this.audit.actor() || null, o.id]);
         }
       }
-      for (const pr of this.db.all(`SELECT phieu_can_id FROM import_batch_row WHERE batch_id=? AND hanh_dong='PENDING_REVIEW' AND phieu_can_id IS NOT NULL`, [batchId])) {
+      for (const pr of this.db.all(`SELECT id, phieu_can_id, raw_json FROM import_batch_row WHERE batch_id=? AND hanh_dong='PENDING_REVIEW' AND phieu_can_id IS NOT NULL`, [batchId])) {
+        // Lô khác (còn hiệu lực) đã nhập lại ĐÚNG dữ liệu này và được ghi PENDING_ALREADY → dòng chờ không được mất theo lô bị hoàn tác:
+        // thăng cấp dòng PENDING_ALREADY mới nhất thành dòng "Cần kiểm tra" (giữ cảnh báo DUPLICATE_TICKET đang mở).
+        this._promotePendingAlready(pr, batchId);
         const left = this.db.get(`SELECT COUNT(*) n FROM import_batch_row WHERE phieu_can_id=? AND hanh_dong='PENDING_REVIEW' AND batch_id<>?`, [pr.phieu_can_id, batchId]).n;
         if (!left) this.alerts.closeAuto('phieu_can', pr.phieu_can_id, [], ['DUPLICATE_TICKET']);
       }
