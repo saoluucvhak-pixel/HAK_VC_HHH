@@ -52,6 +52,7 @@
   }
 
   async function editDialog(table_, row, { parentId = null, onDone, onDelete = null }) {
+    if (!App.canWrite(table_)) { App.toast('Bạn không có quyền sửa dữ liệu này (chỉ xem)', true); return; }
     let c = (await cfg())[table_];
     const isPrice = table_ === 'bang_gia_van_chuyen';
     if (isPrice && !row) { App.toast('Bảng giá mới tạo ở "+ Phiên bản giá mới" (đóng giá cũ, mở giá mới đúng ngày hiệu lực)', true); return; }
@@ -98,9 +99,9 @@
         const rows = await api('catalog.list', { table: arg, search });
         App.clear(body).append(h('div', { class: 'card' }, table({
           columns: [...cols, { key: '_a', label: '', render: (r) => h('span', { class: 'row gap-s' },
-            h('button', { class: 'btn ghost sm', onclick: (e) => { e.stopPropagation(); editDialog(arg, r, { onDone: load }); } }, 'Sửa'),
+            h('button', { class: 'btn ghost sm', 'data-act': 'row-edit', hidden: !App.canWrite(arg), onclick: (e) => { e.stopPropagation(); editDialog(arg, r, { onDone: load }); } }, 'Sửa'),
             (c.children || []).length ? h('button', { class: 'btn ghost sm', onclick: (e) => { e.stopPropagation(); children(r); } }, 'Chi tiết') : null,
-            h('button', { class: 'btn ghost sm', onclick: async (e) => { e.stopPropagation(); if (await App.confirmBox('Xóa', `Xóa ${r[c.displayField]}?`, 'Xóa', 'danger')) { if (await call('catalog.remove', { table: arg, id: r.id }, 'Đã xóa')) load(); } } }, 'Xóa')) }],
+            h('button', { class: 'btn ghost sm', 'data-act': 'row-del', hidden: !App.canWrite(arg), onclick: async (e) => { e.stopPropagation(); if (await App.confirmBox('Xóa', `Xóa ${r[c.displayField]}?`, 'Xóa', 'danger')) { if (await call('catalog.remove', { table: arg, id: r.id }, 'Đã xóa')) load(); } } }, 'Xóa')) }],
           rows, wrapClass: 'tall', onRow: (r) => editDialog(arg, r, { onDone: load }) }), h('p', { class: 'muted' }, `${rows.length} bản ghi`)));
       });
       async function children(parent) {
@@ -119,7 +120,7 @@
       }
       v.append(App.pageHead(c.label, null,
         arg === 'xe' ? h('button', { class: 'btn ghost', onclick: () => App.go('import') }, '📥 Import danh mục xe') : null,
-        h('input', { placeholder: 'Tìm…', onchange: (e) => { search = e.target.value.trim(); load(); } }), h('button', { class: 'btn', 'data-act': 'add', onclick: () => editDialog(arg, null, { onDone: load }) }, '+ Thêm')), body);
+        h('input', { placeholder: 'Tìm…', onchange: (e) => { search = e.target.value.trim(); load(); } }), h('button', { class: 'btn', 'data-act': 'add', hidden: !App.canWrite(arg), onclick: () => editDialog(arg, null, { onDone: load }) }, '+ Thêm')), body);
       await load();
     },
   });

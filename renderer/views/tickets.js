@@ -69,12 +69,12 @@
       const allBtn = h('button', { class: 'btn ghost', 'data-act': 'del-filtered', title: 'Xóa mọi phiếu khớp bộ lọc hiện tại (kể cả các trang khác)', onclick: async () => { const ids = await api('tickets.ids', { filter: flt() }); delTickets(ids, done); } }, '🗑 Xóa tất cả phiếu đang lọc');
       const approve = async (ids, expectedVersions = vers) => {
         if (!ids.length) return App.toast('Không có phiếu Nháp nào để duyệt');
-        if (!(await App.confirmBox(`Duyệt ${ids.length} phiếu Nháp? Phiếu được duyệt sẽ vào Dashboard, Bảng kê, báo cáo và chốt kỳ.`))) return;
+        if (!(await App.confirmBox('Duyệt phiếu Nháp', `Duyệt ${ids.length} phiếu Nháp? Phiếu được duyệt sẽ vào Dashboard, Bảng kê, báo cáo và chốt kỳ.`, 'Duyệt'))) return;
         const r = await App.call('tickets.approve', { ids, vers: Object.fromEntries(ids.filter((i) => expectedVersions[i] != null).map((i) => [i, expectedVersions[i]])) }, `Đã duyệt`);
         if (r && r.failed) App.toast(`Duyệt ${r.ok}/${r.total} phiếu. Không duyệt được ${r.failed}: ${r.results.filter((x) => !x.ok).slice(0, 3).map((x) => `${x.so_phieu || x.id} (${x.reason})`).join('; ')}`, 'warn');
         sel.clear(); await App.refreshInfo(); await App.reload();
       };
-      const duyetOn = () => App.info && App.info.duyetBat && App.can('tickets.approve');
+      const duyetOn = () => App.info && App.info.duyetBat && App.can('duyet');
       const apvSel = h('button', { class: 'btn', 'data-act': 'approve-selected', onclick: () => approve([...sel]) }, '✔ Duyệt phiếu đã chọn');
       const apvAll = h('button', { class: 'btn ghost', 'data-act': 'approve-filtered', title: 'Duyệt mọi phiếu Nháp khớp bộ lọc hiện tại', onclick: async () => { const data = await api('tickets.list', { filter: { ...flt(), trang_thai_duyet: 'NHAP' }, limit: 10_000_000 }); await approve(data.rows.map((r) => r.id), Object.fromEntries(data.rows.map((r) => [r.id, r.ver]))); } }, '✔ Duyệt tất cả Nháp theo lọc');
       v.append(App.pageHead('Phiếu cân', 'Bấm một dòng để xem vì sao phiếu có đơn giá đó',

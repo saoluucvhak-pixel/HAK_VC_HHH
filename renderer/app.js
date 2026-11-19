@@ -219,8 +219,42 @@ const App = (() => {
   // ---------------------------------------------------------------- phân quyền (tùy chọn)
   // Tắt (mặc định): 1 người dùng, không đăng nhập. Bật: đăng nhập + quyền theo vai trò (máy chủ là nơi quyết định; giao diện chỉ ẩn mục không dùng được).
   let auth = { enabled: false, user: null, perms: [], roles: {} };
-  const can = (perm) => !auth.enabled || auth.perms.includes(perm);
+  const PERMS = ['xem', 'nhap', 'duyet', 'admin'];
+  window.__canWarnings = [];
+  /** can() chỉ nhận TÊN QUYỀN. Chuỗi lạ (vd tên kênh API) → cảnh báo + trả false, để lỗi truyền sai lộ ra thay vì ẩn nút âm thầm. */
+  const can = (perm) => {
+    if (!PERMS.includes(perm)) { const m = `App.can("${perm}"): chỉ nhận ${PERMS.join('|')}`; console.warn(m); window.__canWarnings.push(m); return false; }
+    return !auth.enabled || auth.perms.includes(perm);
+  };
+  /** Quyền bảng giá/giá dầu cao hơn các bảng khác (máy chủ khai báo, giao diện chỉ đọc). */
+  const canWrite = (table) => can((auth.tablePerm && Object.hasOwn(auth.tablePerm, table) && auth.tablePerm[table]) || 'nhap');
   const NAV_NEED = { import: 'nhap', review: 'duyet', settings: 'admin' };
+  /**
+   * Bảng NÚT → KÊNH API dùng chung. Mức quyền lấy từ máy chủ (auth.channelPerm = permissions.js), không khai lại ở đây.
+   * Nút có data-act trong bảng này bị ẩn khi vai trò không đủ quyền; máy chủ vẫn kiểm tra khi gọi.
+   */
+  const ACTION_CHANNEL = {
+    'approve-selected': 'tickets.approve', 'approve-filtered': 'tickets.approve', 'del-selected': 'tickets.remove', 'del-filtered': 'tickets.remove',
+    commit: 'import.commit', preview: 'import.preview', 'bulk-update': 'import.resolveMany', 'bulk-keep': 'import.resolveMany', 'bulk-ignore': 'import.resolveMany',
+    'undo': 'import.undo', 'undo-batch': 'import.undo', 'lock-create': 'lock.create', 'lock-unlock': 'lock.unlock',
+    newversion: 'price.createVersion', apply: 'price.applySheet', delprice: 'price.remove', newperiod: 'price.createFuelPeriod', delperiod: 'price.removeFuelPeriod',
+    importfuel: 'fuel.importCommit', recalc: 'cost.recalc', backup: 'backup.now', 'export-backup': 'backup.export', 'restore-backup': 'backup.restore',
+    run: 'recon.run', 'alert-set': 'alerts.setStatus', 'tpl-tickets': 'template.tickets', 'tpl-vehicles': 'template.vehicles',
+    seed: 'seed.loadSample', initial: 'initial.load', 'add-user': 'auth.createUser', 'disable-auth': 'auth.disable', 'save-rounding': 'settings.set', 'save-kl': 'settings.set',
+    'save-duyet': 'settings.set', 'save-company': 'settings.set', 'save-backup': 'settings.set',
+  };
+  const RANK = Object.fromEntries(PERMS.map((p, i) => [p, i]));
+  const actionAllowed = (act) => {
+    if (!auth.enabled) return true; const ch = ACTION_CHANNEL[act]; if (!ch) return true;
+    const need = (auth.channelPerm || {})[ch]; return !need || can(need);
+  };
+  /** Ẩn mọi nút ghi dữ liệu mà vai trò hiện tại không đủ quyền (gọi lại mỗi khi DOM đổi). */
+  function applyPerms(root = document) {
+    if (!auth.enabled) return;
+    root.querySelectorAll('[data-act]').forEach((el) => { if (!actionAllowed(el.getAttribute('data-act'))) { el.hidden = true; el.style.display = 'none'; el.setAttribute('aria-hidden', 'true'); } });
+  }
+  new MutationObserver((muts) => { if (!auth.enabled) return; for (const m of muts) for (const n of m.addedNodes) if (n.nodeType === 1) { if (n.hasAttribute('data-act') && !actionAllowed(n.getAttribute('data-act'))) { n.hidden = true; n.style.display = 'none'; } applyPerms(n); } })
+    .observe(document.documentElement, { childList: true, subtree: true });
   async function refreshAuth() { try { auth = await api('auth.status'); } catch (e) { /* bỏ qua */ } return auth; }
   let loginOpen = false;
   function showLogin(msg) {
@@ -307,5 +341,5 @@ const App = (() => {
 
   async function start() { await refreshAuth(); if (auth.enabled && !auth.user) { renderNav(); showLogin(); return; } await refreshInfo(); await go('dashboard'); }
 
-  return { h, clear, bindNum, fmt, tag, api, call, pickFile, saveExport, exportXlsx, toast, modal, confirmBox, promptBox, table, register, latestRender, viewId: () => current, go, reload, start, refreshInfo, refreshAuth, can, get auth() { return auth; }, logout, state, pageHead, STATUS_TAG, get info() { return info; } };
+  return { h, clear, bindNum, fmt, tag, api, call, pickFile, canWrite, applyPerms, actionAllowed, saveExport, exportXlsx, toast, modal, confirmBox, promptBox, table, register, latestRender, viewId: () => current, go, reload, start, refreshInfo, refreshAuth, can, get auth() { return auth; }, logout, state, pageHead, STATUS_TAG, get info() { return info; } };
 })();

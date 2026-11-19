@@ -137,3 +137,14 @@ test('P1: giá dầu — "+ Thêm giá" (catalog.create gia_dau) và "Import" (f
   assert.equal(permissionFor('fuel.importPreview'), 'duyet');
   assert.equal(permissionFor('fuel.importCommit'), 'duyet');
 });
+
+test('auth.status trả channelPerm/tablePerm lấy từ permissions.js (giao diện không tự khai mức quyền)', async () => {
+  const { CHANNEL_PERM, TABLE_PERM } = require('../src/utils/permissions');
+  const rt = mk();
+  try {
+    const st = (await call(rt, 'auth.status')).data;
+    assert.equal(st.channelPerm['tickets.approve'], 'duyet'); assert.equal(st.channelPerm['price.createVersion'], 'duyet');
+    assert.equal(st.channelPerm['tickets.remove'], CHANNEL_PERM.get('tickets.remove'));
+    assert.deepEqual(st.tablePerm, TABLE_PERM);
+  } finally { rt.close(); }
+});

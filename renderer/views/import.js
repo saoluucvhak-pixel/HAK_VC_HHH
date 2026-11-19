@@ -219,7 +219,7 @@
       v.append(App.pageHead('Lịch sử import', 'Mỗi lần import là một lô; có thể hoàn tác cả lô nếu chưa chốt kỳ'),
         h('div', { class: 'card' }, table({ columns: [{ key: 'id', label: 'Lô', num: true }, { key: 'import_time', label: 'Thời gian', fmt: 'dt' }, { key: 'file_name', label: 'File' }, { key: 'total_rows', label: 'Dòng', fmt: 'int' }, { key: 'inserted_rows', label: 'Mới', fmt: 'int' },
           { key: 'duplicate_rows', label: 'Trùng', fmt: 'int' }, { key: 'conflict_rows', label: 'Cần kiểm tra', fmt: 'int' }, { key: 'error_rows', label: 'Lỗi', fmt: 'int' }, { key: 'trang_thai', label: 'Trạng thái', tag: true },
-          { key: 'x', label: '', render: (b) => h('span', { class: 'row gap-s' }, h('button', { class: 'btn ghost sm', onclick: () => rowsOf(b) }, 'Chi tiết'), b.trang_thai === 'COMMITTED' ? h('button', { class: 'btn danger sm', onclick: () => undo(b) }, 'Hoàn tác') : null) }], rows, empty: 'Chưa import lần nào' })));
+          { key: 'x', label: '', render: (b) => h('span', { class: 'row gap-s' }, h('button', { class: 'btn ghost sm', onclick: () => rowsOf(b) }, 'Chi tiết'), b.trang_thai === 'COMMITTED' ? h('button', { class: 'btn danger sm', 'data-act': 'undo-batch', onclick: () => undo(b) }, 'Hoàn tác') : null) }], rows, empty: 'Chưa import lần nào' })));
     },
   });
 })();

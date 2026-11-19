@@ -361,6 +361,48 @@ await page.unroute('**/api/reports.dashboard');
   await shot('32-xem-truoc-ap-dung-gia'); await page.click('.modal:has-text("Xem trước") .btn.ghost');
 }
 
+// ---- 0.8.2: bật phân quyền + duyệt phiếu → nút theo vai trò (giao diện chỉ ẩn/hiện; máy chủ quyết định)
+{
+  const ck = (ok, msg) => { if (!ok) errors.push('vai trò: ' + msg); };
+  const PW = 'matkhau-manh-1';
+  const go = async (id) => { await page.evaluate((i) => App.go(i), id); await page.waitForTimeout(500); };
+  const api = (c, a) => page.evaluate(async ([c, a]) => { try { return { ok: true, data: await App.api(c, a) }; } catch (e) { return { ok: false, error: e.message }; } }, [c, a || {}]);
+  const loginAs = async (u) => { await page.evaluate(async ([u, pw]) => { await App.api('auth.login', { ten_dang_nhap: u, mat_khau: pw }); await App.refreshAuth(); await App.refreshInfo(); }, [u, PW]); };
+  await page.evaluate(async (pw) => { await App.api('auth.enable', { ten_dang_nhap: 'admin', ho_ten: 'QT', mat_khau: pw }); await App.refreshAuth(); }, PW);
+  for (const [u, r] of [['xem1', 'XEM'], ['nhap1', 'NHAP'], ['duyet1', 'DUYET']]) await api('auth.createUser', { ten_dang_nhap: u, ho_ten: u, vai_tro: r, mat_khau: PW });
+  await api('settings.set', { key: 'duyet_phieu', value: { bat: true } });
+  const t = (await api('tickets.list', { filter: { chua_chot: true }, limit: 1 })).data.rows[0];
+  await api('tickets.update', { id: t.id, data: { xe_tra_ve: t.xe_tra_ve ? 0 : 1 }, note: 'UI vai trò' });
+  await page.evaluate(() => { Object.keys(App.state.filter).forEach((k) => delete App.state.filter[k]); App.state.filter.trang_thai = 'NHAP'; });
+  const visible = (sel) => page.evaluate((s) => [...document.querySelectorAll(s)].filter((e) => e.offsetParent !== null).length, sel);
+  // DUYỆT: thấy nút duyệt
+  await loginAs('duyet1'); await go('tickets'); await page.waitForSelector('table.t tbody tr');
+  ck((await visible('[data-act=approve-selected]')) === 1, 'vai trò DUYET phải thấy nút duyệt phiếu đã chọn');
+  ck((await visible('[data-act=approve-filtered]')) === 1, 'vai trò DUYET phải thấy nút duyệt tất cả Nháp');
+  // NHẬP: không thấy nút duyệt; vẫn thấy nút xóa phiếu
+  await loginAs('nhap1'); await go('tickets'); await page.waitForSelector('table.t tbody tr');
+  ck((await visible('[data-act=approve-selected]')) === 0, 'vai trò NHAP không được thấy nút duyệt');
+  ck((await visible('[data-act=del-selected]')) === 1, 'vai trò NHAP thấy nút xóa phiếu');
+  await go('prices'); await page.waitForSelector('table.t tbody tr');
+  ck((await visible('[data-act=newversion]')) === 0, 'vai trò NHAP không thấy "+ Phiên bản giá mới"');
+  ck((await visible('[data-act=delprice]')) === 0, 'vai trò NHAP không thấy nút xóa bảng giá');
+  // XEM: không thấy bất kỳ nút ghi dữ liệu
+  await loginAs('xem1'); await go('tickets'); await page.waitForSelector('table.t tbody tr');
+  for (const a of ['approve-selected', 'approve-filtered', 'del-selected', 'del-filtered']) ck((await visible(`[data-act=${a}]`)) === 0, 'vai trò XEM không được thấy ' + a);
+  await go('prices'); await page.waitForSelector('table.t tbody tr');
+  for (const a of ['newversion', 'delprice']) ck((await visible(`[data-act=${a}]`)) === 0, 'vai trò XEM không được thấy ' + a);
+  await go('lock');
+  ck((await visible('[data-act=lock-create]')) === 0, 'vai trò XEM không thấy nút chốt kỳ');
+  ck((await page.evaluate(() => window.__canWarnings.length)) === 0, 'App.can nhận chuỗi lạ: ' + (await page.evaluate(() => window.__canWarnings.join('; '))));
+  const bad = await page.evaluate(() => App.can('tickets.approve')); ck(bad === false, 'can() với tên kênh phải trả false');
+  ck((await page.evaluate(() => window.__canWarnings.length)) === 1, 'can() chuỗi lạ phải ghi cảnh báo');
+  await page.evaluate(() => { window.__canWarnings.length = 0; });
+  // dọn: đăng nhập admin, tắt phân quyền + duyệt
+  await loginAs('admin');
+  await api('settings.set', { key: 'duyet_phieu', value: { bat: false } }).catch(() => {});
+  await page.evaluate(async (pw) => { await App.api('auth.disable', { mat_khau: pw }); await App.refreshAuth(); await App.refreshInfo(); }, PW);
+}
+
 console.log('errors:', errors.length ? errors : 'none');
 await browser.close(); srv.close();
 process.exit(errors.length ? 1 : 0);

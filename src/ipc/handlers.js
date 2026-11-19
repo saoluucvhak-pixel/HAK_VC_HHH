@@ -36,8 +36,10 @@ function createHandlers(app, env = {}) {
   const { duyetBat } = require('../utils/duyet');
   const allStates = (f) => ({ moi_trang_thai: true, ...(f || {}) });   // Phiếu cân thấy cả phiếu Nháp (trừ khi lọc theo trạng thái duyệt)
   const session = env.session || { get: () => null, set: () => {} };
-  const { ROLE_PERMS, ROLE_LABEL } = require('../utils/permissions');
-  const authStatus = () => { const u = session.get(); return { enabled: app.auth.enabled(), user: u ? { id: u.id, ten_dang_nhap: u.ten_dang_nhap, ho_ten: u.ho_ten, vai_tro: u.vai_tro } : null, perms: u ? ROLE_PERMS[u.vai_tro] : [], roles: ROLE_LABEL }; };
+  const { ROLE_PERMS, ROLE_LABEL, CHANNEL_PERM, TABLE_PERM } = require('../utils/permissions');
+  const authStatus = () => { const u = session.get(); return { enabled: app.auth.enabled(), user: u ? { id: u.id, ten_dang_nhap: u.ten_dang_nhap, ho_ten: u.ho_ten, vai_tro: u.vai_tro } : null, perms: u ? ROLE_PERMS[u.vai_tro] : [], roles: ROLE_LABEL,
+    // nguồn quyền duy nhất là utils/permissions.js; giao diện chỉ ĐỌC để ẩn/hiện nút, máy chủ vẫn là nơi quyết định
+    channelPerm: Object.fromEntries(CHANNEL_PERM), tablePerm: TABLE_PERM }; };
   const actor = () => { const u = session.get(); return u ? u.id : null; };
   const saveImportCopy = (buf, name) => {
     if (!importsDir || !buf) return null;
