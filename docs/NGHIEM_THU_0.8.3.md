@@ -6,6 +6,8 @@
 - Số test: **trước 200 → sau 210** (`npm test`, node:sqlite). `npm run test:ui` thêm 3 kiểm tra nút giá dầu theo quyền, kết quả `errors: none`.
 - Không có migration mới: cài đè lên 0.8.2 không đổi CSDL.
 - Kiểm chứng ngược (đột biến): trả `src/ipc/handlers.js` và `src/services/TicketImportService.js` về bản 0.8.2 → 6/10 test mới đỏ (các test P1 và P2); 4 test còn lại là test "không được hỏi thừa" / chặn quyền nên vẫn xanh như mong đợi. Khôi phục code → 10/10 xanh.
+- CI trên PR #28 (head `568e06d`, run `44484944434`): job `test` đạt; job `windows` đạt — test Windows với cả node:sqlite và better-sqlite3, đóng gói `win-unpacked`, test giao diện trên Windows, khởi động thử bản đóng gói (sao lưu/khôi phục, nhập lại file mẫu, PDF, chốt kỳ). Bước build bộ cài + `accept-windows.ps1` **không chạy trên PR** từ nhánh `claude/` (chỉ chạy khi push `main` hoặc PR `codex/release-*`).
+- Nghiệm thu bộ cài trên `main` sau khi gộp (`174909b`): **đạt** — run `44525041301` (19/11/2026): build Setup + Portable 0.8.3; `accept-windows.ps1` đạt **6/6 ca**: cài mới mặc định, nâng cấp từ v4, v6, v7 lên schema 8 (giữ đúng số phiếu), thư mục dữ liệu tùy chỉnh, Portable. Bản đóng gói chạy driver better-sqlite3, nhập lại file mẫu ra 2.035 phiếu trùng hoàn toàn / 0 phiếu mới, PDF và Excel hợp lệ, sao lưu–khôi phục giữ nguyên 2.035 phiếu, toàn vẹn 0 lỗi. Bộ cài và `SHA256SUMS.txt` ở artifact `vc-cost-installers` của run (giữ 14 ngày).
 
 ## 1. Ma trận lỗi → sửa → test
 
@@ -24,10 +26,10 @@ Vai trò **Nhập liệu** vẫn sửa được `xe_don_vi_lich_su` (xe thuộc 
 
 Giữ nguyên ở 0.8.3, lý do: đây là việc nhập danh mục hằng ngày của người nhập liệu (thêm xe mới, gán đơn vị, thêm tên gọi khác khi import báo "Nơi xuất chưa rõ"). Nâng lên *Duyệt* sẽ làm nghẽn luồng import. Rủi ro được kiểm soát bởi: (a) nhật ký sửa danh mục có tên người sửa; (b) mọi phiếu bị đổi đơn giá khi tính lại đều sinh cảnh báo `PRICE_CHANGED` (đơn giá cũ → mới) ở Trung tâm cảnh báo; (c) phiếu đã chốt kỳ không bị tính lại.
 
-**Cần chủ sản phẩm xác nhận.** Nếu muốn chặt hơn, chỉ cần thêm vào `TABLE_PERM` trong `src/utils/permissions.js`, ví dụ `xe_don_vi_lich_su: 'duyet'`. Giao diện tự ẩn nút theo bảng, không cần sửa thêm.
+**Quyết định (19/11/2026): giữ nguyên** — chủ sản phẩm đồng ý theo đề xuất. Nếu sau này muốn chặt hơn, chỉ cần thêm vào `TABLE_PERM` trong `src/utils/permissions.js`, ví dụ `xe_don_vi_lich_su: 'duyet'`. Giao diện tự ẩn nút theo bảng, không cần sửa thêm.
 
 ## 3. Rủi ro còn lại / chưa làm
 
-- Đổi trạng thái bảng giá **không** tự mở lại bảng giá liền trước (khác nút Xóa bảng giá). Hộp xác nhận nêu rõ điều này và chỉ sang nút Xóa. Lý do: tự mở lại giá cũ sẽ làm hỏng trường hợp đặt INACTIVE tạm thời rồi bật lại (kiểm tra chồng lấn sẽ chặn bật lại).
+- Đổi trạng thái bảng giá **không** tự mở lại bảng giá liền trước (khác nút Xóa bảng giá). Hộp xác nhận nêu rõ điều này và chỉ sang nút Xóa. Lý do: tự mở lại giá cũ sẽ làm hỏng trường hợp đặt INACTIVE tạm thời rồi bật lại (kiểm tra chồng lấn sẽ chặn bật lại). **Quyết định (19/11/2026): giữ nguyên hành vi này** theo đề xuất.
 - Cảnh báo `PRICE_RECALC_APPROVED` chỉ sinh khi đổi **trạng thái bảng giá**. Các đường tính lại khác (phiên bản giá mới, kỳ giá dầu) đã có bước xem trước + xác nhận từ 0.8.2 và cảnh báo `PRICE_CHANGED` theo từng phiếu.
-- Chưa chạy lại nghiệm thu bộ cài Windows (`scripts/accept-windows.ps1`) cho 0.8.3; logic Electron không đổi ngoài giao diện.
+- Nghiệm thu bộ cài Windows: xem kết quả run trên `main` ở đầu biên bản. Còn lại: người dùng bấm thử trên máy Windows thật hai hộp xác nhận mới (đổi trạng thái bảng giá đang dùng; bật phân quyền khi duyệt phiếu đã bật và chỉ có 1 người duyệt).
