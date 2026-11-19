@@ -106,17 +106,23 @@
       });
       async function children(parent) {
         const kids = c.children; const cc = (await cfg());
-        const holder = h('div', {}); let active = kids[0];
+        const holder = h('div', {}); let active = kids[0]; let dlg = null;
+        // Tiêu đề dạng đường dẫn: "Xe 43H-010.21 › Lịch sử đơn vị"
+        const crumb = (t) => `${c.label} ${parent[c.displayField]} › ${cc[t].label}`;
+        // Sau khi thêm/sửa/xóa dòng con: làm mới bảng con VÀ bảng cha (cột tổng hợp như "Đơn vị hiện tại", "Số chuyến")
+        const afterChange = () => { draw(); load(); };
         const draw = App.latestRender(holder, async (holder) => {
           const childTable = active;
+          if (dlg) dlg.box.querySelector('h2').textContent = crumb(childTable);
           const kcols = await columnsFor(childTable);
           const rows = await api('catalog.list', { table: childTable, parentId: parent.id });
           App.clear(holder).append(h('div', { class: 'tabs' }, kids.map((t) => h('div', { class: 'tab' + (t === childTable ? ' active' : ''), onclick: () => { active = t; draw(); } }, cc[t].label))),
-            h('div', { class: 'row end', style: { marginBottom: '8px' } }, h('button', { class: 'btn sm', onclick: () => editDialog(childTable, null, { parentId: parent.id, onDone: draw }) }, '+ Thêm')),
-            table({ columns: [...kcols, { key: '_a', label: '', render: (r) => h('span', { class: 'row gap-s' }, h('button', { class: 'btn ghost sm', onclick: () => editDialog(childTable, r, { onDone: draw }) }, 'Sửa'),
-              h('button', { class: 'btn ghost sm', onclick: async () => { if (await call('catalog.remove', { table: childTable, id: r.id }, 'Đã xóa')) draw(); } }, 'Xóa')) }], rows }));
+            h('div', { class: 'row end', style: { marginBottom: '8px' } }, h('button', { class: 'btn sm', 'data-act': 'child-add', hidden: !App.canWrite(childTable), onclick: () => editDialog(childTable, null, { parentId: parent.id, onDone: afterChange }) }, '+ Thêm')),
+            table({ columns: [...kcols, { key: '_a', label: '', render: (r) => h('span', { class: 'row gap-s' }, h('button', { class: 'btn ghost sm', 'data-act': 'child-edit', hidden: !App.canWrite(childTable), onclick: () => editDialog(childTable, r, { onDone: afterChange }) }, 'Sửa'),
+              h('button', { class: 'btn ghost sm', 'data-act': 'child-del', hidden: !App.canWrite(childTable), onclick: async () => { if (!(await App.confirmBox('Xóa', `Xóa dòng ${cc[childTable].label.toLowerCase()} này của ${parent[c.displayField]}?`, 'Xóa', 'danger'))) return; if (await call('catalog.remove', { table: childTable, id: r.id }, 'Đã xóa')) afterChange(); } }, 'Xóa')) }], rows }));
         });
-        draw(); App.modal({ title: `${c.label}: ${parent[c.displayField]}`, wide: true, body: holder, actions: [{ label: 'Đóng', primary: false, onClick: () => load() }] });
+        dlg = App.modal({ title: crumb(active), wide: true, body: holder, actions: [{ label: 'Đóng', primary: false }], onClose: load });   // đóng bằng nút hoặc click nền đều làm mới bảng cha
+        draw();
       }
       v.append(App.pageHead(c.label, null,
         arg === 'xe' ? h('button', { class: 'btn ghost', onclick: () => App.go('import') }, '📥 Import danh mục xe') : null,

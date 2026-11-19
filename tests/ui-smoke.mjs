@@ -445,6 +445,33 @@ await page.unroute('**/api/reports.dashboard');
   await shot('33-can-kiem-tra-nhom');
 }
 
+// ---- 0.8.2: danh mục cha–con: tiêu đề đường dẫn, xóa dòng con có xác nhận, đóng bằng click nền vẫn làm mới bảng cha
+{
+  const ck = (ok, msg) => { if (!ok) errors.push('cha–con: ' + msg); };
+  await page.evaluate(() => document.querySelectorAll('.modal-bg, .modal-overlay, .overlay, .modal').forEach((m) => (m.closest('.modal-bg, .modal-overlay, .overlay') || m).remove()));
+  await nav('cat:xe'); await page.waitForSelector('table.t tbody tr');
+  const hits = []; const onReq = (rq) => { if (rq.url().endsWith('/api/catalog.list')) { try { hits.push(JSON.parse(rq.postData() || '{}')); } catch (e) { /* bỏ */ } } };
+  page.on('request', onReq);
+  await page.locator('table.t tbody tr >> nth=0').locator('button:has-text("Chi tiết")').click(); await page.waitForSelector('.modal h2');
+  const title = await page.textContent('.modal h2');
+  ck(/Xe .+ › Lịch sử đơn vị/.test(title), 'tiêu đề cửa sổ con phải dạng đường dẫn, thực tế "' + title + '"');
+  await page.waitForSelector('.modal table.t tbody tr');
+  // xóa dòng con: phải hỏi xác nhận (hộp thứ hai), Hủy thì không xóa
+  const before = await page.locator('.modal table.t tbody tr').count();
+  await page.locator('.modal table.t tbody tr >> nth=0').locator('[data-act=child-del]').click();
+  await page.waitForFunction(() => document.querySelectorAll('.modal').length >= 2);
+  ck((await page.locator('.modal').last().textContent()).includes('Xóa'), 'hộp xác nhận xóa dòng con');
+  await shot('34-xoa-dong-con-xac-nhan');
+  await page.locator('.modal').last().locator('.btn.ghost').click();
+  await page.waitForTimeout(300);
+  ck((await page.locator('.modal table.t tbody tr').count()) === before, 'Hủy xác nhận thì không được xóa dòng con');
+  // đóng bằng click ra nền → bảng cha được tải lại (catalog.list table=xe không có parentId)
+  hits.length = 0;
+  await page.mouse.click(3, 3); await page.waitForTimeout(700);
+  ck(hits.some((b) => b.table === 'xe' && !b.parentId), 'đóng cửa sổ con bằng click nền phải làm mới bảng cha, các gọi: ' + JSON.stringify(hits));
+  page.off('request', onReq);
+}
+
 console.log('errors:', errors.length ? errors : 'none');
 await browser.close(); srv.close();
 process.exit(errors.length ? 1 : 0);
