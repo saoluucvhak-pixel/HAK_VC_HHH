@@ -12,7 +12,7 @@ const { loadInitialData, isFreshDb } = require('./services/InitialDataService');
 const { BackupService } = require('./services/BackupService');
 const { permissionFor, roleAllows } = require('./utils/permissions');
 
-function createRuntime({ dataDir, version = 'dev', driver = null, autoInit = false, renderPdf = null, idleMs = 30 * 60 * 1000 }) {
+function createRuntime({ dataDir, version = 'dev', driver = null, autoInit = false, renderPdf = null, idleMs = 30 * 60 * 1000, autoBackupMs = 60 * 60 * 1000 }) {
   const dirs = {
     dataDir,
     db: path.join(dataDir, 'data', 'app.db'),
@@ -39,10 +39,10 @@ function createRuntime({ dataDir, version = 'dev', driver = null, autoInit = fal
     rt.session.set(null);
     rt.app = createApp({ dbFile: dirs.db, driver, backupFn: preMigrationBackup, user: () => { const u = rt.session.get(); return u ? u.ten_dang_nhap : null; } });
     if (process.env.VCCOST_RESET_AUTH === '1') { rt.app.auth.forceDisable(); log('VCCOST_RESET_AUTH=1: đã tắt phân quyền'); }
-    rt.handlers = createHandlers(rt.app, { exportsDir: dirs.exports, importsDir: dirs.imports, seedDir: SEED_DIR, backup: rt.backup, session: rt.session, version, dataDir, renderPdf: (...a) => { const f = rt.renderPdf || renderPdf; if (!f) throw new Error('Xuất PDF chưa khả dụng trong môi trường này'); return f(...a); } });
+    rt.handlers = createHandlers(rt.app, { exportsDir: dirs.exports, importsDir: dirs.imports, seedDir: SEED_DIR, backup: rt.backup, session: rt.session, log, version, dataDir, renderPdf: (...a) => { const f = rt.renderPdf || renderPdf; if (!f) throw new Error('Xuất PDF chưa khả dụng trong môi trường này'); return f(...a); } });
     log(`Mở DB (${rt.app.db.driver}), migration: ${JSON.stringify(rt.app.db.migration)}`);
   };
-  rt.backup = new BackupService({ getDb: () => rt.app.db, dbFile: dirs.db, backupsDir: dirs.backups, settings: { get: (k) => rt.app.settings.get(k) }, reopen: () => open() });
+  rt.backup = new BackupService({ getDb: () => rt.app.db, dbFile: dirs.db, backupsDir: dirs.backups, settings: { get: (k) => rt.app.settings.get(k), set: (k, v) => rt.app.settings.set(k, v) }, reopen: () => open() });
   open();
   // Nạp dữ liệu ban đầu (đọc Excel bất đồng bộ) rồi sao lưu tự động; dispatch đợi `rt.ready` xong mới xử lý yêu cầu đầu tiên.
   rt.ready = (async () => {
@@ -52,6 +52,11 @@ function createRuntime({ dataDir, version = 'dev', driver = null, autoInit = fal
       } catch (e) { log(`Nạp dữ liệu ban đầu lỗi: ${e.stack}`); }
     }
     try { rt.backup.autoDaily(); } catch (e) { log(`Auto backup lỗi: ${e.message}`); }
+    // App mở qua đêm vẫn có bản AUTO mỗi ngày: kiểm tra lại mỗi giờ (autoDaily chỉ sao lưu khi bản AUTO gần nhất đã quá chu kỳ)
+    if (autoBackupMs > 0 && !rt.closed) {
+      rt.autoTimer = setInterval(() => { try { rt.backup.autoDaily(); } catch (e) { log(`Auto backup lỗi: ${e.message}`); } }, autoBackupMs);
+      if (rt.autoTimer.unref) rt.autoTimer.unref();
+    }
   })();
 
   rt.dispatch = async (channel, args) => {
@@ -76,7 +81,7 @@ function createRuntime({ dataDir, version = 'dev', driver = null, autoInit = fal
       return { ok: false, error: e.message, type: e.name };
     }
   };
-  rt.close = () => rt.app.close();
+  rt.close = () => { rt.closed = true; if (rt.autoTimer) clearInterval(rt.autoTimer); rt.autoTimer = null; rt.app.close(); };
   return rt;
 }
 

@@ -112,8 +112,15 @@ function createHandlers(app, env = {}) {
     'import.preview': ({ token, ...o }) => app.imports.preview(token, o),
     'import.previewRows': ({ token, ...o }) => app.imports.previewRows(token, o),
     'import.commit': ({ token, ...o }) => {
-      if (backup) backup.backupNow('PRE_IMPORT');
-      const r = app.imports.commit(token, o);
+      let pre = null;
+      if (backup) pre = backup.backupNow('PRE_IMPORT');            // sao lưu lỗi → ném lỗi → import bị chặn (giữ hành vi an toàn)
+      let r;
+      try { r = app.imports.commit(token, o); }
+      catch (e) {
+        // commit chạy trong một giao dịch nên lỗi = chưa ghi gì; bản PRE_IMPORT vừa tạo KHÔNG được dùng để khôi phục
+        if (env.log) env.log(`Import thất bại (${e.message}): bản sao lưu PRE_IMPORT ${pre && (pre.file || pre.name) ? `(${pre.file || pre.name}) ` : ''}không được dùng — chưa có dữ liệu nào bị ghi`);
+        throw e;
+      }
       // Batch đã ghi xong: lỗi chép file nguồn chỉ là cảnh báo, không được báo như import thất bại
       let copy = null, copyWarning = null;
       try { copy = saveImportCopy(r.fileBuffer, r.fileName); } catch (e) { copyWarning = `Đã nhập xong nhưng không lưu được bản sao file nguồn: ${e.message}`; }
@@ -265,6 +272,7 @@ function createHandlers(app, env = {}) {
     'auth.resetPassword': ({ id, mat_khau }) => app.auth.resetPassword(actor(), id, mat_khau),
     'auth.changePassword': ({ cu, moi }) => { if (!actor()) throw new Error('Chưa bật phân quyền / chưa đăng nhập'); app.auth.changeOwnPassword(actor(), cu, moi); return { ok: true }; },
     'backup.export': ({ file, dir }) => (backup ? backup.exportTo(file, dir) : null),
+    'backup.exportStatus': () => (backup ? backup.exportStatus() : { last: null, remindDays: 7, nhac: false }),
   };
   return Object.fromEntries(Object.entries(handlers).map(([ch, fn]) => [ch, (args, ...rest) => fn(stripScope(ch, args), ...rest)]));
 }

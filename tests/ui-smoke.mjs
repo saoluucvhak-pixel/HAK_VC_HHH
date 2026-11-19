@@ -472,6 +472,16 @@ await page.unroute('**/api/reports.dashboard');
   page.off('request', onReq);
 }
 
+// ---- 0.8.2: màn Backup nhắc xuất ra ổ khác (chưa từng xuất → nhắc vàng; sau khi xuất → hết nhắc)
+{
+  const ck = (ok, msg) => { if (!ok) errors.push('backup: ' + msg); };
+  await page.evaluate(() => document.querySelectorAll('.modal-bg, .modal-overlay, .overlay, .modal').forEach((m) => (m.closest('.modal-bg, .modal-overlay, .overlay') || m).remove()));
+  await nav('backup'); await page.waitForSelector('[data-export-status]');
+  ck((await page.getAttribute('[data-export-status]', 'data-export-status')) === 'nhac', 'chưa từng xuất ra ổ khác thì phải nhắc');
+  ck((await page.textContent('[data-export-status]')).includes('Lần xuất ra ổ khác gần nhất'), 'phải hiện nhãn lần xuất gần nhất');
+  await shot('35-backup-nhac-xuat');
+}
+
 console.log('errors:', errors.length ? errors : 'none');
 await browser.close(); srv.close();
 process.exit(errors.length ? 1 : 0);

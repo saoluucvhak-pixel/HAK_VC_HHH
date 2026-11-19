@@ -10,6 +10,7 @@
 const path = require('path');
 const fs = require('fs');
 const { app, BrowserWindow, ipcMain, dialog, shell, Menu } = require('electron');
+const { saveFilters } = require('./save-filters');
 const { createRuntime } = require('../src/runtime');
 const { isInside } = require('../src/utils/safePath');
 
@@ -212,7 +213,7 @@ app.whenReady().then(() => {
     return r.canceled ? null : r.filePaths[0];
   });
   ipcMain.handle('dialog.saveExport', async (_e, { path: src, fileName }) => {
-    const r = await dialog.showSaveDialog(win, { defaultPath: fileName, filters: [{ name: 'Excel', extensions: ['xlsx'] }] });
+    const r = await dialog.showSaveDialog(win, { defaultPath: fileName, filters: saveFilters(fileName) });
     if (r.canceled) return null;
     // Chỉ chép file do chính app xuất ra (thư mục exports) — giao diện không được dùng kênh này để đọc file bất kỳ.
     if (!isInside(rt.dirs.exports, src) || !fs.existsSync(src)) throw new Error('Đường dẫn file xuất không hợp lệ');

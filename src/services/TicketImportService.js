@@ -28,9 +28,15 @@ const ISSUE_WARN = {
 };
 
 class TicketImportService {
-  constructor(db, { audit, alerts, cost, settings }) {
-    Object.assign(this, { db, audit, alerts, cost, settings });
+  constructor(db, { audit, alerts, cost, settings, previewTtlMs = 2 * 60 * 60 * 1000 }) {
+    Object.assign(this, { db, audit, alerts, cost, settings, previewTtlMs });
     this.previews = new Map();
+  }
+
+  /** Xóa phiên xem trước quá hạn (giữ bộ nhớ không phình khi mở nhiều file mà không commit/hủy). */
+  _prune() {
+    const now = Date.now();
+    for (const [k, v] of this.previews) if (now - (v.createdAt || 0) > this.previewTtlMs) this.previews.delete(k);
   }
 
   /** Bước 1: đọc file, liệt kê sheet, gợi ý sheet có header tốt nhất. */
@@ -40,7 +46,8 @@ class TicketImportService {
     const best = scored.reduce((a, b) => (b.header.score > (a ? a.header.score : -1) ? b : a), null);
     const prev = this.db.get(`SELECT id, import_time FROM import_batch WHERE file_hash=? AND trang_thai='COMMITTED' ORDER BY id DESC LIMIT 1`, [wb.hash]);
     const token = crypto.randomUUID();
-    this.previews.set(token, { wb, stage: 'opened' });
+    this._prune();
+    this.previews.set(token, { wb, stage: 'opened', createdAt: Date.now() });
     return {
       token, fileName: wb.fileName, hash: wb.hash, size: wb.size,
       sheets: scored.map((s) => ({ name: s.name, rows: s.rows, cols: s.cols, headerRow: s.header.headerRow, score: s.header.score })),

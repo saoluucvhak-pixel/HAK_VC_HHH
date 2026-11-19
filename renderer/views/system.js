@@ -42,7 +42,7 @@
 
   App.register('backup', {
     async render(v) {
-      const rows = await api('backup.list');
+      const rows = await api('backup.list'); const ex = await api('backup.exportStatus');
       v.append(App.pageHead('Backup & khôi phục', 'Tự backup hằng ngày và trước mỗi lần import/khôi phục', h('span', { class: 'row gap-s' }, h('button', { class: 'btn ghost', 'data-act': 'integrity', onclick: async () => {
           const r = await call('system.integrity'); if (!r) return;
           App.modal({ title: r.ok ? 'Dữ liệu toàn vẹn' : `${r.loi} nhóm lỗi cần xử lý`, wide: true, actions: [{ label: 'Đóng', primary: false }],
@@ -50,6 +50,9 @@
               table({ columns: [{ key: 'title', label: 'Mục kiểm tra' }, { key: 'count', label: 'Số bản ghi', num: true }, { key: 'severity', label: 'Mức', render: (c) => (c.count ? tag(c.severity === 'LOI' ? 'ERROR' : 'NHAP', c.severity === 'LOI' ? 'Lỗi' : 'Cảnh báo') : tag('OK', 'Đạt')) }], rows: r.checks }),
               ...r.checks.filter((c) => c.count).map((c) => h('details', {}, h('summary', {}, `${c.title} — ${c.count}`), c.hint ? h('p', { class: 'muted' }, c.hint) : null, h('pre', { class: 'json' }, JSON.stringify(c.sample, null, 1))))) });
         } }, '🩺 Kiểm tra toàn vẹn'), h('button', { class: 'btn', 'data-act': 'backup', onclick: async () => { if (await call('backup.now', {}, 'Đã tạo backup')) App.reload(); } }, '💾 Backup ngay'))),
+        h('div', { class: 'card' + (ex.nhac ? ' warn' : ''), 'data-export-status': ex.nhac ? 'nhac' : 'ok', style: ex.nhac ? { borderColor: 'var(--amber,#d4a017)', background: 'var(--amber-bg,#fff8e1)' } : {} },
+          h('b', {}, 'Lần xuất ra ổ khác gần nhất: '), ex.last ? fmt.dt(ex.last.replace('Z', '')) + ' (giờ UTC)' : 'chưa từng',
+          ex.nhac ? h('p', { class: 'tag amber', style: { display: 'block', marginTop: '6px' } }, `⚠ ${ex.last ? `Đã quá ${ex.remindDays} ngày` : 'Chưa xuất lần nào'} — hãy xuất một bản sao lưu ra ổ khác (USB/ổ mạng) bằng nút "Xuất ra…" bên dưới. Sao lưu cùng ổ đĩa không bảo vệ khi hỏng ổ.`) : h('span', { class: 'muted' }, ` — nhắc lại sau ${ex.remindDays} ngày`)),
         h('div', { class: 'card' }, table({ columns: [{ key: 'name', label: 'File', mono: true }, { key: 'kind', label: 'Loại', render: (b) => { const K = { AUTO: ['gray', 'Tự động', 'Sao lưu hằng ngày'], MANUAL: ['green', 'Thủ công', 'Bạn bấm Backup ngay'], PRE_IMPORT: ['gray', 'Trước import', 'Tự tạo trước mỗi lần nhập'], PRE_RESTORE: ['amber', 'Trước khôi phục', 'Bản an toàn của dữ liệu trước khi khôi phục'], PRE_MIGRATION: ['amber', 'Trước nâng cấp', 'Bản an toàn trước khi nâng cấp cơ sở dữ liệu — dùng để quay về nếu nâng cấp lỗi'] }[b.kind] || ['gray', b.kind, '']; return h('span', { title: K[2] }, h('span', { class: 'tag ' + K[0] }, K[1])); } }, { key: 'time', label: 'Thời gian', fmt: 'dt' }, { key: 'size', label: 'Dung lượng (KB)', fmt: (x) => fmt.int(x / 1024), num: true },
           { key: '_a', label: '', render: (b) => h('span', { class: 'row gap-s' }, h('button', { class: 'btn ghost sm', 'data-act': 'export-backup', onclick: async () => { const dir = window.vcApi && window.vcApi.pickFolder ? await window.vcApi.pickFolder() : await App.promptBox('Xuất bản sao lưu', 'Đường dẫn thư mục đích'); if (!dir) return; const r = await call('backup.export', { file: b.file, dir }); if (r) App.toast(`Đã xuất ra ${r.path}`); } }, 'Xuất ra…'), h('button', { class: 'btn danger sm', 'data-act': 'restore-backup', onclick: async () => { if (await App.confirmBox('Khôi phục', `Khôi phục dữ liệu từ ${b.name}? Dữ liệu hiện tại được backup lại trước.`, 'Khôi phục', 'danger')) { if (await call('backup.restore', { file: b.file }, 'Đã khôi phục')) App.reload(); } } }, 'Khôi phục')) }], rows, empty: 'Chưa có backup' })));
     },
@@ -89,6 +92,7 @@
       const f = { la: h('input', { type: 'number', value: r.lineAmount.digits, style: { width: '80px' } }), lm: mode(r.lineAmount.mode, 'lm'), va: h('input', { type: 'number', value: r.vat.digits, style: { width: '80px' } }), vm: mode(r.vat.mode, 'vm'),
         gap: h('input', { type: 'number', value: ta.minGapMinutes }), dur: h('input', { type: 'number', value: ta.maxWeighDurationMinutes }) };
       const bcfg = s.backup || {}; const bk = h('input', { type: 'number', value: bcfg.intervalDays === undefined ? 1 : bcfg.intervalDays, style: { width: '80px' } });
+      const rm = h('input', { type: 'number', min: 1, max: 365, value: bcfg.remindExportDays === undefined ? 7 : bcfg.remindExportDays, style: { width: '80px' }, 'data-f': 'remind-export' });
       const co = s.company || {};
       const cf = {}; const cmk = (k, label, ph) => { cf[k] = h('input', { value: co[k] || '', placeholder: ph || '' }); return h('label', { class: 'field' }, label, cf[k]); };
       const companyCard = h('div', { class: 'card' }, h('h3', {}, 'Thông tin Bên A (in trên Bảng kê / báo cáo)'), h('p', { class: 'muted' }, 'Công ty của bạn — bên thuê/thanh toán vận chuyển. Bên B lấy từ danh mục Đơn vị vận chuyển (tên, MST, địa chỉ).'),
@@ -114,7 +118,8 @@
         h('div', { class: 'card' }, h('h3', {}, 'Sao lưu tự động khi mở phần mềm'),
           h('p', { class: 'muted' }, 'Mỗi lần mở phần mềm, nếu bản sao lưu tự động gần nhất đã quá số ngày này thì tự sao lưu lại. Nhập 0 để tắt.'),
           h('div', { class: 'row', style: { alignItems: 'flex-end' } }, h('label', { class: 'field' }, 'Định kỳ sao lưu (ngày / lần)', bk),
-            h('button', { class: 'btn', 'data-act': 'save-backup', onclick: async () => { const n = Math.max(0, Math.floor(Number(bk.value) || 0)); await call('settings.set', { key: 'backup', value: { ...bcfg, auto: n ? 'INTERVAL' : 'OFF', intervalDays: n } }, n ? `Đã lưu: sao lưu mỗi ${n} ngày` : 'Đã tắt sao lưu tự động'); } }, 'Lưu'))),
+            h('label', { class: 'field' }, 'Nhắc xuất ra ổ khác sau (ngày)', rm),
+            h('button', { class: 'btn', 'data-act': 'save-backup', onclick: async () => { const n = Math.max(0, Math.floor(Number(bk.value) || 0)); const rd = Math.min(365, Math.max(1, Math.floor(Number(rm.value) || 7))); await call('settings.set', { key: 'backup', value: { ...bcfg, auto: n ? 'INTERVAL' : 'OFF', intervalDays: n, remindExportDays: rd } }, n ? `Đã lưu: sao lưu mỗi ${n} ngày` : 'Đã tắt sao lưu tự động'); } }, 'Lưu'))),
         await storageCard(),
         h('div', { class: 'card' }, h('h3', {}, 'Thông tin hệ thống'), h('div', { class: 'muted' }, `Phiên bản ${info.version} · schema v${info.schema} · ${info.driver}`, h('br'), `Dữ liệu: ${info.dataDir || '(trình duyệt dev)'}`),
           h('div', { class: 'row', style: { marginTop: '10px' } }, h('button', { class: 'btn ghost', 'data-act': 'recalc', onclick: async () => { if (await App.confirmBox('Tính lại', 'Tính lại toàn bộ phiếu chưa chốt theo bảng giá hiện hành?')) { const x = await call('cost.recalc', { all: true }); if (x) App.toast(`Đã tính lại ${x.count ?? ''} phiếu`); } } }, '🔄 Tính lại tất cả phiếu'),
