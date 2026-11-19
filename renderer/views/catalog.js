@@ -52,8 +52,13 @@
   }
 
   async function editDialog(table_, row, { parentId = null, onDone, onDelete = null }) {
-    const c = (await cfg())[table_];
+    let c = (await cfg())[table_];
+    const isPrice = table_ === 'bang_gia_van_chuyen';
+    if (isPrice && !row) { App.toast('Bảng giá mới tạo ở "+ Phiên bản giá mới" (đóng giá cũ, mở giá mới đúng ngày hiệu lực)', true); return; }
+    // Bảng giá: cửa sổ sửa chỉ còn ghi chú và trạng thái; mọi thông số giá đi qua "Phiên bản giá mới"
+    if (isPrice) c = { ...c, fields: c.fields.filter((f) => ['ghi_chu', 'trang_thai'].includes(f.key)) };
     const form = await buildForm(c, row || {});
+    if (isPrice) form.box.prepend(h('p', { class: 'muted', style: { gridColumn: '1/-1', margin: '0 0 6px' } }, `${row.ma_bang_gia}: chỉ sửa được ghi chú và trạng thái. Muốn đổi thông số giá, dùng "+ Phiên bản giá mới".`));
     App.modal({ title: `${row ? 'Sửa' : 'Thêm'} ${c.label.toLowerCase()}`, body: form.box,
       actions: [...(row && onDelete ? [{ label: '🗑 Xóa', cls: 'danger', onClick: async () => { await onDelete(); } }] : []), { label: 'Hủy', primary: false }, { label: 'Lưu', onClick: async () => {
         const data = form.read();
@@ -61,6 +66,13 @@
         if (!r) return false; onDone && onDone();
       } }] });
   }
+
+  /** Bảng tác động khi mở giá mới: tuyến, giá cũ → giá mới, đóng giá cũ đến ngày nào, mở từ ngày nào, số phiếu tính lại. */
+  const impactTable = (items) => table({ columns: [
+    { key: 'ma_tuyen', label: 'Tuyến', mono: true }, { key: 'gia_cu', label: 'Giá cũ', fmt: 'money' },
+    { key: 'gia_moi', label: 'Giá mới', render: (i) => (i.skip ? h('span', { class: 'tag amber' }, i.skip) : h('b', {}, fmt.money(i.gia_moi))), num: true },
+    { key: 'dong_gia_cu_den', label: 'Đóng giá cũ đến', fmt: 'date' }, { key: 'mo_gia_moi_tu', label: 'Mở giá mới từ', fmt: 'date' },
+    { key: 'so_phieu_tinh_lai', label: 'Phiếu tính lại', fmt: 'int', num: true }], rows: items, wrapClass: 'tall' });
 
   async function columnsFor(table_) {
     const c = (await cfg())[table_]; const refs = {};
@@ -211,7 +223,17 @@
         if (!gd) { App.toast('Nhập "Giá dầu áp dụng" để tạo bảng giá mới (hoặc chọn khoảng ngày rồi bấm Tính để xem giá dầu bình quân)', true); return; }
         App.modal({ title: 'Áp dụng thành bảng giá mới', body: h('div', {}, h('p', {}, 'Tạo phiên bản bảng giá mới cho các tuyến điều chỉnh theo dầu, hiệu lực từ ngày: '), mk('ap', '', h('input', { type: 'date', value: f.ngay.value || today }))),
           actions: [{ label: 'Hủy', primary: false }, { label: 'Áp dụng', onClick: async () => {
-            const r = await call('price.applySheet', { ngay_ap_dung: f.ap.value, gia_dau: gd }, 'Đã tạo bảng giá mới và tính lại phiếu'); if (!r) return false; App.toast(`Đã tạo ${r.created} bảng giá`); calc();
+            // Bước xem trước bắt buộc: tuyến nào đóng giá cũ ngày nào, mở giá mới bao nhiêu, bao nhiêu phiếu được tính lại
+            const pv = await call('price.previewApply', { ngay_ap_dung: f.ap.value, gia_dau: gd }); if (!pv) return false;
+            const okItems = pv.items.filter((i) => !i.skip);
+            if (!okItems.length) { App.toast('Không có tuyến nào áp dụng được', true); return false; }
+            const tong = okItems.reduce((s, i) => s + i.so_phieu_tinh_lai, 0);
+            App.modal({ title: `Xem trước: mở giá mới từ ${fmt.date(pv.ngay_ap_dung)}`, wide: true,
+              body: h('div', {}, impactTable(pv.items), h('p', { class: 'muted' }, `${okItems.length} tuyến sẽ có bảng giá mới; ${fmt.int(tong)} phiếu chưa chốt từ ngày áp dụng sẽ được tính lại.`)),
+              actions: [{ label: 'Quay lại', primary: false }, { label: `Xác nhận tạo ${okItems.length} bảng giá`, onClick: async () => {
+                const r = await call('price.applySheet', { ngay_ap_dung: f.ap.value, gia_dau: gd }, 'Đã tạo bảng giá mới và tính lại phiếu'); if (!r) return false; App.toast(`Đã tạo ${r.created} bảng giá`); calc();
+              } }] });
+            return false;
           } }] });
       };
       v.append(App.pageHead('Bảng tính đơn giá', 'Tính đơn giá vận chuyển theo công thức Excel từ thông số bảng giá; đổi giá dầu để xem trước',
@@ -255,8 +277,9 @@
         const p = await call('price.previewFuel', { id: k.id }); if (!p) return;
         App.modal({ title: `Xem trước kỳ ${k.ma_ky} — giá dầu BQ ${fmt.money2(p.ky.gia_dau_binh_quan)} (${p.so_ngay_gia} ngày)`, wide: true,
           body: h('div', {}, table({ columns: [{ key: 'ma_tuyen', label: 'Tuyến', mono: true }, { key: 'gia_cu', label: 'Giá cũ', fmt: 'money' }, { key: 'gia_moi', label: 'Giá mới', fmt: 'money' },
+            { key: 'dong_gia_cu_den', label: 'Đóng giá cũ đến', fmt: 'date' }, { key: 'mo_gia_moi_tu', label: 'Mở giá mới từ', fmt: 'date' }, { key: 'so_phieu_tinh_lai', label: 'Phiếu tính lại', fmt: 'int', num: true },
             { key: 'b', label: 'Chi tiết tính', render: (i) => (i.skip ? h('span', { class: 'tag amber' }, i.skip) : h('span', { class: 'mono' }, `${i.breakdown.distanceKm}km × ${i.breakdown.fuelNormPer100km}L/100km = ${fmt.money2(i.breakdown.litres)}L · chênh dầu ${fmt.money2(i.breakdown.fuelDiff)} → điều chỉnh ${fmt.money(i.breakdown.adjustmentFinal)}`)) }], rows: p.items })),
-          actions: [{ label: 'Đóng', primary: false }, ...(k.trang_thai === 'NHAP' ? [{ label: 'Duyệt & tạo bảng giá mới', onClick: async () => { const r = await call('price.approveFuel', { id: k.id }, 'Đã duyệt, bảng giá mới đã tạo và tính lại'); if (!r) return false; load(); } }] : [])] });
+          actions: [{ label: 'Đóng', primary: false }, ...(k.trang_thai === 'NHAP' ? [{ label: 'Duyệt & tạo bảng giá mới', onClick: async () => { const n = p.items.filter((i) => !i.skip); const t = n.reduce((s, i) => s + (i.so_phieu_tinh_lai || 0), 0); if (!(await App.confirmBox('Duyệt kỳ giá dầu', `Tạo ${n.length} bảng giá mới từ ${fmt.date(p.ky.ngay_ap_dung)}, đóng giá cũ đến ngày liền trước và tính lại ${fmt.int(t)} phiếu chưa chốt. Tiếp tục?`, 'Duyệt & tạo'))) return false; const r = await call('price.approveFuel', { id: k.id }, 'Đã duyệt, bảng giá mới đã tạo và tính lại'); if (!r) return false; load(); } }] : [])] });
       }
       async function newPeriod() {
         const f = {}; const mk = (k, l, el) => { f[k] = el; return h('label', { class: 'field' }, l, el); };

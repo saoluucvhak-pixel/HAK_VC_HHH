@@ -342,6 +342,25 @@ await page.waitForTimeout(1100);
 if (await page.textContent('.kpi b') !== '2.035') errors.push('phản hồi bộ lọc cũ ghi đè Dashboard');
 await page.unroute('**/api/reports.dashboard');
 
+// ---- 0.8.2: bảng giá chỉ sửa ghi chú/trạng thái; "Áp dụng" bảng tính đơn giá hiện xem trước + xác nhận
+{
+  const ck = (ok, msg) => { if (!ok) errors.push('bảng giá: ' + msg); };
+  await nav('prices'); await page.waitForSelector('table.t tbody tr');
+  await page.click('table.t tbody tr >> nth=0'); await page.waitForSelector('.modal');
+  ck((await page.locator('.modal [data-f=don_gia_goc]').count()) === 0, 'cửa sổ sửa bảng giá không được còn ô đơn giá gốc');
+  ck((await page.locator('.modal [data-f=vat_percent]').count()) === 0, 'cửa sổ sửa bảng giá không được còn ô VAT');
+  ck((await page.locator('.modal [data-f=ghi_chu]').count()) === 1, 'phải còn ô ghi chú');
+  ck((await page.locator('.modal [data-f=trang_thai]').count()) === 1, 'phải còn ô trạng thái');
+  await shot('31-sua-bang-gia-han-che'); await page.click('.modal .btn.ghost');
+  await nav('pricecalc'); await page.waitForSelector('[data-act=apply]');
+  await page.locator('label.field:has-text("Giá dầu áp dụng") input').fill('25000'); await page.click('[data-act=apply]'); await page.waitForSelector('.modal');
+  await page.fill('.modal input[type=date]', '2027-03-01'); await page.click('.modal .btn:not(.ghost)');
+  await page.waitForSelector('.modal:has-text("Xem trước: mở giá mới")', { timeout: 10000 });
+  ck((await page.locator('.modal:has-text("Xem trước: mở giá mới") th:has-text("Phiếu tính lại")').count()) >= 1, 'xem trước phải có cột số phiếu tính lại');
+  ck((await page.locator('.modal:has-text("Xem trước: mở giá mới") th:has-text("Đóng giá cũ đến")').count()) >= 1, 'xem trước phải có cột đóng giá cũ');
+  await shot('32-xem-truoc-ap-dung-gia'); await page.click('.modal:has-text("Xem trước") .btn.ghost');
+}
+
 console.log('errors:', errors.length ? errors : 'none');
 await browser.close(); srv.close();
 process.exit(errors.length ? 1 : 0);

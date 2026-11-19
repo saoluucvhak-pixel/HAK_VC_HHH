@@ -8,6 +8,7 @@ const fs = require('fs');
 const path = require('path');
 const { CATALOGS } = require('../models/catalogs');
 const { ALERT_DEF } = require('../services/AlertService');
+const { ValidationError } = require('../services/CatalogService');
 const exporters = require('../excel/exporters');
 const documents = require('../print/documents');
 const templates = require('../print/htmlTemplates');
@@ -25,6 +26,10 @@ const stripScope = (channel, args) => {
   if (out && out.filter) out.filter = clean(out.filter);
   return out;
 };
+
+/** Bảng giá chỉ đổi thông số qua "Phiên bản giá mới" (price.createVersion): đóng giá cũ đến ngày X−1, mở giá mới từ X, tính lại phiếu bị ảnh hưởng. */
+const PRICE_TABLE = 'bang_gia_van_chuyen';
+const PRICE_EDITABLE = ['ghi_chu', 'trang_thai'];
 
 function createHandlers(app, env = {}) {
   const { exportsDir = null, importsDir = null, seedDir = null, backup = null } = env;
@@ -79,8 +84,17 @@ function createHandlers(app, env = {}) {
     'catalog.list': ({ table, ...o }) => app.catalog.list(table, o),
     'catalog.get': ({ table, id }) => app.catalog.get(table, id),
     'catalog.options': ({ table }) => app.catalog.options(table),
-    'catalog.create': ({ table, data, parentId }) => app.catalog.create(table, data, { parentId }),
-    'catalog.update': ({ table, id, data }) => app.catalog.update(table, id, data),
+    'catalog.create': ({ table, data, parentId }) => {
+      if (table === PRICE_TABLE) throw new ValidationError('Không thêm bảng giá trực tiếp — dùng "+ Phiên bản giá mới" (Bảng giá) để đóng giá cũ và mở giá mới đúng ngày hiệu lực');
+      return app.catalog.create(table, data, { parentId });
+    },
+    'catalog.update': ({ table, id, data }) => {
+      if (table === PRICE_TABLE) {
+        const bad = Object.keys(data || {}).filter((k) => !PRICE_EDITABLE.includes(k));
+        if (bad.length) throw new ValidationError(`Bảng giá chỉ sửa được ghi chú và trạng thái (không sửa: ${bad.join(', ')}). Muốn đổi thông số giá, dùng "+ Phiên bản giá mới"`);
+      }
+      return app.catalog.update(table, id, data);
+    },
     'catalog.remove': ({ table, id }) => app.catalog.remove(table, id),
 
     // ---------------- import phiếu cân
@@ -154,6 +168,7 @@ function createHandlers(app, env = {}) {
     'price.fuelPeriods': () => app.price.listFuelPeriods(),
     'price.createFuelPeriod': (o) => app.price.createFuelPeriod(o),
     'price.previewFuel': ({ id }) => app.price.previewFuelPeriod(id),
+    'price.previewApply': (o) => app.price.previewApplySheet(o),
     'price.approveFuel': ({ id }) => app.price.approveFuelPeriod(id),
     'price.createVersion': (o) => app.price.createVersion(o),
     'fuel.importPreview': ({ filePath, base64, fileName, sheetName }) => app.fuelImport.preview(base64 ? { buffer: Buffer.from(base64, 'base64'), fileName, sheetName } : { filePath, sheetName }),
