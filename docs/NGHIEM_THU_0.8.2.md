@@ -56,4 +56,26 @@ Kết luận rà quyền: không còn đường nào ghi trực tiếp vào bả
 
 ## 5. Nghiệm thu bộ cài Windows
 
-**Chưa chạy.** Nhánh `claude/vc-cost-0.8.2` mới có commit cục bộ, chưa push và chưa chạy workflow CI Windows nên chưa có bằng chứng trên bộ cài Setup/Portable (cài mới, nâng từ v4/v6/v7, thư mục dữ liệu tùy chỉnh, Portable) và chưa có SHA-256. `scripts/accept-windows.ps1` đã được cập nhật (schema đích 8, thêm ca nâng từ v7) nhưng chưa được chạy. Kết luận hiện tại: **Chưa đủ điều kiện bàn giao** cho tới khi workflow bộ cài chạy xanh trên commit cuối; phần mã và test (mục 4) đã đạt.
+Run [44456764322](https://github.com/saoluucvhak-pixel/HAK_VC_HHH/actions/runs/44456764322) (`workflow_dispatch`, `installers=true`) trên commit `20454e5`, kết luận **thành công**: cài gói, test Windows (node:sqlite và better-sqlite3), đóng gói, **kiểm thử giao diện trên Windows**, khởi động thử bản đóng gói, build Setup + Portable, SHA-256, nghiệm thu bộ cài. Đồng thời CI Linux (#65) và Windows theo PR (#73) trên cùng commit đều thành công.
+
+| Ca | Thư mục dữ liệu | Schema | Phiếu | Ghi chú |
+|---|---|---:|---:|---|
+| Cài mới (Setup, mặc định) | `%APPDATA%\VCCost` | 8 | 2.035 | migration 001→008 |
+| Nâng từ v4 | `%APPDATA%\VCCost` | 8 | 3 | 4 → 8 (005–008), có `PRE_MIGRATION` |
+| Nâng từ v6 | `%APPDATA%\VCCost` | 8 | 3 | 6 → 8 (007, 008), có `PRE_MIGRATION` |
+| **Nâng từ v7** | `%APPDATA%\VCCost` | 8 | 3 | 7 → 8 (chỉ 008), có `PRE_MIGRATION` |
+| Thư mục dữ liệu tùy chỉnh | `D:\a\_temp\du-lieu-tuy-chinh` | 8 | 2.035 | migration 001→008 |
+| Portable | `…\portable-test\VCCost-data` | 8 | 2.035 | migration 001→008 |
+
+Cả 6 ca: `version=0.8.2`, `driver=better-sqlite3`, `electron=45.3.3`, `problems=[]`, integrity `ok` (0 lỗi). Các ca có dữ liệu V.47 còn cho: PDF `%PDF-` (404.845 byte), Excel `PK`, sao lưu → khôi phục an toàn (2.035 → 2.035), import lại 2.035 phiếu = trùng hoàn toàn / 0 ghi mới, chốt kỳ 1.046 phiếu, kiểm tra duyệt phiếu (`draftTripsInStatement=0`, `draftVisible=1`, `approved=1`).
+
+SHA-256 các tệp của run này (commit `20454e5`):
+```
+fcc74c2d157d219357067c1296790f79af4821c33e9a759b7e2587e70c573246  VC-Cost-0.8.2-Portable.exe
+c8caf3eedbce64df56f42ebc6a7964a30c89a5870a6a7b5926121854f372fffe  VC-Cost-0.8.2-Setup.exe
+```
+Lưu ý: nếu PR được gộp bằng squash, commit trên `main` sẽ khác `20454e5`; bản phát hành chính thức phải được build và nghiệm thu lại trên commit của `main` rồi dùng đúng các tệp của run đó (cùng quy trình 0.8.0).
+
+## 6. Kết luận
+
+**Bàn giao có điều kiện.** Căn cứ: 200/200 test hai driver, UI smoke (cả bản Windows), integrity 0 lỗi, run bộ cài đạt 6/6 ca nghiệm thu kể cả nâng từ v7. Điều kiện: (a) nghiệm thu lại bộ cài trên commit `main` sau khi gộp và phát hành đúng các tệp đó; (b) chủ sản phẩm quyết định các bảng còn ở mức *Nhập* (mục 3.1) và chấp nhận các rủi ro còn lại ở mục 3 (chưa chạy dữ liệu thật, chưa kiểm tay trên Windows thật và hộp thoại lưu của Electron, chưa ký số, icon mặc định). Chưa phát hành: chờ bạn duyệt biên bản và xác nhận.
