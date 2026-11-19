@@ -8,6 +8,7 @@ const fs = require('fs');
 const path = require('path');
 const { CATALOGS } = require('../models/catalogs');
 const { ALERT_DEF } = require('../services/AlertService');
+const { ValidationError } = require('../services/CatalogService');
 const exporters = require('../excel/exporters');
 const documents = require('../print/documents');
 const templates = require('../print/htmlTemplates');
@@ -26,13 +27,19 @@ const stripScope = (channel, args) => {
   return out;
 };
 
+/** Bảng giá chỉ đổi thông số qua "Phiên bản giá mới" (price.createVersion): đóng giá cũ đến ngày X−1, mở giá mới từ X, tính lại phiếu bị ảnh hưởng. */
+const PRICE_TABLE = 'bang_gia_van_chuyen';
+const PRICE_EDITABLE = ['ghi_chu', 'trang_thai'];
+
 function createHandlers(app, env = {}) {
   const { exportsDir = null, importsDir = null, seedDir = null, backup = null } = env;
-  const { duyetBat } = require('../utils/duyet');
+  const { duyetBat, duyetTuDuyet, ConfirmRequired, coQuyenDuyet, soNguoiDuyet } = require('../utils/duyet');
   const allStates = (f) => ({ moi_trang_thai: true, ...(f || {}) });   // Phiếu cân thấy cả phiếu Nháp (trừ khi lọc theo trạng thái duyệt)
   const session = env.session || { get: () => null, set: () => {} };
-  const { ROLE_PERMS, ROLE_LABEL } = require('../utils/permissions');
-  const authStatus = () => { const u = session.get(); return { enabled: app.auth.enabled(), user: u ? { id: u.id, ten_dang_nhap: u.ten_dang_nhap, ho_ten: u.ho_ten, vai_tro: u.vai_tro } : null, perms: u ? ROLE_PERMS[u.vai_tro] : [], roles: ROLE_LABEL }; };
+  const { ROLE_PERMS, ROLE_LABEL, CHANNEL_PERM, TABLE_PERM } = require('../utils/permissions');
+  const authStatus = () => { const u = session.get(); return { enabled: app.auth.enabled(), user: u ? { id: u.id, ten_dang_nhap: u.ten_dang_nhap, ho_ten: u.ho_ten, vai_tro: u.vai_tro } : null, perms: u ? ROLE_PERMS[u.vai_tro] : [], roles: ROLE_LABEL,
+    // nguồn quyền duy nhất là utils/permissions.js; giao diện chỉ ĐỌC để ẩn/hiện nút, máy chủ vẫn là nơi quyết định
+    channelPerm: Object.fromEntries(CHANNEL_PERM), tablePerm: TABLE_PERM }; };
   const actor = () => { const u = session.get(); return u ? u.id : null; };
   const saveImportCopy = (buf, name) => {
     if (!importsDir || !buf) return null;
@@ -62,7 +69,13 @@ function createHandlers(app, env = {}) {
       alertsOpen: app.alerts.countOpen(), pendingReviews: app.imports.pendingReviews().length,
       duyetBat: duyetBat(app.settings), choDuyet: app.db.get(`SELECT COUNT(*) n FROM phieu_can WHERE trang_thai='ACTIVE' AND trang_thai_duyet='NHAP'`).n }),
     'settings.all': () => app.settings.all(),
-    'settings.set': ({ key, value }) => { app.settings.set(key, value); if (key === 'time_anomaly') app.cost.syncTimeAlerts(app.db.all('SELECT DISTINCT bien_so_chuan b FROM phieu_can').map((x) => x.b)); return { ok: true }; },
+    'settings.set': ({ key, value, xac_nhan }) => {
+      // Bật duyệt phiếu khi đã bật phân quyền mà còn < 2 người có quyền duyệt và chưa cho tự duyệt → phiếu có thể kẹt ở Nháp: hỏi xác nhận
+      if (key === 'duyet_phieu' && value && value.bat === true && !value.cho_tu_duyet && app.auth.enabled() && !xac_nhan && !duyetBat(app.settings)) {
+        const n = soNguoiDuyet(app.db);
+        if (n < 2) throw new ConfirmRequired(`Hiện chỉ có ${n} người có quyền duyệt. Người nhập/sửa phiếu không tự duyệt phiếu của mình nên phiếu có thể kẹt ở trạng thái Nháp. Hãy thêm người có quyền Duyệt, hoặc bật "Cho phép tự duyệt". Vẫn bật duyệt phiếu?`);
+      }
+      app.settings.set(key, value); if (key === 'time_anomaly') app.cost.syncTimeAlerts(app.db.all('SELECT DISTINCT bien_so_chuan b FROM phieu_can').map((x) => x.b)); return { ok: true }; },
     'seed.loadSample': () => {
       const f = path.join(seedDir, 'sample-v47.json');
       return app.seed.load(JSON.parse(fs.readFileSync(f, 'utf8')));
@@ -79,8 +92,17 @@ function createHandlers(app, env = {}) {
     'catalog.list': ({ table, ...o }) => app.catalog.list(table, o),
     'catalog.get': ({ table, id }) => app.catalog.get(table, id),
     'catalog.options': ({ table }) => app.catalog.options(table),
-    'catalog.create': ({ table, data, parentId }) => app.catalog.create(table, data, { parentId }),
-    'catalog.update': ({ table, id, data }) => app.catalog.update(table, id, data),
+    'catalog.create': ({ table, data, parentId }) => {
+      if (table === PRICE_TABLE) throw new ValidationError('Không thêm bảng giá trực tiếp — dùng "+ Phiên bản giá mới" (Bảng giá) để đóng giá cũ và mở giá mới đúng ngày hiệu lực');
+      return app.catalog.create(table, data, { parentId });
+    },
+    'catalog.update': ({ table, id, data }) => {
+      if (table === PRICE_TABLE) {
+        const bad = Object.keys(data || {}).filter((k) => !PRICE_EDITABLE.includes(k));
+        if (bad.length) throw new ValidationError(`Bảng giá chỉ sửa được ghi chú và trạng thái (không sửa: ${bad.join(', ')}). Muốn đổi thông số giá, dùng "+ Phiên bản giá mới"`);
+      }
+      return app.catalog.update(table, id, data);
+    },
     'catalog.remove': ({ table, id }) => app.catalog.remove(table, id),
 
     // ---------------- import phiếu cân
@@ -90,8 +112,15 @@ function createHandlers(app, env = {}) {
     'import.preview': ({ token, ...o }) => app.imports.preview(token, o),
     'import.previewRows': ({ token, ...o }) => app.imports.previewRows(token, o),
     'import.commit': ({ token, ...o }) => {
-      if (backup) backup.backupNow('PRE_IMPORT');
-      const r = app.imports.commit(token, o);
+      let pre = null;
+      if (backup) pre = backup.backupNow('PRE_IMPORT');            // sao lưu lỗi → ném lỗi → import bị chặn (giữ hành vi an toàn)
+      let r;
+      try { r = app.imports.commit(token, o); }
+      catch (e) {
+        // commit chạy trong một giao dịch nên lỗi = chưa ghi gì; bản PRE_IMPORT vừa tạo KHÔNG được dùng để khôi phục
+        if (env.log) env.log(`Import thất bại (${e.message}): bản sao lưu PRE_IMPORT ${pre && (pre.file || pre.name) ? `(${pre.file || pre.name}) ` : ''}không được dùng — chưa có dữ liệu nào bị ghi`);
+        throw e;
+      }
       // Batch đã ghi xong: lỗi chép file nguồn chỉ là cảnh báo, không được báo như import thất bại
       let copy = null, copyWarning = null;
       try { copy = saveImportCopy(r.fileBuffer, r.fileName); } catch (e) { copyWarning = `Đã nhập xong nhưng không lưu được bản sao file nguồn: ${e.message}`; }
@@ -105,6 +134,7 @@ function createHandlers(app, env = {}) {
     },
     'import.cancel': ({ token }) => app.imports.cancel(token),
     'import.pending': () => app.imports.pendingReviews(),
+    'import.pendingGroups': () => app.imports.pendingGroups(),
     'import.resolve': ({ id, action, note }) => app.imports.resolveReview(id, action, note),
     'import.resolveMany': ({ ids, action, note, batchId }) => app.imports.resolveMany(ids, action, note, { batchId }),
     'import.batches': () => app.imports.listBatches(),
@@ -154,6 +184,7 @@ function createHandlers(app, env = {}) {
     'price.fuelPeriods': () => app.price.listFuelPeriods(),
     'price.createFuelPeriod': (o) => app.price.createFuelPeriod(o),
     'price.previewFuel': ({ id }) => app.price.previewFuelPeriod(id),
+    'price.previewApply': (o) => app.price.previewApplySheet(o),
     'price.approveFuel': ({ id }) => app.price.approveFuelPeriod(id),
     'price.createVersion': (o) => app.price.createVersion(o),
     'fuel.importPreview': ({ filePath, base64, fileName, sheetName }) => app.fuelImport.preview(base64 ? { buffer: Buffer.from(base64, 'base64'), fileName, sheetName } : { filePath, sheetName }),
@@ -226,10 +257,22 @@ function createHandlers(app, env = {}) {
     'auth.disable': ({ mat_khau }) => { app.auth.disable(actor(), mat_khau); session.set(null); return authStatus(); },
     'auth.users': () => app.auth.list(),
     'auth.createUser': (o) => app.auth.createUser(actor(), o),
-    'auth.updateUser': ({ id, ...patch }) => app.auth.updateUser(actor(), id, patch),
+    'auth.updateUser': ({ id, xac_nhan, ...patch }) => {
+      // Khóa/hạ quyền người duyệt làm số người duyệt còn < 2 khi đang bật duyệt phiếu (không cho tự duyệt) → hỏi xác nhận
+      if (!xac_nhan && duyetBat(app.settings) && !duyetTuDuyet(app.settings)) {
+        const u = app.db.get('SELECT vai_tro, trang_thai FROM nguoi_dung WHERE id=?', [id]);
+        const next = { vai_tro: patch.vai_tro !== undefined ? patch.vai_tro : u && u.vai_tro, trang_thai: patch.trang_thai !== undefined ? patch.trang_thai : u && u.trang_thai };
+        if (u && coQuyenDuyet(u) && !coQuyenDuyet(next)) {
+          const con = soNguoiDuyet(app.db) - 1;
+          if (con < 2) throw new ConfirmRequired(`Sau thay đổi này chỉ còn ${con} người có quyền duyệt; người nhập/sửa phiếu không tự duyệt phiếu của mình nên phiếu có thể kẹt ở Nháp. Hãy bật "Cho phép tự duyệt" hoặc thêm người có quyền Duyệt. Vẫn tiếp tục?`);
+        }
+      }
+      return app.auth.updateUser(actor(), id, patch);
+    },
     'auth.resetPassword': ({ id, mat_khau }) => app.auth.resetPassword(actor(), id, mat_khau),
     'auth.changePassword': ({ cu, moi }) => { if (!actor()) throw new Error('Chưa bật phân quyền / chưa đăng nhập'); app.auth.changeOwnPassword(actor(), cu, moi); return { ok: true }; },
     'backup.export': ({ file, dir }) => (backup ? backup.exportTo(file, dir) : null),
+    'backup.exportStatus': () => (backup ? backup.exportStatus() : { last: null, remindDays: 7, nhac: false }),
   };
   return Object.fromEntries(Object.entries(handlers).map(([ch, fn]) => [ch, (args, ...rest) => fn(stripScope(ch, args), ...rest)]));
 }

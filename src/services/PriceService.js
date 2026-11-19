@@ -29,6 +29,32 @@ class PriceService {
     carrierId ? [tuyenId, carrierId, date, date] : [tuyenId, date, date]));
   }
 
+  /**
+   * Tác động của việc mở giá mới từ `ngay_ap_dung` trên một bảng giá gốc: giá cũ đóng đến ngày nào, giá mới mở từ ngày nào,
+   * bao nhiêu phiếu CHƯA CHỐT (từ ngày áp dụng trở đi, cùng tuyến/đơn vị/loại hàng) sẽ được tính lại, và bao nhiêu phiếu đã chốt (sẽ chặn).
+   */
+  _impact(tuyenId, ngayApDung, base) {
+    const w = ['tuyen_id = ?', "trang_thai = 'ACTIVE'", 'ngay_can >= ?']; const p = [tuyenId, ngayApDung];
+    if (base && base.don_vi_van_chuyen_id) { w.push('don_vi_van_chuyen_id = ?'); p.push(base.don_vi_van_chuyen_id); }
+    if (base && base.loai_hang) { w.push('loai_hang = ?'); p.push(base.loai_hang); }
+    const cnt = (extra) => this.db.get(`SELECT COUNT(*) n FROM phieu_can WHERE ${w.join(' AND ')} AND ${extra}`, p).n;
+    return {
+      dong_gia_cu_den: base ? dayBefore(ngayApDung) : null, ma_gia_cu: base ? base.ma_bang_gia : null, mo_gia_moi_tu: ngayApDung,
+      so_phieu_tinh_lai: cnt('chot_ky_id IS NULL'), so_phieu_da_chot: cnt('chot_ky_id IS NOT NULL'),
+    };
+  }
+
+  /** Xem trước "Áp dụng bảng tính đơn giá": từng tuyến điều chỉnh theo dầu → giá cũ/mới + tác động. KHÔNG ghi dữ liệu. */
+  previewApplySheet({ ngay_ap_dung, gia_dau }) {
+    if (!ngay_ap_dung || !(Number(gia_dau) > 0)) throw new ValidationError('Cần ngày áp dụng và giá dầu áp dụng');
+    const sh = this.priceSheet({ ngay: dayBefore(ngay_ap_dung), gia_dau });
+    const items = sh.rows.filter((r) => r.phuong_thuc === 'DIEU_CHINH_DAU').map((r) => {
+      const base = this.activeRule(r.tuyen_id, ngay_ap_dung) || this.activeRule(r.tuyen_id, dayBefore(ngay_ap_dung));
+      return { tuyen_id: r.tuyen_id, ma_tuyen: r.ma_tuyen, gia_cu: r.gia_hien_hanh, gia_moi: r.thieu ? null : r.gia_moi, skip: r.thieu ? 'Thiếu thông số để tính giá' : undefined, ...this._impact(r.tuyen_id, ngay_ap_dung, base) };
+    });
+    return { ngay_ap_dung, gia_dau: Number(gia_dau), items };
+  }
+
   /** Đóng bảng giá cũ (nếu mở/chồng) rồi tạo bảng giá mới. Dùng trong transaction của caller. */
   _insertVersion(base, newRule) {
     if (base && (base.den_ngay === null || base.den_ngay >= newRule.tu_ngay)) {
@@ -197,7 +223,7 @@ class PriceService {
           rounding: base.quy_tac_lam_tron_json ? JSON.parse(base.quy_tac_lam_tron_json) : undefined,
         });
         items.push({ tuyen_id: t.id, ma_tuyen: label, ma_tuyen_goc: t.ma_tuyen, noi_xuat: t.noi_xuat, noi_den: t.noi_den, base_rule_id: base.id, base_ma: base.ma_bang_gia,
-          gia_cu: base.don_gia_ap_dung, gia_moi: b.appliedPrice, vat_percent: base.vat_percent, breakdown: b });
+          gia_cu: base.don_gia_ap_dung, gia_moi: b.appliedPrice, vat_percent: base.vat_percent, breakdown: b, ...this._impact(t.id, ky.ngay_ap_dung, base) });
       }
     }
     return { ky: { ...ky, gia_dau_binh_quan: fromDb(ky.gia_dau_binh_quan) }, so_ngay_gia: prices.length, items };

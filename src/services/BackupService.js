@@ -108,7 +108,18 @@ class BackupService {
     const h = (f) => crypto.createHash('sha256').update(fs.readFileSync(f)).digest('hex');
     const sha = h(out);
     if (sha !== h(full)) { try { fs.unlinkSync(out); } catch { /* bỏ qua */ } throw new Error('Chép ra thư mục đích không khớp bản gốc (SHA-256) — đã hủy, hãy thử ổ khác'); }
+    // Ghi mốc "xuất ra ổ khác gần nhất" CHỈ khi đã chép và đối chiếu SHA-256 thành công
+    try { if (this.settings && this.settings.set) this.settings.set('backup_export_last', { at: new Date().toISOString() }); } catch { /* không chặn việc xuất */ }
     return { path: out, size: fs.statSync(out).size, sha256: sha };
+  }
+
+  /** Mốc xuất ra ổ khác gần nhất và có cần nhắc không (quá `remindExportDays`, mặc định 7 ngày; chưa từng xuất cũng nhắc). */
+  exportStatus() {
+    const get = (k) => (this.settings && this.settings.get ? this.settings.get(k) : null);
+    const last = (get('backup_export_last') || {}).at || null;
+    const days = Number((get('backup') || {}).remindExportDays) || 7;
+    const nhac = !last || Date.now() - Date.parse(last) > days * 24 * 3600 * 1000;
+    return { last, remindDays: days, nhac };
   }
 
   /**

@@ -342,6 +342,146 @@ await page.waitForTimeout(1100);
 if (await page.textContent('.kpi b') !== '2.035') errors.push('phản hồi bộ lọc cũ ghi đè Dashboard');
 await page.unroute('**/api/reports.dashboard');
 
+// ---- 0.8.2: bảng giá chỉ sửa ghi chú/trạng thái; "Áp dụng" bảng tính đơn giá hiện xem trước + xác nhận
+{
+  const ck = (ok, msg) => { if (!ok) errors.push('bảng giá: ' + msg); };
+  await nav('prices'); await page.waitForSelector('table.t tbody tr');
+  await page.click('table.t tbody tr >> nth=0'); await page.waitForSelector('.modal');
+  ck((await page.locator('.modal [data-f=don_gia_goc]').count()) === 0, 'cửa sổ sửa bảng giá không được còn ô đơn giá gốc');
+  ck((await page.locator('.modal [data-f=vat_percent]').count()) === 0, 'cửa sổ sửa bảng giá không được còn ô VAT');
+  ck((await page.locator('.modal [data-f=ghi_chu]').count()) === 1, 'phải còn ô ghi chú');
+  ck((await page.locator('.modal [data-f=trang_thai]').count()) === 1, 'phải còn ô trạng thái');
+  await shot('31-sua-bang-gia-han-che'); await page.click('.modal .btn.ghost');
+  await nav('pricecalc'); await page.waitForSelector('[data-act=apply]');
+  await page.locator('label.field:has-text("Giá dầu áp dụng") input').fill('25000'); await page.click('[data-act=apply]'); await page.waitForSelector('.modal');
+  await page.fill('.modal input[type=date]', '2027-03-01'); await page.click('.modal .btn:not(.ghost)');
+  await page.waitForSelector('.modal:has-text("Xem trước: mở giá mới")', { timeout: 10000 });
+  ck((await page.locator('.modal:has-text("Xem trước: mở giá mới") th:has-text("Phiếu tính lại")').count()) >= 1, 'xem trước phải có cột số phiếu tính lại');
+  ck((await page.locator('.modal:has-text("Xem trước: mở giá mới") th:has-text("Đóng giá cũ đến")').count()) >= 1, 'xem trước phải có cột đóng giá cũ');
+  await shot('32-xem-truoc-ap-dung-gia'); await page.click('.modal:has-text("Xem trước") .btn.ghost');
+}
+
+// ---- 0.8.2: bật phân quyền + duyệt phiếu → nút theo vai trò (giao diện chỉ ẩn/hiện; máy chủ quyết định)
+{
+  const ck = (ok, msg) => { if (!ok) errors.push('vai trò: ' + msg); };
+  const PW = 'matkhau-manh-1';
+  const go = async (id) => { await page.evaluate((i) => App.go(i), id); await page.waitForTimeout(500); };
+  const api = (c, a) => page.evaluate(async ([c, a]) => { try { return { ok: true, data: await App.api(c, a) }; } catch (e) { return { ok: false, error: e.message }; } }, [c, a || {}]);
+  const loginAs = async (u) => { await page.evaluate(async ([u, pw]) => { await App.api('auth.login', { ten_dang_nhap: u, mat_khau: pw }); await App.refreshAuth(); await App.refreshInfo(); }, [u, PW]); };
+  await page.evaluate(async (pw) => { await App.api('auth.enable', { ten_dang_nhap: 'admin', ho_ten: 'QT', mat_khau: pw }); await App.refreshAuth(); }, PW);
+  for (const [u, r] of [['xem1', 'XEM'], ['nhap1', 'NHAP'], ['duyet1', 'DUYET']]) await api('auth.createUser', { ten_dang_nhap: u, ho_ten: u, vai_tro: r, mat_khau: PW });
+  await api('settings.set', { key: 'duyet_phieu', value: { bat: true } });
+  const t = (await api('tickets.list', { filter: { chua_chot: true }, limit: 1 })).data.rows[0];
+  await api('tickets.update', { id: t.id, data: { xe_tra_ve: t.xe_tra_ve ? 0 : 1 }, note: 'UI vai trò' });
+  await page.evaluate(() => { Object.keys(App.state.filter).forEach((k) => delete App.state.filter[k]); App.state.filter.trang_thai = 'NHAP'; });
+  const visible = (sel) => page.evaluate((s) => [...document.querySelectorAll(s)].filter((e) => e.offsetParent !== null).length, sel);
+  // DUYỆT: thấy nút duyệt
+  await loginAs('duyet1'); await go('tickets'); await page.waitForSelector('table.t tbody tr');
+  ck((await visible('[data-act=approve-selected]')) === 1, 'vai trò DUYET phải thấy nút duyệt phiếu đã chọn');
+  ck((await visible('[data-act=approve-filtered]')) === 1, 'vai trò DUYET phải thấy nút duyệt tất cả Nháp');
+  // NHẬP: không thấy nút duyệt; vẫn thấy nút xóa phiếu
+  await loginAs('nhap1'); await go('tickets'); await page.waitForSelector('table.t tbody tr');
+  ck((await visible('[data-act=approve-selected]')) === 0, 'vai trò NHAP không được thấy nút duyệt');
+  ck((await visible('[data-act=del-selected]')) === 1, 'vai trò NHAP thấy nút xóa phiếu');
+  await go('prices'); await page.waitForSelector('table.t tbody tr');
+  ck((await visible('[data-act=newversion]')) === 0, 'vai trò NHAP không thấy "+ Phiên bản giá mới"');
+  ck((await visible('[data-act=delprice]')) === 0, 'vai trò NHAP không thấy nút xóa bảng giá');
+  // XEM: không thấy bất kỳ nút ghi dữ liệu
+  await loginAs('xem1'); await go('tickets'); await page.waitForSelector('table.t tbody tr');
+  for (const a of ['approve-selected', 'approve-filtered', 'del-selected', 'del-filtered']) ck((await visible(`[data-act=${a}]`)) === 0, 'vai trò XEM không được thấy ' + a);
+  await go('prices'); await page.waitForSelector('table.t tbody tr');
+  for (const a of ['newversion', 'delprice']) ck((await visible(`[data-act=${a}]`)) === 0, 'vai trò XEM không được thấy ' + a);
+  await go('lock');
+  ck((await visible('[data-act=lock-create]')) === 0, 'vai trò XEM không thấy nút chốt kỳ');
+  ck((await page.evaluate(() => window.__canWarnings.length)) === 0, 'App.can nhận chuỗi lạ: ' + (await page.evaluate(() => window.__canWarnings.join('; '))));
+  const bad = await page.evaluate(() => App.can('tickets.approve')); ck(bad === false, 'can() với tên kênh phải trả false');
+  ck((await page.evaluate(() => window.__canWarnings.length)) === 1, 'can() chuỗi lạ phải ghi cảnh báo');
+  await page.evaluate(() => { window.__canWarnings.length = 0; });
+  // dọn: đăng nhập admin, tắt phân quyền + duyệt
+  await loginAs('admin');
+  await api('settings.set', { key: 'duyet_phieu', value: { bat: false } }).catch(() => {});
+  await page.evaluate(async (pw) => { await App.api('auth.disable', { mat_khau: pw }); await App.refreshAuth(); await App.refreshInfo(); }, PW);
+}
+
+// ---- 0.8.2: cài đặt "Cho phép tự duyệt" + nhãn "Tự duyệt"
+{
+  const ck = (ok, msg) => { if (!ok) errors.push('tự duyệt: ' + msg); };
+  await page.evaluate(() => document.querySelectorAll('.modal-bg, .modal-overlay, .overlay, .modal').forEach((m) => (m.closest('.modal-bg, .modal-overlay, .overlay') || m).remove()));
+  await nav('settings'); await page.waitForSelector('[data-f=duyet-tu]');
+  ck((await page.locator('[data-f=duyet-tu]').count()) === 1, 'phải có ô Cho phép tự duyệt');
+  const st = await page.evaluate(() => App.api('settings.all'));
+  ck(!st.duyet_phieu || !st.duyet_phieu.cho_tu_duyet, 'mặc định không cho tự duyệt');
+}
+
+// ---- 0.8.2: Cần kiểm tra — số liệu khác cho cùng phiếu thì NHÓM theo phiếu (k/n); nhập lại cùng dòng không nhân dòng chờ
+{
+  const ck = (ok, msg) => { if (!ok) errors.push('cần kiểm tra: ' + msg); };
+  const res = await page.evaluate(async () => {
+    const cand = (await App.api('tickets.list', { filter: { chua_chot: true }, limit: 200 })).rows.find((x) => x.ngay_gio_can_1 && x.ngay_gio_can_2 && x.can_lan_1 !== null && x.can_lan_1 !== undefined);
+    const t = cand;
+    const f = (iso) => `${iso.slice(8, 10)}/${iso.slice(5, 7)}/${iso.slice(0, 4)} ${iso.slice(11, 19)}`;
+    const get = await App.api('tickets.get', { id: t.id });
+    const mkRow = (extra) => [get.so_phieu, get.bien_so_goc, get.noi_xuat_goc, f(get.ngay_gio_can_1), f(get.ngay_gio_can_2), get.can_lan_1, get.can_lan_1 + 15000 + extra, 15000 + extra];
+    const H = ['Số phiếu', 'Biển số', 'Nơi xuất', 'Giờ cân 1', 'Giờ cân 2', 'Cân 1', 'Cân 2', 'KL hàng'];
+    const csv = (rows) => btoa(unescape(encodeURIComponent('\ufeff' + [H, ...rows].map((r) => r.join(';')).join('\r\n'))));
+    const run = async (rows, name) => {
+      const o = await App.api('import.open', { base64: csv(rows), fileName: name });
+      const si = await App.api('import.sheetInfo', { token: o.token, sheetName: o.suggestedSheet });
+      const pv = await App.api('import.preview', { token: o.token, sheetName: si.sheetName, headerRow: si.headerRow, mapping: si.mapping });
+      await App.api('import.commit', { token: o.token }); return pv.counts;
+    };
+    const c1 = await run([mkRow(0)], 'x1.csv'); const c2 = await run([mkRow(0)], 'x2.csv'); const c3 = await run([mkRow(1000)], 'x3.csv');
+    const g = (await App.api('import.pendingGroups')).find((x) => x.phieu_can_id === t.id);
+    return { c1, c2, c3, n: g ? g.rows.length : 0, so_phieu: get.so_phieu };
+  });
+  ck(res.c1.conflict === 1, 'lần 1 phải là 1 dòng xung đột, thực tế ' + JSON.stringify(res.c1));
+  ck(res.c2.pendingAlready === 1 && res.c2.conflict === 0, 'lần 2 (cùng dữ liệu) phải là "đã chờ kiểm tra", thực tế ' + JSON.stringify(res.c2));
+  ck(res.c3.conflict === 1, 'lần 3 (số liệu khác) phải mở dòng chờ mới');
+  ck(res.n === 2, 'nhóm phải có đúng 2 dòng chờ, thực tế ' + res.n);
+  await page.evaluate(() => document.querySelectorAll('.modal-bg, .modal-overlay, .overlay, .modal').forEach((m) => (m.closest('.modal-bg, .modal-overlay, .overlay') || m).remove()));
+  await nav('review'); await page.waitForSelector('[data-review] [data-group]');
+  ck((await page.locator('[data-review] [data-group]').count()) === 2, 'màn Cần kiểm tra phải đánh dấu 2 dòng cùng phiếu (1/2, 2/2)');
+  ck((await page.locator('[data-review] [data-group]:has-text("1/2"), [data-review] [data-group]:has-text("2/2")').count()) === 2, 'nhãn nhóm k/n');
+  await shot('33-can-kiem-tra-nhom');
+}
+
+// ---- 0.8.2: danh mục cha–con: tiêu đề đường dẫn, xóa dòng con có xác nhận, đóng bằng click nền vẫn làm mới bảng cha
+{
+  const ck = (ok, msg) => { if (!ok) errors.push('cha–con: ' + msg); };
+  await page.evaluate(() => document.querySelectorAll('.modal-bg, .modal-overlay, .overlay, .modal').forEach((m) => (m.closest('.modal-bg, .modal-overlay, .overlay') || m).remove()));
+  await nav('cat:xe'); await page.waitForSelector('table.t tbody tr');
+  const hits = []; const onReq = (rq) => { if (rq.url().endsWith('/api/catalog.list')) { try { hits.push(JSON.parse(rq.postData() || '{}')); } catch (e) { /* bỏ */ } } };
+  page.on('request', onReq);
+  await page.locator('table.t tbody tr >> nth=0').locator('button:has-text("Chi tiết")').click(); await page.waitForSelector('.modal h2');
+  const title = await page.textContent('.modal h2');
+  ck(/Xe .+ › Lịch sử đơn vị/.test(title), 'tiêu đề cửa sổ con phải dạng đường dẫn, thực tế "' + title + '"');
+  await page.waitForSelector('.modal table.t tbody tr');
+  // xóa dòng con: phải hỏi xác nhận (hộp thứ hai), Hủy thì không xóa
+  const before = await page.locator('.modal table.t tbody tr').count();
+  await page.locator('.modal table.t tbody tr >> nth=0').locator('[data-act=child-del]').click();
+  await page.waitForFunction(() => document.querySelectorAll('.modal').length >= 2);
+  ck((await page.locator('.modal').last().textContent()).includes('Xóa'), 'hộp xác nhận xóa dòng con');
+  await shot('34-xoa-dong-con-xac-nhan');
+  await page.locator('.modal').last().locator('.btn.ghost').click();
+  await page.waitForTimeout(300);
+  ck((await page.locator('.modal table.t tbody tr').count()) === before, 'Hủy xác nhận thì không được xóa dòng con');
+  // đóng bằng click ra nền → bảng cha được tải lại (catalog.list table=xe không có parentId)
+  hits.length = 0;
+  await page.mouse.click(3, 3); await page.waitForTimeout(700);
+  ck(hits.some((b) => b.table === 'xe' && !b.parentId), 'đóng cửa sổ con bằng click nền phải làm mới bảng cha, các gọi: ' + JSON.stringify(hits));
+  page.off('request', onReq);
+}
+
+// ---- 0.8.2: màn Backup nhắc xuất ra ổ khác (chưa từng xuất → nhắc vàng; sau khi xuất → hết nhắc)
+{
+  const ck = (ok, msg) => { if (!ok) errors.push('backup: ' + msg); };
+  await page.evaluate(() => document.querySelectorAll('.modal-bg, .modal-overlay, .overlay, .modal').forEach((m) => (m.closest('.modal-bg, .modal-overlay, .overlay') || m).remove()));
+  await nav('backup'); await page.waitForSelector('[data-export-status]');
+  ck((await page.getAttribute('[data-export-status]', 'data-export-status')) === 'nhac', 'chưa từng xuất ra ổ khác thì phải nhắc');
+  ck((await page.textContent('[data-export-status]')).includes('Lần xuất ra ổ khác gần nhất'), 'phải hiện nhãn lần xuất gần nhất');
+  await shot('35-backup-nhac-xuat');
+}
+
 console.log('errors:', errors.length ? errors : 'none');
 await browser.close(); srv.close();
 process.exit(errors.length ? 1 : 0);

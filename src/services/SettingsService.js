@@ -11,7 +11,10 @@ const need = (cond, msg) => { if (!cond) throw new ValidationError(msg); };
  * (Trước đây nhận mọi khóa/giá trị: vd số bản sao lưu giữ lại = "abc" làm xóa sạch bản sao lưu tự động, làm tròn NaN → bỏ làm tròn âm thầm.)
  */
 const VALIDATORS = {
-  duyet_phieu(v) { need(isObj(v) && typeof v.bat === 'boolean', 'Duyệt phiếu: bat phải là true/false'); },
+  duyet_phieu(v) {
+    need(isObj(v) && typeof v.bat === 'boolean', 'Duyệt phiếu: bat phải là true/false');
+    need(v.cho_tu_duyet === undefined || typeof v.cho_tu_duyet === 'boolean', 'Duyệt phiếu: cho_tu_duyet phải là true/false');
+  },
   kl_hop_ly(v) {
     need(isObj(v), 'Ngưỡng khối lượng phải là đối tượng');
     need(numIn(v.min_kg, 0, 1_000_000) && numIn(v.max_kg, 1, 10_000_000), 'Ngưỡng KL: tối thiểu 0–1.000.000 kg, tối đa 1–10.000.000 kg');
@@ -51,7 +54,10 @@ const VALIDATORS = {
     if (v.keepDaily !== undefined) need(intIn(v.keepDaily, 1, 3650), 'Số bản sao lưu hằng ngày giữ lại phải từ 1 đến 3650');
     if (v.keepMonthly !== undefined) need(intIn(v.keepMonthly, 1, 240), 'Số bản sao lưu hằng tháng giữ lại phải từ 1 đến 240');
     if (v.auto !== undefined) need(['OFF', 'INTERVAL', 'DAILY'].includes(v.auto), 'Chế độ sao lưu tự động không hợp lệ');
+    if (v.remindExportDays !== undefined) need(intIn(v.remindExportDays, 1, 365), 'Số ngày nhắc xuất sao lưu ra ổ khác phải từ 1 đến 365');
   },
+  /** Mốc lần xuất bản sao lưu ra ổ khác gần nhất — do máy chủ ghi khi backup.export thành công. */
+  backup_export_last(v) { need(isObj(v) && typeof v.at === 'string' && !Number.isNaN(Date.parse(v.at)), 'Mốc xuất sao lưu không hợp lệ'); },
 };
 
 class SettingsService {

@@ -1,5 +1,15 @@
 # CHANGELOG
 
+## 0.8.2 — sửa lỗi sau kiểm tra (schema 8)
+- **P0 quyền theo từng bảng**: `catalog.create/update/remove` với **bảng giá** và **giá dầu** cần quyền *Duyệt* (như `price.createVersion`, `fuel.importCommit`); người nhập không còn tạo được bảng giá riêng làm đổi tổng tiền. Các bảng khác giữ quyền *Nhập*. Máy chủ quyết định (`runtime.dispatch`), giao diện chỉ ẩn/hiện nút.
+- **P1 bảng giá một luồng**: thông số giá chỉ đổi qua "Phiên bản giá mới"; `catalog.update` bảng giá chỉ nhận ghi chú/trạng thái, `catalog.create` bảng giá trả lỗi hướng dẫn. "Áp dụng" (Bảng tính đơn giá) và "Duyệt kỳ giá dầu" hiện bảng xem trước (đóng giá cũ đến ngày nào, mở giá mới, số phiếu tính lại) và xác nhận trước khi ghi. Import giá dầu cùng mức quyền *Duyệt*.
+- **P1 nút Duyệt**: sửa `App.can('tickets.approve')` (luôn false khi bật phân quyền) → `App.can('duyet')`; `can()` cảnh báo khi nhận chuỗi lạ; bảng nút→kênh dùng chung lấy mức quyền từ máy chủ; ẩn nút ghi dữ liệu với vai trò không đủ quyền.
+- **P1 không kẹt duyệt khi chỉ có 1 người**: cài đặt `duyet_phieu.cho_tu_duyet` (mặc định tắt); cảnh báo + xác nhận khi bật duyệt phiếu, khóa hoặc hạ quyền làm số người có quyền duyệt < 2; nhãn "Tự duyệt"; audit `APPROVE_TICKET {tu_duyet}`; README mô tả hai chế độ.
+- **P2 hàng chờ "Cần kiểm tra"**: nhập lại cùng dòng xung đột không nhân dòng chờ (`PENDING_ALREADY`, SKIP, không mở thêm cảnh báo); số liệu khác thì tạo dòng mới và nhóm theo phiếu; xem trước hiện riêng. **Migration 008** (dựng lại `import_batch_row` để mở rộng CHECK, giữ nguyên dữ liệu).
+- **P2 cha–con**: xóa dòng con có xác nhận; tiêu đề đường dẫn; đóng bằng click nền và thêm/sửa/xóa dòng con làm mới bảng cha.
+- **P2 sao lưu & xuất**: hẹn giờ kiểm tra sao lưu AUTO mỗi 60 phút (app mở qua đêm vẫn có bản mỗi ngày); mốc "xuất ra ổ khác gần nhất" + nhắc quá 7 ngày (cấu hình được); dọn phiên xem trước import quá 2 giờ; log rõ bản PRE_IMPORT không được dùng khi commit lỗi; hộp thoại lưu chọn bộ lọc theo đuôi (.pdf/.xlsx).
+- Chi tiết, ma trận lỗi → test: `docs/NGHIEM_THU_0.8.2.md`.
+
 ## 0.8.1 — 18/11/2026 (schema 7)
 - Báo cáo và chứng từ chỉ nhận phiếu đã duyệt ở backend, kể cả bộ lọc Nháp/mọi trạng thái. Dashboard, tổng hợp, bảng kê, đối chiếu và biểu mẫu ký dùng cùng phạm vi. Danh sách Phiếu cân vẫn xem được Nháp; Excel dữ liệu có cột trạng thái duyệt.
 - Bộ đếm Smart Filter theo đúng phạm vi màn nhập hoặc báo cáo; phản hồi dữ liệu/đếm cũ được bỏ qua khi đổi lọc nhanh; số đếm được làm mới sau duyệt/xóa. Bảng con giữ đúng loại dữ liệu khi chuyển tab. Màn báo cáo nêu phạm vi đã duyệt.

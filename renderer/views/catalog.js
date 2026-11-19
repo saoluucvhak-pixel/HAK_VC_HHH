@@ -52,8 +52,14 @@
   }
 
   async function editDialog(table_, row, { parentId = null, onDone, onDelete = null }) {
-    const c = (await cfg())[table_];
+    if (!App.canWrite(table_)) { App.toast('Bạn không có quyền sửa dữ liệu này (chỉ xem)', true); return; }
+    let c = (await cfg())[table_];
+    const isPrice = table_ === 'bang_gia_van_chuyen';
+    if (isPrice && !row) { App.toast('Bảng giá mới tạo ở "+ Phiên bản giá mới" (đóng giá cũ, mở giá mới đúng ngày hiệu lực)', true); return; }
+    // Bảng giá: cửa sổ sửa chỉ còn ghi chú và trạng thái; mọi thông số giá đi qua "Phiên bản giá mới"
+    if (isPrice) c = { ...c, fields: c.fields.filter((f) => ['ghi_chu', 'trang_thai'].includes(f.key)) };
     const form = await buildForm(c, row || {});
+    if (isPrice) form.box.prepend(h('p', { class: 'muted', style: { gridColumn: '1/-1', margin: '0 0 6px' } }, `${row.ma_bang_gia}: chỉ sửa được ghi chú và trạng thái. Muốn đổi thông số giá, dùng "+ Phiên bản giá mới".`));
     App.modal({ title: `${row ? 'Sửa' : 'Thêm'} ${c.label.toLowerCase()}`, body: form.box,
       actions: [...(row && onDelete ? [{ label: '🗑 Xóa', cls: 'danger', onClick: async () => { await onDelete(); } }] : []), { label: 'Hủy', primary: false }, { label: 'Lưu', onClick: async () => {
         const data = form.read();
@@ -61,6 +67,13 @@
         if (!r) return false; onDone && onDone();
       } }] });
   }
+
+  /** Bảng tác động khi mở giá mới: tuyến, giá cũ → giá mới, đóng giá cũ đến ngày nào, mở từ ngày nào, số phiếu tính lại. */
+  const impactTable = (items) => table({ columns: [
+    { key: 'ma_tuyen', label: 'Tuyến', mono: true }, { key: 'gia_cu', label: 'Giá cũ', fmt: 'money' },
+    { key: 'gia_moi', label: 'Giá mới', render: (i) => (i.skip ? h('span', { class: 'tag amber' }, i.skip) : h('b', {}, fmt.money(i.gia_moi))), num: true },
+    { key: 'dong_gia_cu_den', label: 'Đóng giá cũ đến', fmt: 'date' }, { key: 'mo_gia_moi_tu', label: 'Mở giá mới từ', fmt: 'date' },
+    { key: 'so_phieu_tinh_lai', label: 'Phiếu tính lại', fmt: 'int', num: true }], rows: items, wrapClass: 'tall' });
 
   async function columnsFor(table_) {
     const c = (await cfg())[table_]; const refs = {};
@@ -86,28 +99,34 @@
         const rows = await api('catalog.list', { table: arg, search });
         App.clear(body).append(h('div', { class: 'card' }, table({
           columns: [...cols, { key: '_a', label: '', render: (r) => h('span', { class: 'row gap-s' },
-            h('button', { class: 'btn ghost sm', onclick: (e) => { e.stopPropagation(); editDialog(arg, r, { onDone: load }); } }, 'Sửa'),
+            h('button', { class: 'btn ghost sm', 'data-act': 'row-edit', hidden: !App.canWrite(arg), onclick: (e) => { e.stopPropagation(); editDialog(arg, r, { onDone: load }); } }, 'Sửa'),
             (c.children || []).length ? h('button', { class: 'btn ghost sm', onclick: (e) => { e.stopPropagation(); children(r); } }, 'Chi tiết') : null,
-            h('button', { class: 'btn ghost sm', onclick: async (e) => { e.stopPropagation(); if (await App.confirmBox('Xóa', `Xóa ${r[c.displayField]}?`, 'Xóa', 'danger')) { if (await call('catalog.remove', { table: arg, id: r.id }, 'Đã xóa')) load(); } } }, 'Xóa')) }],
+            h('button', { class: 'btn ghost sm', 'data-act': 'row-del', hidden: !App.canWrite(arg), onclick: async (e) => { e.stopPropagation(); if (await App.confirmBox('Xóa', `Xóa ${r[c.displayField]}?`, 'Xóa', 'danger')) { if (await call('catalog.remove', { table: arg, id: r.id }, 'Đã xóa')) load(); } } }, 'Xóa')) }],
           rows, wrapClass: 'tall', onRow: (r) => editDialog(arg, r, { onDone: load }) }), h('p', { class: 'muted' }, `${rows.length} bản ghi`)));
       });
       async function children(parent) {
         const kids = c.children; const cc = (await cfg());
-        const holder = h('div', {}); let active = kids[0];
+        const holder = h('div', {}); let active = kids[0]; let dlg = null;
+        // Tiêu đề dạng đường dẫn: "Xe 43H-010.21 › Lịch sử đơn vị"
+        const crumb = (t) => `${c.label} ${parent[c.displayField]} › ${cc[t].label}`;
+        // Sau khi thêm/sửa/xóa dòng con: làm mới bảng con VÀ bảng cha (cột tổng hợp như "Đơn vị hiện tại", "Số chuyến")
+        const afterChange = () => { draw(); load(); };
         const draw = App.latestRender(holder, async (holder) => {
           const childTable = active;
+          if (dlg) dlg.box.querySelector('h2').textContent = crumb(childTable);
           const kcols = await columnsFor(childTable);
           const rows = await api('catalog.list', { table: childTable, parentId: parent.id });
           App.clear(holder).append(h('div', { class: 'tabs' }, kids.map((t) => h('div', { class: 'tab' + (t === childTable ? ' active' : ''), onclick: () => { active = t; draw(); } }, cc[t].label))),
-            h('div', { class: 'row end', style: { marginBottom: '8px' } }, h('button', { class: 'btn sm', onclick: () => editDialog(childTable, null, { parentId: parent.id, onDone: draw }) }, '+ Thêm')),
-            table({ columns: [...kcols, { key: '_a', label: '', render: (r) => h('span', { class: 'row gap-s' }, h('button', { class: 'btn ghost sm', onclick: () => editDialog(childTable, r, { onDone: draw }) }, 'Sửa'),
-              h('button', { class: 'btn ghost sm', onclick: async () => { if (await call('catalog.remove', { table: childTable, id: r.id }, 'Đã xóa')) draw(); } }, 'Xóa')) }], rows }));
+            h('div', { class: 'row end', style: { marginBottom: '8px' } }, h('button', { class: 'btn sm', 'data-act': 'child-add', hidden: !App.canWrite(childTable), onclick: () => editDialog(childTable, null, { parentId: parent.id, onDone: afterChange }) }, '+ Thêm')),
+            table({ columns: [...kcols, { key: '_a', label: '', render: (r) => h('span', { class: 'row gap-s' }, h('button', { class: 'btn ghost sm', 'data-act': 'child-edit', hidden: !App.canWrite(childTable), onclick: () => editDialog(childTable, r, { onDone: afterChange }) }, 'Sửa'),
+              h('button', { class: 'btn ghost sm', 'data-act': 'child-del', hidden: !App.canWrite(childTable), onclick: async () => { if (!(await App.confirmBox('Xóa', `Xóa dòng ${cc[childTable].label.toLowerCase()} này của ${parent[c.displayField]}?`, 'Xóa', 'danger'))) return; if (await call('catalog.remove', { table: childTable, id: r.id }, 'Đã xóa')) afterChange(); } }, 'Xóa')) }], rows }));
         });
-        draw(); App.modal({ title: `${c.label}: ${parent[c.displayField]}`, wide: true, body: holder, actions: [{ label: 'Đóng', primary: false, onClick: () => load() }] });
+        dlg = App.modal({ title: crumb(active), wide: true, body: holder, actions: [{ label: 'Đóng', primary: false }], onClose: load });   // đóng bằng nút hoặc click nền đều làm mới bảng cha
+        draw();
       }
       v.append(App.pageHead(c.label, null,
         arg === 'xe' ? h('button', { class: 'btn ghost', onclick: () => App.go('import') }, '📥 Import danh mục xe') : null,
-        h('input', { placeholder: 'Tìm…', onchange: (e) => { search = e.target.value.trim(); load(); } }), h('button', { class: 'btn', 'data-act': 'add', onclick: () => editDialog(arg, null, { onDone: load }) }, '+ Thêm')), body);
+        h('input', { placeholder: 'Tìm…', onchange: (e) => { search = e.target.value.trim(); load(); } }), h('button', { class: 'btn', 'data-act': 'add', hidden: !App.canWrite(arg), onclick: () => editDialog(arg, null, { onDone: load }) }, '+ Thêm')), body);
       await load();
     },
   });
@@ -211,7 +230,17 @@
         if (!gd) { App.toast('Nhập "Giá dầu áp dụng" để tạo bảng giá mới (hoặc chọn khoảng ngày rồi bấm Tính để xem giá dầu bình quân)', true); return; }
         App.modal({ title: 'Áp dụng thành bảng giá mới', body: h('div', {}, h('p', {}, 'Tạo phiên bản bảng giá mới cho các tuyến điều chỉnh theo dầu, hiệu lực từ ngày: '), mk('ap', '', h('input', { type: 'date', value: f.ngay.value || today }))),
           actions: [{ label: 'Hủy', primary: false }, { label: 'Áp dụng', onClick: async () => {
-            const r = await call('price.applySheet', { ngay_ap_dung: f.ap.value, gia_dau: gd }, 'Đã tạo bảng giá mới và tính lại phiếu'); if (!r) return false; App.toast(`Đã tạo ${r.created} bảng giá`); calc();
+            // Bước xem trước bắt buộc: tuyến nào đóng giá cũ ngày nào, mở giá mới bao nhiêu, bao nhiêu phiếu được tính lại
+            const pv = await call('price.previewApply', { ngay_ap_dung: f.ap.value, gia_dau: gd }); if (!pv) return false;
+            const okItems = pv.items.filter((i) => !i.skip);
+            if (!okItems.length) { App.toast('Không có tuyến nào áp dụng được', true); return false; }
+            const tong = okItems.reduce((s, i) => s + i.so_phieu_tinh_lai, 0);
+            App.modal({ title: `Xem trước: mở giá mới từ ${fmt.date(pv.ngay_ap_dung)}`, wide: true,
+              body: h('div', {}, impactTable(pv.items), h('p', { class: 'muted' }, `${okItems.length} tuyến sẽ có bảng giá mới; ${fmt.int(tong)} phiếu chưa chốt từ ngày áp dụng sẽ được tính lại.`)),
+              actions: [{ label: 'Quay lại', primary: false }, { label: `Xác nhận tạo ${okItems.length} bảng giá`, onClick: async () => {
+                const r = await call('price.applySheet', { ngay_ap_dung: f.ap.value, gia_dau: gd }, 'Đã tạo bảng giá mới và tính lại phiếu'); if (!r) return false; App.toast(`Đã tạo ${r.created} bảng giá`); calc();
+              } }] });
+            return false;
           } }] });
       };
       v.append(App.pageHead('Bảng tính đơn giá', 'Tính đơn giá vận chuyển theo công thức Excel từ thông số bảng giá; đổi giá dầu để xem trước',
@@ -255,8 +284,9 @@
         const p = await call('price.previewFuel', { id: k.id }); if (!p) return;
         App.modal({ title: `Xem trước kỳ ${k.ma_ky} — giá dầu BQ ${fmt.money2(p.ky.gia_dau_binh_quan)} (${p.so_ngay_gia} ngày)`, wide: true,
           body: h('div', {}, table({ columns: [{ key: 'ma_tuyen', label: 'Tuyến', mono: true }, { key: 'gia_cu', label: 'Giá cũ', fmt: 'money' }, { key: 'gia_moi', label: 'Giá mới', fmt: 'money' },
+            { key: 'dong_gia_cu_den', label: 'Đóng giá cũ đến', fmt: 'date' }, { key: 'mo_gia_moi_tu', label: 'Mở giá mới từ', fmt: 'date' }, { key: 'so_phieu_tinh_lai', label: 'Phiếu tính lại', fmt: 'int', num: true },
             { key: 'b', label: 'Chi tiết tính', render: (i) => (i.skip ? h('span', { class: 'tag amber' }, i.skip) : h('span', { class: 'mono' }, `${i.breakdown.distanceKm}km × ${i.breakdown.fuelNormPer100km}L/100km = ${fmt.money2(i.breakdown.litres)}L · chênh dầu ${fmt.money2(i.breakdown.fuelDiff)} → điều chỉnh ${fmt.money(i.breakdown.adjustmentFinal)}`)) }], rows: p.items })),
-          actions: [{ label: 'Đóng', primary: false }, ...(k.trang_thai === 'NHAP' ? [{ label: 'Duyệt & tạo bảng giá mới', onClick: async () => { const r = await call('price.approveFuel', { id: k.id }, 'Đã duyệt, bảng giá mới đã tạo và tính lại'); if (!r) return false; load(); } }] : [])] });
+          actions: [{ label: 'Đóng', primary: false }, ...(k.trang_thai === 'NHAP' ? [{ label: 'Duyệt & tạo bảng giá mới', onClick: async () => { const n = p.items.filter((i) => !i.skip); const t = n.reduce((s, i) => s + (i.so_phieu_tinh_lai || 0), 0); if (!(await App.confirmBox('Duyệt kỳ giá dầu', `Tạo ${n.length} bảng giá mới từ ${fmt.date(p.ky.ngay_ap_dung)}, đóng giá cũ đến ngày liền trước và tính lại ${fmt.int(t)} phiếu chưa chốt. Tiếp tục?`, 'Duyệt & tạo'))) return false; const r = await call('price.approveFuel', { id: k.id }, 'Đã duyệt, bảng giá mới đã tạo và tính lại'); if (!r) return false; load(); } }] : [])] });
       }
       async function newPeriod() {
         const f = {}; const mk = (k, l, el) => { f[k] = el; return h('label', { class: 'field' }, l, el); };

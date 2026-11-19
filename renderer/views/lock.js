@@ -21,7 +21,7 @@
             { key: 'so_phieu', label: 'Số phiếu', fmt: 'int' }, { key: 'tong_kg', label: 'Khối lượng (kg)', fmt: 'kg' },
             { key: 'tong_tien', label: 'Tổng tiền (đ)', fmt: 'money' },
             { key: 'trang_thai', label: 'Trạng thái', tag: true },
-            { key: '_a', label: '', render: (r) => (r.trang_thai === 'DA_CHOT' ? h('button', { class: 'btn danger sm', onclick: async () => {
+            { key: '_a', label: '', render: (r) => (r.trang_thai === 'DA_CHOT' ? h('button', { class: 'btn danger sm', 'data-act': 'lock-unlock', onclick: async () => {
               const reason = await App.promptBox('Mở khóa kỳ ' + r.ma, 'Lý do mở khóa');
               if (!reason) return;
               if (await call('lock.unlock', { id: r.id, reason }, 'Đã mở khóa')) { loadHist(); App.refreshInfo(); }
@@ -48,7 +48,7 @@
             h('div', { class: 'row', style: { marginTop: '12px' } }, h('button', { class: 'btn', disabled: !d.chot_duoc, onclick: async () => {
               if (!(await App.confirmBox('Chốt kỳ', `Chốt ${fmt.int(d.tong.so_chuyen)} phiếu, tổng ${fmt.money(d.tong.tong_tien)} đ? Phiếu chốt không sửa được cho đến khi mở khóa.`, 'Chốt kỳ'))) return;
               if (await call('lock.create', scope(), 'Đã chốt kỳ')) { App.clear(pv); loadHist(); App.refreshInfo(); }
-            } }, '🔒 Chốt kỳ'))),
+            } , 'data-act': 'lock-create' }, '🔒 Chốt kỳ'))),
           nhap, un);
       };
 

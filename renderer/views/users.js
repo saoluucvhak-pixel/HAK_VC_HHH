@@ -39,7 +39,7 @@
           const ht = h('input', { value: u.ho_ten }), vt = sel(roles, u.vai_tro), tt = h('select', {}, h('option', { value: 'ACTIVE' }, 'Đang hoạt động'), h('option', { value: 'INACTIVE' }, 'Khóa'));
           tt.value = u.trang_thai;
           modal({ title: `Sửa ${u.ten_dang_nhap}`, body: h('div', {}, field('Họ và tên', ht), field('Vai trò', vt), field('Trạng thái', tt)),
-            actions: [{ label: 'Hủy', primary: false }, { label: 'Lưu', onClick: async () => { if (!(await call('auth.updateUser', { id: u.id, ho_ten: ht.value, vai_tro: vt.value, trang_thai: tt.value }, 'Đã lưu'))) return false; draw(); } }] });
+            actions: [{ label: 'Hủy', primary: false }, { label: 'Lưu', onClick: async () => { if (!(await App.callConfirm('auth.updateUser', { id: u.id, ho_ten: ht.value, vai_tro: vt.value, trang_thai: tt.value }, 'Đã lưu', 'Số người duyệt'))) return false; draw(); } }] });
         };
         const reset = (u) => {
           const mk = h('input', { type: 'password', autocomplete: 'new-password', placeholder: 'Ít nhất 8 ký tự' });
