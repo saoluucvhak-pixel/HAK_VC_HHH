@@ -6,7 +6,13 @@ import os, subprocess, sys, glob
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 ver = sys.argv[1] if len(sys.argv) > 1 else '0.0.0'
 src = os.path.join(ROOT, 'dist', 'win-unpacked')
-nsis = glob.glob(os.path.expanduser('~/.cache/electron-builder/nsis-3.0.4.1/*/'))[0].rstrip('/')
+nsis_candidates = glob.glob(os.path.expanduser('~/.cache/electron-builder/nsis-3.0.4.1/*/'))
+if not nsis_candidates and 'LOCALAPPDATA' in os.environ:
+    nsis_candidates = glob.glob(os.path.join(os.environ['LOCALAPPDATA'], 'electron-builder', 'Cache', 'nsis-3.0.4.1', '*/'))
+if not nsis_candidates:
+    sys.exit('Khong tim thay thu muc nsis-3.0.4.1')
+nsis = nsis_candidates[0].rstrip('/\\')
+makensis_bin = os.path.join(nsis, 'makensis.exe') if os.name == 'nt' else os.path.join(nsis, 'linux', 'makensis')
 files, dirs = [], []
 for dp, dn, fn in os.walk(src):
     rel = os.path.relpath(dp, src)
@@ -54,7 +60,7 @@ Section "Install"
   Abort
   chua_cai:
   SetOutPath "$INSTDIR"
-  File /r "{src}\\*.*"
+  File /r "win-unpacked\*.*"
   WriteUninstaller "$INSTDIR\\Uninstall.exe"
   CreateDirectory "$SMPROGRAMS\\VC Cost"
   CreateShortcut "$SMPROGRAMS\\VC Cost\\VC Cost.lnk" "$INSTDIR\\VC Cost.exe"
@@ -88,5 +94,5 @@ SectionEnd
 nsi_path = os.path.join(ROOT, 'dist', 'setup.nsi')
 open(nsi_path, 'w', encoding='utf-8-sig').write(nsi)
 env = dict(os.environ, NSISDIR=nsis, NSISCONFDIR=nsis)
-r = subprocess.run([os.path.join(nsis, 'linux', 'makensis'), '-V2', nsi_path], env=env)
+r = subprocess.run([makensis_bin, '-V2', nsi_path], env=env, cwd=os.path.join(ROOT, 'dist'))
 sys.exit(r.returncode)
