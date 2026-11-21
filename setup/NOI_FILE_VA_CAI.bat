@@ -1,14 +1,14 @@
 @echo off
 cd /d "%~dp0"
 title VC Cost - Noi file va cai dat
-set "NAME=VC-Cost-0.6.17-Setup.exe"
-set "HASH=b981968bc56a983455021fb3e58036eed3f2110902b24e2dcc93346a7ff04440"
+set "NAME=VC-Cost-0.8.3-Setup.exe"
+set "HASH=39cc35bb0679a08290ceea3184b47b47d5dba891ffcba2585dc859b9ca2baa72"
 set "PARTS="
 set "GOT="
 set COUNT=0
 
 echo ============================================
-echo   VC Cost 0.6.17 - Noi file va cai dat
+echo   VC Cost 0.8.3 - Noi file va cai dat
 echo ============================================
 echo Thu muc: %CD%
 echo.
@@ -16,7 +16,7 @@ echo.
 for %%F in (%NAME%.part*) do call :addpart "%%F"
 
 if %COUNT%==0 goto :nopart
-if not %COUNT%==4 goto :badcount
+if not %COUNT%==5 goto :badcount
 
 echo Dang noi %COUNT% file, vui long doi...
 if exist "%NAME%" del /f /q "%NAME%"
@@ -52,7 +52,7 @@ echo Hay dat file .bat cung thu muc voi cac file .part va giu nguyen ten file.
 goto :fail
 
 :badcount
-echo [LOI] Can du 4 file part tu part00 den part03, hien chi co %COUNT% file.
+echo [LOI] Can du 5 file part tu part00 den part04, hien chi co %COUNT% file.
 goto :fail
 
 :copyfail
