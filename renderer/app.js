@@ -157,9 +157,16 @@ const App = (() => {
     document.getElementById('toasts').append(t);
     setTimeout(() => t.remove(), err ? 7000 : 3500);
   }
+  const modalStack = [];
   /** Modal: chỉ đóng khi bấm đúng lớp nền (e.target === overlay) hoặc nút Đóng. */
   function modal({ title, body, actions = [], wide = false, onClose = null }) {
-    const close = () => { ov.remove(); if (onClose) onClose(); };
+    const close = () => {
+      const idx = modalStack.indexOf(close);
+      if (idx >= 0) modalStack.splice(idx, 1);
+      ov.remove();
+      if (onClose) onClose();
+    };
+    modalStack.push(close);
     const box = h('div', { class: 'modal' + (wide ? ' wide' : '') }, h('h2', {}, title), body,
       h('div', { class: 'actions' }, actions.map((a) => h('button', {
         class: 'btn ' + (a.cls || (a.primary === false ? 'ghost' : '')), disabled: a.disabled,
@@ -191,23 +198,24 @@ const App = (() => {
   function table({ columns, rows, totals = null, onRow = null, rowClass = null, sort = null, onSort = null, empty = 'Không có dữ liệu', wrapClass = '' }) {
     const num = (c) => ['money', 'money2', 'int', 'kg', 'tan', 'min', 'pct'].includes(c.fmt) || c.num;
     const dat = (c) => ['date', 'dt', 'dts'].includes(c.fmt) || c.date;
+    const stCls = (c) => c.sticky ? (c.sticky === 'left' ? 'col-sticky-left-1 ' : c.sticky === 'left-2' ? 'col-sticky-left-2 ' : 'col-sticky-right ') : '';
     const thead = h('thead', {}, h('tr', {}, columns.map((c) => h('th', {
-      class: (num(c) ? 'r ' : dat(c) ? 'c ' : '') + (c.sort && onSort ? 'sortable' : ''),
+      class: stCls(c) + (num(c) ? 'r ' : dat(c) ? 'c ' : '') + (c.sort && onSort ? 'sortable ' : '') + (c.cls || ''),
       onclick: c.sort && onSort ? () => onSort(c.sort === true ? c.key : c.sort) : null,
     }, c.label, sort && (sort.key === (c.sort === true ? c.key : c.sort)) ? (sort.dir === 'desc' ? ' ▼' : ' ▲') : ''))));
     const cell = (c, r) => {
-      if (c.render) { const v = c.render(r); return h('td', { class: (num(c) ? 'num ' : dat(c) ? 'ctr ' : '') + (c.cls || '') }, v); }
+      if (c.render) { const v = c.render(r); return h('td', { class: stCls(c) + (num(c) ? 'num ' : dat(c) ? 'ctr ' : '') + (c.cls || '') }, v); }
       let v = r[c.key];
       if (typeof c.fmt === 'function') v = c.fmt(v, r); else if (c.fmt && fmt[c.fmt]) v = fmt[c.fmt](v);
-      if (c.tag) return h('td', {}, v === null || v === undefined || v === '' ? '' : tag(r[c.key]));
-      return h('td', { class: (num(c) ? 'num ' : dat(c) ? 'ctr ' : '') + (c.mono ? 'mono ' : '') + (c.cls || '') }, v === null || v === undefined ? '' : v);
+      if (c.tag) return h('td', { class: stCls(c) }, v === null || v === undefined || v === '' ? '' : tag(r[c.key]));
+      return h('td', { class: stCls(c) + (num(c) ? 'num ' : dat(c) ? 'ctr ' : '') + (c.mono ? 'mono ' : '') + (c.cls || '') }, v === null || v === undefined ? '' : v);
     };
     const tbody = h('tbody', {}, rows.length ? rows.map((r) => h('tr', { class: rowClass ? rowClass(r) : '', onclick: onRow ? () => onRow(r) : null, style: onRow ? { cursor: 'pointer' } : null }, columns.map((c) => cell(c, r))))
       : h('tr', {}, h('td', { colspan: columns.length, class: 'empty' }, empty)));
     const tfoot = totals ? h('tfoot', {}, h('tr', {}, columns.map((c, i) => {
       const v = totals[c.key]; let t = '';
       if (v !== undefined && v !== null) t = typeof c.fmt === 'function' ? c.fmt(v, totals) : (c.fmt && fmt[c.fmt] ? fmt[c.fmt](v) : v);
-      return h('td', { class: num(c) ? 'num' : dat(c) ? 'ctr' : '' }, i === 0 && (v === undefined || v === null) ? 'Tổng cộng' : t);
+      return h('td', { class: stCls(c) + (num(c) ? 'num' : dat(c) ? 'ctr' : '') }, i === 0 && (v === undefined || v === null) ? 'Tổng cộng' : t);
     }))) : null;
     return h('div', { class: 'tbl-wrap ' + wrapClass }, h('table', { class: 't' }, thead, tbody, tfoot));
   }
@@ -304,7 +312,8 @@ const App = (() => {
       for (const [id, ic, label, bk] of items) {
         if (NAV_NEED[id] && !can(NAV_NEED[id])) continue;
         const n = bk && info ? (bk === 'pending' ? info.pendingReviews : bk === 'duyet' ? info.choDuyet : info.alertsOpen) : 0;
-        sb.append(h('div', { class: 'nav-item' + (current === id ? ' active' : ''), 'data-nav': id, onclick: () => go(id) },
+        const tip = id === 'import' ? ' (Alt+I)' : id === 'review' ? ' (Alt+D)' : id === 'statements' ? ' (Alt+B)' : '';
+        sb.append(h('div', { class: 'nav-item' + (current === id ? ' active' : ''), 'data-nav': id, title: label + tip, onclick: () => go(id) },
           h('span', { class: 'ic' }, ic), label, n ? h('span', { class: 'badge' + (bk === 'alerts' ? ' red' : '') }, n) : null));
       }
     }
@@ -354,6 +363,43 @@ const App = (() => {
   const pageHead = (title, subtitle, ...actions) => h('div', { class: 'row', style: { marginBottom: '12px' } }, h('div', { class: 'grow' }, h('h1', {}, title), subtitle ? h('p', { class: 'sub', style: { margin: 0 } }, subtitle) : null), ...actions);
 
   async function start() { await refreshAuth(); if (auth.enabled && !auth.user) { renderNav(); showLogin(); return; } await refreshInfo(); await go('dashboard'); }
+
+  // ---------------------------------------------------------------- phím tắt toàn cục
+  window.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') {
+      const popovers = document.querySelectorAll('.fpop, .sfd-mask');
+      if (popovers.length) {
+        document.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
+        return;
+      }
+      if (modalStack.length) {
+        e.preventDefault();
+        const top = modalStack[modalStack.length - 1];
+        top();
+        return;
+      }
+    }
+    if ((e.ctrlKey || e.metaKey) && (e.key === 'f' || e.key === 'F')) {
+      const q = document.querySelector('[data-sf-q] input, input.search, .sf input[type="text"]');
+      if (q) {
+        e.preventDefault();
+        q.focus();
+        if (typeof q.select === 'function') q.select();
+      }
+    }
+    if (e.altKey && (e.key === 'd' || e.key === 'D')) {
+      e.preventDefault();
+      go('review');
+    }
+    if (e.altKey && (e.key === 'i' || e.key === 'I')) {
+      e.preventDefault();
+      go('import');
+    }
+    if (e.altKey && (e.key === 'b' || e.key === 'B')) {
+      e.preventDefault();
+      go('statements');
+    }
+  });
 
   return { h, clear, bindNum, fmt, tag, api, call, callConfirm, pickFile, canWrite, applyPerms, actionAllowed, saveExport, exportXlsx, toast, modal, confirmBox, promptBox, table, register, latestRender, viewId: () => current, go, reload, start, refreshInfo, refreshAuth, can, get auth() { return auth; }, logout, state, pageHead, STATUS_TAG, get info() { return info; } };
 })();

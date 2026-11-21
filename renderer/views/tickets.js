@@ -41,22 +41,67 @@
       if (params.chua_tinh_gia) App.state.filter.trang_thai = params.trang_thai_tinh_gia || 'CHUA_TINH'; else if (params.trang_thai_tinh_gia) App.state.filter.trang_thai = params.trang_thai_tinh_gia;
       const st = { offset: 0, limit: 100, sort: 'ngay_gio_can_1', dir: 'asc' };
       const body = h('div', {}); const sel = new Set(); const vers = {};
+      let currentRows = [];
+      const ALL_COLS = [
+        { key: '_sel', sticky: 'left', fixed: true, label: h('input', { type: 'checkbox', title: 'Chọn cả trang', onclick: (e) => e.stopPropagation(), onchange: (e) => { currentRows.forEach((r) => (e.target.checked ? sel.add(r.id) : sel.delete(r.id))); load(); } }),
+          render: (r) => h('input', { type: 'checkbox', checked: sel.has(r.id), onclick: (e) => e.stopPropagation(), onchange: (e) => { e.target.checked ? sel.add(r.id) : sel.delete(r.id); selBtn.textContent = `🗑 Xóa phiếu đã chọn (${sel.size})`; selBtn.disabled = !sel.size; } }) },
+        { key: 'so_phieu', sticky: 'left-2', fixed: true, label: 'Số phiếu', mono: true, sort: true },
+        { key: 'ngay_gio_can_1', label: 'Cân 1', fmt: 'dt', mono: true, sort: true },
+        { key: 'bien_so', label: 'Biển số', mono: true, sort: true },
+        { key: 'don_vi', label: 'Đơn vị', sort: true },
+        { key: 'noi_xuat', label: 'Nơi xuất', sort: true, render: (r) => r.noi_xuat || h('span', { class: 'muted' }, r.noi_xuat_goc || '') },
+        { key: 'kl_hang_kg', label: 'KL (kg)', fmt: 'kg', sort: true },
+        { key: 'don_gia', label: 'Đơn giá', fmt: 'money', sort: true },
+        { key: 'tien_truoc_vat', label: 'Trước VAT', fmt: 'money', sort: true },
+        { key: 'tong_tien', label: 'Tổng', fmt: 'money', sort: true },
+        { key: 'dot', label: 'Đợt' },
+        { key: 'trang_thai_tinh_gia', sticky: 'right', fixed: true, label: 'Trạng thái', render: (r) => h('span', {}, r.trang_thai_duyet === 'NHAP' ? h('span', { class: 'tag warn', title: 'Phiếu Nháp — chưa vào Dashboard/Bảng kê/báo cáo/chốt kỳ cho tới khi được duyệt' }, 'Nháp') : null, r.trang_thai_duyet === 'NHAP' ? ' ' : '', tag(r.trang_thai_tinh_gia), r.tu_duyet ? ' ' : '', r.tu_duyet ? h('span', { class: 'tag gray', 'data-tu-duyet': '1', title: 'Người nhập/sửa phiếu cũng là người duyệt (đã bật "Cho phép tự duyệt")' }, 'Tự duyệt') : null, r.xe_tra_ve ? ' ' : '', r.xe_tra_ve ? tag('KHAC', 'Trả về') : null) },
+      ];
+      const getVisibleCols = () => {
+        try {
+          const raw = localStorage.getItem('vc.tickets.columns');
+          if (raw) return new Set(JSON.parse(raw));
+        } catch (e) {}
+        return new Set(ALL_COLS.map((c) => c.key));
+      };
+      let visibleCols = getVisibleCols();
+
+      const openColConfig = () => {
+        const cbs = {};
+        const configBody = h('div', { class: 'grid g2' },
+          ALL_COLS.filter((c) => !c.fixed).map((c) => {
+            cbs[c.key] = h('input', { type: 'checkbox', checked: visibleCols.has(c.key) });
+            return h('label', { class: 'row gap-s', style: { padding: '4px 0', cursor: 'pointer' } }, cbs[c.key], typeof c.label === 'string' ? c.label : c.key);
+          }));
+        App.modal({
+          title: 'Tùy chọn cột hiển thị',
+          body: h('div', {}, h('p', { class: 'muted' }, 'Chọn các cột bạn muốn hiển thị trên bảng phiếu cân:'), configBody),
+          actions: [
+            { label: 'Mặc định', cls: 'ghost', keepOpen: true, onClick: () => {
+              ALL_COLS.forEach((c) => { if (cbs[c.key]) cbs[c.key].checked = true; });
+            }},
+            { label: 'Hủy', primary: false },
+            { label: 'Lưu', onClick: () => {
+              const next = new Set(ALL_COLS.filter((c) => c.fixed).map((c) => c.key));
+              for (const [k, cb] of Object.entries(cbs)) if (cb.checked) next.add(k);
+              visibleCols = next;
+              try { localStorage.setItem('vc.tickets.columns', JSON.stringify([...next])); } catch (e) {}
+              load();
+            }},
+          ],
+        });
+      };
+
       const flt = () => App.cleanFilter(App.state.filter);
       const load = App.latestRender(body, async (body) => {
         const d = await api('tickets.list', { filter: flt(), offset: st.offset, limit: st.limit, sort: st.sort, dir: st.dir });
+        currentRows = d.rows;
         d.rows.forEach((r) => { vers[r.id] = r.ver; });
         const pages = Math.max(1, Math.ceil(d.total / st.limit)); const page = Math.floor(st.offset / st.limit) + 1;
+        const activeCols = ALL_COLS.filter((c) => c.fixed || visibleCols.has(c.key));
         App.clear(body).append(h('div', { class: 'card' },
           table({
-            columns: [
-              { key: '_sel', label: h('input', { type: 'checkbox', title: 'Chọn cả trang', onclick: (e) => e.stopPropagation(), onchange: (e) => { d.rows.forEach((r) => (e.target.checked ? sel.add(r.id) : sel.delete(r.id))); load(); } }),
-                render: (r) => h('input', { type: 'checkbox', checked: sel.has(r.id), onclick: (e) => e.stopPropagation(), onchange: (e) => { e.target.checked ? sel.add(r.id) : sel.delete(r.id); selBtn.textContent = `🗑 Xóa phiếu đã chọn (${sel.size})`; selBtn.disabled = !sel.size; } }) },
-              { key: 'so_phieu', label: 'Số phiếu', mono: true, sort: true }, { key: 'ngay_gio_can_1', label: 'Cân 1', fmt: 'dt', mono: true, sort: true }, { key: 'bien_so', label: 'Biển số', mono: true, sort: true },
-              { key: 'don_vi', label: 'Đơn vị', sort: true }, { key: 'noi_xuat', label: 'Nơi xuất', sort: true, render: (r) => r.noi_xuat || h('span', { class: 'muted' }, r.noi_xuat_goc || '') },
-              { key: 'kl_hang_kg', label: 'KL (kg)', fmt: 'kg', sort: true }, { key: 'don_gia', label: 'Đơn giá', fmt: 'money', sort: true }, { key: 'tien_truoc_vat', label: 'Trước VAT', fmt: 'money', sort: true },
-              { key: 'tong_tien', label: 'Tổng', fmt: 'money', sort: true }, { key: 'dot', label: 'Đợt' },
-              { key: 'trang_thai_tinh_gia', label: 'Trạng thái', render: (r) => h('span', {}, r.trang_thai_duyet === 'NHAP' ? h('span', { class: 'tag warn', title: 'Phiếu Nháp — chưa vào Dashboard/Bảng kê/báo cáo/chốt kỳ cho tới khi được duyệt' }, 'Nháp') : null, r.trang_thai_duyet === 'NHAP' ? ' ' : '', tag(r.trang_thai_tinh_gia), r.tu_duyet ? ' ' : '', r.tu_duyet ? h('span', { class: 'tag gray', 'data-tu-duyet': '1', title: 'Người nhập/sửa phiếu cũng là người duyệt (đã bật "Cho phép tự duyệt")' }, 'Tự duyệt') : null, r.xe_tra_ve ? ' ' : '', r.xe_tra_ve ? tag('KHAC', 'Trả về') : null) },
-            ], rows: d.rows, sort: { key: st.sort, dir: st.dir }, onSort: (k) => { st.dir = st.sort === k && st.dir === 'asc' ? 'desc' : 'asc'; st.sort = k; st.offset = 0; load(); },
+            columns: activeCols, rows: d.rows, sort: { key: st.sort, dir: st.dir }, onSort: (k) => { st.dir = st.sort === k && st.dir === 'asc' ? 'desc' : 'asc'; st.sort = k; st.offset = 0; load(); },
             totals: { so_phieu: null, kl_hang_kg: d.totals.tong_kg, tien_truoc_vat: d.totals.tien_truoc_vat, tong_tien: d.totals.tong_tien }, onRow: (r) => explain(r.id),
             rowClass: (r) => (['OK', 'LOCKED'].includes(r.trang_thai_tinh_gia) ? '' : 'err'), wrapClass: 'tall',
           }),
@@ -78,7 +123,7 @@
       const apvSel = h('button', { class: 'btn', 'data-act': 'approve-selected', onclick: () => approve([...sel]) }, '✔ Duyệt phiếu đã chọn');
       const apvAll = h('button', { class: 'btn ghost', 'data-act': 'approve-filtered', title: 'Duyệt mọi phiếu Nháp khớp bộ lọc hiện tại', onclick: async () => { const data = await api('tickets.list', { filter: { ...flt(), trang_thai_duyet: 'NHAP' }, limit: 10_000_000 }); await approve(data.rows.map((r) => r.id), Object.fromEntries(data.rows.map((r) => [r.id, r.ver]))); } }, '✔ Duyệt tất cả Nháp theo lọc');
       v.append(App.pageHead('Phiếu cân', 'Bấm một dòng để xem vì sao phiếu có đơn giá đó',
-        h('span', { class: 'row gap-s' }, duyetOn() ? apvSel : null, duyetOn() ? apvAll : null, selBtn, allBtn, h('button', { class: 'btn ghost', onclick: () => App.exportXlsx('export.tickets', { filter: flt() }) }, '⬇ Xuất Excel'))),
+        h('span', { class: 'row gap-s' }, duyetOn() ? apvSel : null, duyetOn() ? apvAll : null, selBtn, allBtn, h('button', { class: 'btn ghost', 'data-act': 'col-settings', onclick: openColConfig, title: 'Tùy chọn cột hiển thị' }, '⚙ Cột'), h('button', { class: 'btn ghost', onclick: () => App.exportXlsx('export.tickets', { filter: flt() }) }, '⬇ Xuất Excel'))),
       await App.filterBar(reset),
       body);
       await load();

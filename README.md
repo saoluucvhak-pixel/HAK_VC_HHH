@@ -27,12 +27,13 @@ Lịch sử thay đổi: `CHANGELOG.md`.
 
 ## Chạy thử (cần Node.js ≥ 22.5)
 ```bash
-npm install
-npm test                                           # unit + integration test (145); VCCOST_DRIVER=better-sqlite3 npm test để chạy bằng driver của bản đóng gói
+npm install                                        # hoặc: npm run install:safe (trên máy thiếu C++ build tools)
+npm test                                           # unit + integration test; VCCOST_DRIVER=better-sqlite3 npm test để chạy bằng driver của bản đóng gói
 npm run test:ui                                    # smoke test giao diện (cần Chromium cho Playwright)
 npm run validate -- tests/fixtures/sample-v47.xlsx # so engine với Excel → docs/EXCEL_VS_APP_VALIDATION.md
 npm run dev                                        # chạy giao diện trong trình duyệt (dev server, không cần Electron)
 ```
+> **Lưu ý cài đặt trên Windows**: Nếu máy tính chưa cài đặt Visual Studio C++ Build Tools, `npm install` gốc có thể cảnh báo build native `better-sqlite3`. Ứng dụng đã tích hợp sẵn và tự động chuyển sang `node:sqlite` (tích hợp sẵn trong Node.js >= 22.5) để hoạt động bình thường, hoặc bạn có thể chạy `npm run install:safe` (`npm install --ignore-scripts`).
 Đóng gói Windows: `npm run dist:win` (portable + NSIS) hoặc `npm run dist:setup`. CI Windows (`.github/workflows/windows.yml`) tự build `win-unpacked` và khởi động thử; chạy tay workflow và tick "installers" để lấy bộ cài Portable/Setup. Kiểm tra khởi động cục bộ: `VCCOST_SMOKE=1 VCCOST_SMOKE_OUT=smoke.json VCCOST_DATA_DIR=<thư mục tạm> npx electron .` (thoát 0 = đạt). Bộ cài chia phần nằm trong `setup/` (xem `setup/HUONG_DAN.md`).
 
 ## Cấu trúc

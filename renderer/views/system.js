@@ -109,6 +109,17 @@
               h('div', { class: 'row gap-s', style: { marginTop: '6px' } }, h('label', { class: 'row gap-s' }, tu, 'Cho phép tự duyệt (người nhập/sửa được tự duyệt phiếu của mình)')),
               h('p', { class: 'muted small' }, 'Dùng khi chỉ có MỘT người có quyền duyệt (chế độ 1 người dùng có đăng nhập). Phiếu tự duyệt ghi nhật ký APPROVE_TICKET {tu_duyet: true} và hiện nhãn "Tự duyệt". Nhiều người: để tắt để tách nhập và duyệt.'),
               h('div', { class: 'row end', style: { marginTop: '10px' } }, h('button', { class: 'btn', 'data-act': 'save-duyet', onclick: async () => { await App.callConfirm('settings.set', { key: 'duyet_phieu', value: { bat: cb.checked, cho_tu_duyet: tu.checked } }, 'Đã lưu', 'Bật duyệt phiếu'); App.refreshInfo(); } }, 'Lưu'))); })()),
+        h('div', { class: 'card' }, h('h3', {}, 'Ngày căn cứ tính giá cước'),
+          h('p', { class: 'muted' }, 'Xác định thời điểm áp dụng bảng giá và nhà xe sở hữu khi chuyến xe cân xuyên đêm qua ngày mới.'),
+          (() => {
+            const cur = s.ngay_can_cu_gia || 'CAN_1';
+            const sel = h('select', { 'data-f': 'ngay-can-cu-gia' },
+              h('option', { value: 'CAN_1', selected: cur === 'CAN_1' }, 'Ngày cân lần 1 (Mặc định — lúc xe vào)'),
+              h('option', { value: 'CAN_2', selected: cur === 'CAN_2' }, 'Ngày cân lần 2 (Lúc xe ra)'));
+            return h('div', {},
+              h('div', { class: 'row gap-s' }, h('label', { class: 'field' }, 'Căn cứ theo', sel)),
+              h('div', { class: 'row end', style: { marginTop: '10px' } }, h('button', { class: 'btn', 'data-act': 'save-ngay-can-cu', onclick: async () => { await call('settings.set', { key: 'ngay_can_cu_gia', value: sel.value }, 'Đã lưu cài đặt ngày căn cứ'); } }, 'Lưu')));
+          })()),
         h('div', { class: 'card' }, h('h3', {}, 'Khối lượng hợp lý mỗi chuyến (kg)'), h('p', { class: 'muted' }, 'Phiếu có KL ngoài khoảng này bị chặn khi nhập/sửa (phát hiện KL ghi nhầm theo tấn hoặc thừa chữ số). Mặc định 100 – 100.000 kg.'),
           (() => { const k = s.kl_hop_ly || { min_kg: 100, max_kg: 100000 }; const lo = h('input', { type: 'number', min: 0, value: k.min_kg, 'data-f': 'kl-min' }), hi = h('input', { type: 'number', min: 1, value: k.max_kg, 'data-f': 'kl-max' });
             return h('div', {}, h('div', { class: 'form-grid' }, h('label', { class: 'field' }, 'Tối thiểu (kg)', lo), h('label', { class: 'field' }, 'Tối đa (kg)', hi)),

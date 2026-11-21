@@ -23,6 +23,7 @@ const DEFAULT_SETTINGS = {
     total: null,
   },
   defaultVatPercent: null,                 // KHÔNG mặc định 8% — phải lấy từ bảng giá/cấu hình
+  ngay_can_cu_gia: 'CAN_1',
 };
 
 function amountFor(unit, kg, price) {
@@ -54,7 +55,8 @@ function computeTicket(t, ctx) {
   if (!(Number(t.kl_hang_kg) > 0)) warnings.push('INVALID_WEIGHT');
   if (!t.ngay_gio_can_1) warnings.push('INVALID_TIME');
 
-  const date = datePart(t.ngay_gio_can_1);
+  const ngayCanCu = (s.ngay_can_cu_gia === 'CAN_2' && t.ngay_gio_can_2) ? t.ngay_gio_can_2 : t.ngay_gio_can_1;
+  const date = datePart(ngayCanCu);
   const v = ctx.vehicleResolver.resolve(t.bien_so, date);
   if (v.status !== 'OK') warnings.push(v.status);
   out.don_vi_van_chuyen_id = v.carrierId;

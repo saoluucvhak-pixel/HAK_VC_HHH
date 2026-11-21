@@ -7,10 +7,33 @@
 
   App.register('import', {
     async render(v) {
-      const S = { step: 1, open: null, info: null, mapping: {}, sheet: null, headerRow: 0, dotId: '', noiDenId: '', prev: null, filter: null, result: null };
+      const S = { step: 1, open: null, info: null, mapping: {}, sheet: null, headerRow: 0, dotId: '', noiDenId: '', prev: null, filter: null, result: null, readAfterTotal: false };
       const root = h('div', {});
       const steps = () => h('div', { class: 'steps' }, ['1. Chọn file', '2. Sheet & cột', '3. Xem trước', '4. Kết quả'].map((t, i) => h('div', { class: 'step ' + (S.step === i + 1 ? 'on' : S.step > i + 1 ? 'done' : '') }, t)));
       const draw = () => { App.clear(root).append(steps()); ({ 1: s1, 2: s2, 3: s3, 4: s4 })[S.step](); };
+
+      function makeProgressBar(title) {
+        const fill = h('div', { style: { width: '25%', height: '100%', background: 'linear-gradient(90deg, var(--brand), var(--champ))', transition: 'width .2s ease' } });
+        const pct = h('span', { class: 'mono' }, '25%');
+        const stText = h('span', {}, title);
+        const el = h('div', { class: 'card', style: { padding: '12px 16px', marginBottom: '12px', borderLeft: '4px solid var(--brand)' } },
+          h('div', { class: 'row', style: { justifyContent: 'space-between', marginBottom: '6px' } },
+            h('b', { style: { color: 'var(--brand)' } }, stText),
+            pct
+          ),
+          h('div', { style: { background: 'var(--line)', borderRadius: '999px', height: '8px', overflow: 'hidden' } }, fill)
+        );
+        return {
+          el,
+          update(step, text) {
+            const p = Math.min(100, step * 25);
+            fill.style.width = p + '%';
+            pct.textContent = p + '%';
+            stText.textContent = text;
+          },
+          remove() { el.remove(); },
+        };
+      }
 
       function s1() {
         root.append(h('div', { class: 'card' }, h('h3', {}, 'Chọn file phiếu cân (.xlsx / .csv)'),
@@ -32,8 +55,22 @@
         // Kiểm tra NGAY khi ghép cột: thiếu cột bắt buộc, lỗi theo lý do, và đọc thử các dòng đầu để thấy máy hiểu gì
         const checkBox = h('div', { class: 'card', 'data-check': '1' }, h('h3', {}, 'Kiểm tra ngay…'));
         const previewBtn = h('button', { class: 'btn', 'data-act': 'preview', disabled: true, onclick: async () => {
-          const r = await call('import.preview', { token: S.open.token, sheetName: S.sheet, headerRow: S.headerRow, mapping: S.mapping, dotId: S.dotId || null, noiDenId: S.noiDenId || null, readAfterTotal: !!S.readAfterTotal });
-          if (!r) return; S.prev = r; S.filter = null; S.step = 3; draw();
+          previewBtn.disabled = true;
+          const prog = makeProgressBar('Bước 1/4: Đọc file Excel vào bộ nhớ…');
+          checkBox.before(prog.el);
+          try {
+            await new Promise((res) => setTimeout(res, 50));
+            prog.update(2, 'Bước 2/4: Phân tích cú pháp & chuẩn hóa dữ liệu…');
+            await new Promise((res) => setTimeout(res, 50));
+            prog.update(3, 'Bước 3/4: Kiểm tra trùng lặp & tính thử chi phí…');
+            const r = await call('import.preview', { token: S.open.token, sheetName: S.sheet, headerRow: S.headerRow, mapping: S.mapping, dotId: S.dotId || null, noiDenId: S.noiDenId || null, readAfterTotal: !!S.readAfterTotal });
+            if (!r) return;
+            prog.update(4, 'Bước 4/4: Hoàn tất xem trước');
+            S.prev = r; S.filter = null; S.step = 3; draw();
+          } finally {
+            prog.remove();
+            previewBtn.disabled = false;
+          }
         } }, 'Xem trước ›');
         const verdict = h('div', { class: 'chk-verdict', 'data-verdict': '1' }, 'Đang kiểm tra…');   // kết luận 1 dòng ngay cạnh các ô ghép cột
         const bad = (t) => h('span', { class: 'tag red' }, t), good = (t) => h('span', { class: 'tag green' }, t);
@@ -46,6 +83,23 @@
           const kids = [h('h3', {}, 'Kiểm tra ngay — máy đọc file theo cách ghép cột hiện tại')];
           if (!r.problems.length) kids.push(h('p', { class: 'tag green' }, '✓ Đủ cột cần thiết'));
           r.problems.forEach((p) => kids.push(h('p', { class: 'chk ' + (p.level === 'error' ? 'bad' : 'warn') }, (p.level === 'error' ? '✗ ' : '⚠ ') + p.text)));
+          const ignoredWarn = r.problems.find((x) => x.text && x.text.includes('DƯỚI dòng "Tổng cộng"'));
+          if (ignoredWarn) {
+            kids.push(h('div', { class: 'card', style: { borderColor: 'var(--amber)', background: 'var(--warnBg, rgba(237,161,0,.1))', marginTop: '10px' } },
+              h('div', { class: 'row', style: { justifyContent: 'space-between', alignItems: 'center' } },
+                h('div', {},
+                  h('b', { style: { color: 'var(--amber)' } }, '⚠ Phát hiện nhiều khối dữ liệu con trong file:'),
+                  h('p', { style: { margin: '4px 0 0', fontSize: '13px' } }, ignoredWarn.text)
+                ),
+                h('button', { class: 'btn sm ' + (S.readAfterTotal ? 'ghost' : 'amber'), 'data-act': 'toggle-multi-block', onclick: () => {
+                  S.readAfterTotal = !S.readAfterTotal;
+                  const cb = root.querySelector('[data-f="multi-block"]');
+                  if (cb) cb.checked = !!S.readAfterTotal;
+                  runCheck();
+                } }, S.readAfterTotal ? '✓ Đang đọc tất cả các khối' : 'Đọc tiếp toàn bộ các khối phía dưới')
+              )
+            ));
+          }
           const sm = r.summary;
           if (sm.tong_dong) {
             kids.push(h('p', { class: 'chk ' + (sm.dong_loi ? 'warn' : 'ok') }, `Đọc được ${fmt.int(sm.tong_dong)} dòng — ` + (sm.dong_loi ? `${fmt.int(sm.dong_loi)} dòng có lỗi (sẽ không được ghi)` : 'không có dòng lỗi')));
@@ -90,6 +144,21 @@
         // Đối chiếu khối lượng: tổng KL đọc được ↔ dòng "Tổng cộng" của file; tổng tạm tính của phiếu mới
         const T = S.prev.totals || {}; const kgf = (v) => `${fmt.kg(v)} kg (${fmt.tan(v / 1000)} tấn)`;
         const klCls = (T.ignored_below_total > 0) || (T.lech_kg !== null && T.lech_kg !== undefined && T.lech_kg !== 0) ? 'bad' : 'ok';
+        if (T.ignored_below_total > 0) {
+          root.append(h('div', { class: 'card', style: { borderColor: 'var(--amber)', background: 'var(--warnBg, rgba(237,161,0,.1))', marginBottom: '12px' } },
+            h('div', { class: 'row', style: { justifyContent: 'space-between', alignItems: 'center' } },
+              h('div', {},
+                h('b', { style: { color: 'var(--amber)' } }, `⚠ Còn ${fmt.int(T.ignored_below_total)} dòng dữ liệu nằm dưới dòng "Tổng cộng" (dòng ${T.ignored_first_row}). File có thể chứa nhiều khối dữ liệu con.`),
+                h('p', { class: 'muted', style: { margin: '4px 0 0', fontSize: '13px' } }, 'Bấm nút bên cạnh để đọc tiếp toàn bộ các khối phía dưới mà không cần quay lại cấu hình.')
+              ),
+              h('button', { class: 'btn amber sm', 'data-act': 'read-multi-block', onclick: async () => {
+                S.readAfterTotal = true;
+                const r = await call('import.preview', { token: S.open.token, sheetName: S.sheet, headerRow: S.headerRow, mapping: S.mapping, dotId: S.dotId || null, noiDenId: S.noiDenId || null, readAfterTotal: true });
+                if (r) { S.prev = r; S.filter = null; draw(); }
+              } }, 'Đọc tiếp toàn bộ các khối phía dưới')
+            )
+          ));
+        }
         root.append(h('div', { class: 'chk-verdict ' + klCls, 'data-kl-check': '1' },
           `Đọc ${fmt.int(T.so_dong)} dòng, tổng KL ${kgf(T.read_kg || 0)}. `,
           T.ignored_below_total > 0 ? `CÒN ${fmt.int(T.ignored_below_total)} dòng giống phiếu cân dưới dòng "Tổng cộng" (từ dòng ${T.ignored_first_row}) CHƯA được đọc — file có nhiều khối? `
@@ -112,7 +181,20 @@
           (c.error + c.conflict + c.unknownVehicle + c.unknownLocation + c.noPrice + c.multiplePrice) > 0 ? h('button', { class: 'btn ghost', 'data-act': 'issues', title: 'Excel liệt kê từng dòng cần xử lý kèm lý do và cách xử lý — sửa rồi import lại, dòng đã đúng không bị trùng', onclick: () => App.exportXlsx('import.issuesXlsx', { token: S.open.token }) }, '⬇ Tải các dòng cần xử lý (Excel)') : null,
           h('button', { class: 'btn', 'data-act': 'commit', disabled: c.new + c.conflict === 0, onclick: async () => {
             if (!(await App.confirmBox('Xác nhận import', `Ghi ${c.new} phiếu mới. ${c.conflict} dòng trùng khóa sẽ vào "Cần kiểm tra"${c.pendingAlready ? `, ${c.pendingAlready} dòng đã chờ kiểm tra từ lô trước (không mở thêm)` : ''}, ${c.exact + c.inFile} dòng trùng bị bỏ qua, ${c.error} dòng lỗi không được ghi. Hệ thống sẽ tự backup trước khi ghi.`, 'Import'))) return;
-            const r = await call('import.commit', { token: S.open.token, dotId: S.dotId || null, noiDenId: S.noiDenId || null }); if (!r) return; S.result = r; S.step = 4; if (r.copyWarning) App.toast(r.copyWarning, true); draw();
+            const prog = makeProgressBar('Bước 1/4: Tạo bản sao lưu an toàn trước khi ghi…');
+            root.prepend(prog.el);
+            try {
+              await new Promise((res) => setTimeout(res, 40));
+              prog.update(2, 'Bước 2/4: Kiểm tra toàn vẹn các phiếu cân…');
+              await new Promise((res) => setTimeout(res, 40));
+              prog.update(3, 'Bước 3/4: Ghi nhận dữ liệu vào CSDL (Transaction)…');
+              const r = await call('import.commit', { token: S.open.token, dotId: S.dotId || null, noiDenId: S.noiDenId || null });
+              if (!r) return;
+              prog.update(4, 'Bước 4/4: Hoàn tất import!');
+              S.result = r; S.step = 4; if (r.copyWarning) App.toast(r.copyWarning, true); draw();
+            } finally {
+              prog.remove();
+            }
           } }, `Import ${c.new} phiếu mới`)));
       }
 

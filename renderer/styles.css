@@ -149,6 +149,15 @@ table.t thead th.sortable{cursor:pointer}table.t thead th.r{text-align:right}
 table.t td{padding:6px 10px;border-bottom:1px solid var(--line);vertical-align:top}table.t tbody tr:nth-child(even) td{background:var(--th)}
 table.t tbody tr:hover td{background:var(--hover)}table.t tr.sel td{background:var(--brand-soft)}
 table.t tfoot td{font-weight:700;background:var(--th);border-top:2px solid var(--ctl)}
+table.t th.col-sticky-left-1,table.t td.col-sticky-left-1{position:sticky;left:0;z-index:2;background:var(--card)}
+table.t th.col-sticky-left-2,table.t td.col-sticky-left-2{position:sticky;left:38px;z-index:2;background:var(--card);box-shadow:2px 0 6px rgba(0,0,0,.08)}
+table.t tbody tr:nth-child(even) td.col-sticky-left-1,table.t tbody tr:nth-child(even) td.col-sticky-left-2{background:var(--th)}
+table.t tbody tr:hover td.col-sticky-left-1,table.t tbody tr:hover td.col-sticky-left-2{background:var(--hover)}
+table.t th.col-sticky-right,table.t td.col-sticky-right{position:sticky;right:0;z-index:2;background:var(--card);box-shadow:-2px 0 6px rgba(0,0,0,.08)}
+table.t tbody tr:nth-child(even) td.col-sticky-right{background:var(--th)}
+table.t tbody tr:hover td.col-sticky-right{background:var(--hover)}
+table.t thead th.col-sticky-left-1,table.t thead th.col-sticky-left-2,table.t thead th.col-sticky-right{z-index:4}
+table.t tfoot td.col-sticky-left-1,table.t tfoot td.col-sticky-left-2,table.t tfoot td.col-sticky-right{z-index:3;background:var(--th)}
 .tbl-wrap{overflow:auto;max-height:calc(100vh - 330px);border-radius:10px;border:1px solid var(--line)}.tbl-wrap.tall{max-height:calc(100vh - 220px)}
 tr.flag td{background:var(--warnBg)}tr.err td{background:var(--redBg)}tr.dup td{color:var(--mut)}
 

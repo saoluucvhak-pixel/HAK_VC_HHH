@@ -37,7 +37,11 @@ class CostService {
           return id ? { status: 'OK', routeId: id } : { status: 'UNKNOWN_ROUTE', routeId: null };
         },
         priceRules: rules,
-        settings: { roundingLevel: 'TICKET', rounding: { amount: null, vat: null, total: null } }, // giá trị từng phiếu: không làm tròn (bảng kê làm tròn)
+        settings: {
+          roundingLevel: 'TICKET',
+          rounding: { amount: null, vat: null, total: null },
+          ngay_can_cu_gia: (this.settings && typeof this.settings.get === 'function') ? (this.settings.get('ngay_can_cu_gia') || 'CAN_1') : 'CAN_1',
+        }, // giá trị từng phiếu: không làm tròn (bảng kê làm tròn)
       },
     };
   }

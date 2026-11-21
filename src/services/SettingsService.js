@@ -20,6 +20,9 @@ const VALIDATORS = {
     need(numIn(v.min_kg, 0, 1_000_000) && numIn(v.max_kg, 1, 10_000_000), 'Ngưỡng KL: tối thiểu 0–1.000.000 kg, tối đa 1–10.000.000 kg');
     need(v.min_kg < v.max_kg, 'Ngưỡng KL tối thiểu phải nhỏ hơn tối đa');
   },
+  ngay_can_cu_gia(v) {
+    need(v === 'CAN_1' || v === 'CAN_2', 'Ngày căn cứ tính giá phải là CAN_1 (Ngày cân lần 1) hoặc CAN_2 (Ngày cân lần 2)');
+  },
   money_scale(v) { need(v === 1000, 'Hệ số lưu tiền (money_scale) cố định 1000 — không đổi được'); },
   // Chỉ một quy tắc được cài đặt trong mã: số phiếu + nơi xuất. Giá trị khác sẽ bị mã bỏ qua âm thầm → từ chối thay vì nhận rồi không áp dụng.
   duplicate_key(v) { need(v === 'SO_PHIEU_NOI_XUAT', 'Khóa chống trùng chỉ hỗ trợ SO_PHIEU_NOI_XUAT (số phiếu + nơi xuất)'); },
