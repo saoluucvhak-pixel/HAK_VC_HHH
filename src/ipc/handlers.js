@@ -107,6 +107,24 @@ function createHandlers(app, env = {}) {
         const m = canhBaoNguoiDuyet({ duyetBat: true, phanQuyen: app.auth.enabled(), tuDuyet: !!value.cho_tu_duyet, soSau: soNguoiDuyet(app.db), ngu_canh: 'khi bật duyệt phiếu' });
         if (m) throw new ConfirmRequired(m);
       }
+      // Đổi căn cứ ngày tính giá (cân 1 ↔ cân 2) làm phiếu XUYÊN ĐÊM đổi bảng giá/đơn vị áp dụng → hỏi xác nhận (nêu số phiếu), rồi tính lại
+      // các phiếu chưa chốt; phiếu đã chốt kỳ giữ nguyên số đã chốt.
+      if (key === 'ngay_can_cu_gia') {
+        const cur = app.settings.get('ngay_can_cu_gia') || 'CAN_1';
+        if (value !== cur && (value === 'CAN_1' || value === 'CAN_2')) {
+          const rows = app.db.all(`SELECT id, chot_ky_id FROM phieu_can WHERE trang_thai='ACTIVE' AND ngay_gio_can_2 IS NOT NULL AND substr(ngay_gio_can_1,1,10) <> substr(ngay_gio_can_2,1,10)`);
+          const open = rows.filter((r) => !r.chot_ky_id).map((r) => r.id); const locked = rows.length - open.length;
+          if (open.length && !xac_nhan) {
+            throw new ConfirmRequired(`Đổi căn cứ tính giá sang "${value === 'CAN_2' ? 'ngày cân lần 2' : 'ngày cân lần 1'}" ảnh hưởng ${open.length} phiếu xuyên đêm chưa chốt: bảng giá và đơn vị áp dụng được xác định lại theo ngày mới và các phiếu này sẽ được tính lại ngay${locked ? `; ${locked} phiếu đã chốt kỳ giữ nguyên` : ''}. Bảng kê vẫn lọc theo ngày cân lần 1. Tiếp tục?`);
+          }
+          app.db.tx(() => {
+            app.settings.set(key, value);
+            if (open.length) app.cost.recalc({ ids: open });
+            app.audit.log('SETTING_PRICE_BASIS', 'settings', null, { ngay_can_cu_gia: cur }, { ngay_can_cu_gia: value, so_phieu_tinh_lai: open.length, so_phieu_da_chot_giu_nguyen: locked });
+          });
+          return { ok: true, tinh_lai: open.length };
+        }
+      }
       app.settings.set(key, value); if (key === 'time_anomaly') app.cost.syncTimeAlerts(app.db.all('SELECT DISTINCT bien_so_chuan b FROM phieu_can').map((x) => x.b)); return { ok: true }; },
     'seed.loadSample': () => {
       const f = path.join(seedDir, 'sample-v47.json');

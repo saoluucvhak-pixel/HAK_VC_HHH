@@ -118,7 +118,7 @@
               h('option', { value: 'CAN_2', selected: cur === 'CAN_2' }, 'Ngày cân lần 2 (Lúc xe ra)'));
             return h('div', {},
               h('div', { class: 'row gap-s' }, h('label', { class: 'field' }, 'Căn cứ theo', sel)),
-              h('div', { class: 'row end', style: { marginTop: '10px' } }, h('button', { class: 'btn', 'data-act': 'save-ngay-can-cu', onclick: async () => { await call('settings.set', { key: 'ngay_can_cu_gia', value: sel.value }, 'Đã lưu cài đặt ngày căn cứ'); } }, 'Lưu')));
+              h('div', { class: 'row end', style: { marginTop: '10px' } }, h('button', { class: 'btn', 'data-act': 'save-ngay-can-cu', onclick: async () => { const r = await App.callConfirm('settings.set', { key: 'ngay_can_cu_gia', value: sel.value }, 'Đã lưu cài đặt ngày căn cứ', 'Đổi căn cứ tính giá'); if (r && r.tinh_lai) App.toast(`Đã tính lại ${r.tinh_lai} phiếu xuyên đêm`); App.refreshInfo(); } }, 'Lưu')));
           })()),
         h('div', { class: 'card' }, h('h3', {}, 'Khối lượng hợp lý mỗi chuyến (kg)'), h('p', { class: 'muted' }, 'Phiếu có KL ngoài khoảng này bị chặn khi nhập/sửa (phát hiện KL ghi nhầm theo tấn hoặc thừa chữ số). Mặc định 100 – 100.000 kg.'),
           (() => { const k = s.kl_hop_ly || { min_kg: 100, max_kg: 100000 }; const lo = h('input', { type: 'number', min: 0, value: k.min_kg, 'data-f': 'kl-min' }), hi = h('input', { type: 'number', min: 1, value: k.max_kg, 'data-f': 'kl-max' });

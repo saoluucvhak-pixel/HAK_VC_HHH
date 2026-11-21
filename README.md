@@ -52,7 +52,7 @@ scripts/        validate-sample.js
 tools/          dev-server.js (dùng cho `npm run dev`)
 tests/          *.test.js, ui-smoke.mjs, fixtures/
 docs/           tài liệu dự án
-setup/          bộ cài Windows chia phần + hướng dẫn
+setup/          hướng dẫn cài đặt (bộ cài tải từ trang Releases, có SHA256SUMS)
 ```
 
 ## Nguyên tắc

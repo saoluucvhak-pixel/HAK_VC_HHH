@@ -3,7 +3,7 @@ import { createRequire } from 'module';
 const require = createRequire(import.meta.url);
 const { chromium } = require('playwright-core');
 const { start } = require('../tools/dev-server.js');
-import fs from 'fs'; import path from 'path';
+import fs from 'fs'; import path from 'path'; import os from 'os';
 const out = path.resolve('docs/screenshots'); fs.mkdirSync(out, { recursive: true });
 const srv = await start({ port: 5191 });
 const errors = [];
@@ -171,7 +171,7 @@ const tk = (await (await fetch('http://127.0.0.1:5191/api/tickets.list', { metho
 const aoa = [['STT', 'Số phiếu', 'Biển số', 'Ngày', 'KL (kg)', 'Đơn giá', 'Thành tiền']];
 tk.forEach((x, i) => aoa.push([i + 1, x.so_phieu, x.bien_so, x.ngay_can, x.kl_hang_kg, x.don_gia, x.tien_truoc_vat]));
 aoa[2][4] += 100; aoa[3][5] = 200000; aoa.splice(4, 1);
-const partner = path.join(out, '..', '..', 'tests', 'fixtures', 'doitac-hak.xlsx'); await writeXlsx(partner, aoa, 'BangKe');
+const partner = path.join(fs.mkdtempSync(path.join(os.tmpdir(), 'vcui-')), 'doitac-hak.xlsx'); await writeXlsx(partner, aoa, 'BangKe');   // tệp sinh ra mỗi lần chạy: ghi vào thư mục tạm, không làm bẩn cây git
 await page.click('.modal .btn:has-text("Đóng")');
 await nav('reconcile'); await shot('23-recon-list');
 await page.click('[data-act=new]'); await page.fill('[data-f=ten]', 'HAK – V.47');

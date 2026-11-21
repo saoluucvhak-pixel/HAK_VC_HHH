@@ -35,7 +35,7 @@ class CatalogService {
   }
 
   cfg(table) {
-    const c = CATALOGS[table];
+    const c = typeof table === 'string' && Object.hasOwn(CATALOGS, table) ? CATALOGS[table] : null;   // không nhận khóa kế thừa (constructor, __proto__…)
     if (!c) throw new ValidationError(`Danh mục không tồn tại: ${table}`);
     return c;
   }

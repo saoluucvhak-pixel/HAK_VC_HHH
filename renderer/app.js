@@ -246,6 +246,8 @@ const App = (() => {
   /** Quyền bảng giá/giá dầu cao hơn các bảng khác (máy chủ khai báo, giao diện chỉ đọc). */
   const canWrite = (table) => can((auth.tablePerm && Object.hasOwn(auth.tablePerm, table) && auth.tablePerm[table]) || 'nhap');
   const NAV_NEED = { import: 'nhap', review: 'duyet', settings: 'admin' };
+  /** Phím tắt và điều hướng phải tôn trọng cùng bảng NAV_NEED như menu (máy chủ vẫn kiểm tra khi gọi API). */
+  const navAllowed = (id) => !NAV_NEED[id] || can(NAV_NEED[id]);
   /**
    * Bảng NÚT → KÊNH API dùng chung. Mức quyền lấy từ máy chủ (auth.channelPerm = permissions.js), không khai lại ở đây.
    * Nút có data-act trong bảng này bị ẩn khi vai trò không đủ quyền; máy chủ vẫn kiểm tra khi gọi.
@@ -258,7 +260,7 @@ const App = (() => {
     importfuel: 'fuel.importCommit', delfuel: 'catalog.remove', addfuel: 'catalog.create', recalc: 'cost.recalc', backup: 'backup.now', 'export-backup': 'backup.export', 'restore-backup': 'backup.restore',
     run: 'recon.run', 'alert-set': 'alerts.setStatus', 'tpl-tickets': 'template.tickets', 'tpl-vehicles': 'template.vehicles',
     seed: 'seed.loadSample', initial: 'initial.load', 'add-user': 'auth.createUser', 'disable-auth': 'auth.disable', 'save-rounding': 'settings.set', 'save-kl': 'settings.set',
-    'save-duyet': 'settings.set', 'save-company': 'settings.set', 'save-backup': 'settings.set',
+    'save-duyet': 'settings.set', 'save-ngay-can-cu': 'settings.set', 'save-company': 'settings.set', 'save-backup': 'settings.set',
   };
   const RANK = Object.fromEntries(PERMS.map((p, i) => [p, i]));
   /** Nút gọi catalog.* có thể khai data-table: quyền theo bảng (auth.tablePerm, vd gia_dau = duyet) được ưu tiên nếu cao hơn quyền kênh. */
@@ -389,15 +391,15 @@ const App = (() => {
     }
     if (e.altKey && (e.key === 'd' || e.key === 'D')) {
       e.preventDefault();
-      go('review');
+      if (navAllowed('review')) go('review');
     }
     if (e.altKey && (e.key === 'i' || e.key === 'I')) {
       e.preventDefault();
-      go('import');
+      if (navAllowed('import')) go('import');
     }
     if (e.altKey && (e.key === 'b' || e.key === 'B')) {
       e.preventDefault();
-      go('statements');
+      if (navAllowed('statements')) go('statements');
     }
   });
 
