@@ -2,7 +2,7 @@
 cd /d "%~dp0"
 title VC Cost - Noi file va cai dat
 set "NAME=VC-Cost-0.8.3-Setup.exe"
-set "HASH=39cc35bb0679a08290ceea3184b47b47d5dba891ffcba2585dc859b9ca2baa72"
+set "HASH=8444704b3616449b11209ff184b184756410689f8cdd20769efcc271f9f226a7"
 set "PARTS="
 set "GOT="
 set COUNT=0

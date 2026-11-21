@@ -13,11 +13,11 @@ const { toDb, fromDb } = require('../utils/dbMoney');
 const { ValidationError } = require('./CatalogService');
 
 const B_SYN = {
-  don_gia: ['don gia', 'don gia (dong/tan)', 'gia'],
-  tien_truoc_vat: ['thanh tien', 'thanh tien truoc vat', 'tien truoc vat', 'cuoc van chuyen', 'cuoc truoc thue'],
+  don_gia: ['don gia', 'don gia (dong/tan)', 'don gia (d/tan)', 'gia', 'gia cuoc'],
+  tien_truoc_vat: ['thanh tien', 'thanh tien truoc vat', 'tien truoc vat', 'cuoc van chuyen', 'cuoc truoc thue', 'tien cuoc'],
   tien_vat: ['vat', 'tien vat', 'thue gtgt', 'tien thue'],
   tong_tien: ['tong cong', 'tong tien', 'tong thanh toan', 'cong tien thanh toan', 'tong cong tien thanh toan'],
-  ngay: ['ngay', 'ngay van chuyen', 'ngay can'],
+  ngay: ['ngay', 'ngay van chuyen', 'ngay can', 'ngay xuat'],
 };
 const B_FIELDS = ['so_phieu', 'bien_so', 'ngay', 'kl_hang_kg', 'don_gia', 'tien_truoc_vat', 'tien_vat', 'tong_tien'];
 
@@ -27,9 +27,10 @@ function detectB(aoa) {
     const mapping = {};
     (aoa[r] || []).forEach((cell, c) => {
       const h = fold(cell); if (!h) return;
+      const baseH = h.replace(/\s*\([^)]*\)/g, '').trim();
       let f = matchField(cell);
       if (f === 'ngay_gio_can_1') f = 'ngay';
-      if (!B_FIELDS.includes(f)) { f = Object.entries(B_SYN).find(([, s]) => s.includes(h))?.[0] || null; }
+      if (!B_FIELDS.includes(f)) { f = Object.entries(B_SYN).find(([, s]) => s.includes(h) || s.includes(baseH))?.[0] || null; }
       if (f && B_FIELDS.includes(f) && mapping[f] === undefined) mapping[f] = c;
     });
     const score = Object.keys(mapping).length + (mapping.so_phieu !== undefined || mapping.bien_so !== undefined ? 3 : 0);

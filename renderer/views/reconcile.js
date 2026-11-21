@@ -54,7 +54,10 @@
         h('div', { class: 'row' }, h('label', { class: 'field' }, 'Từ ngày', f.tu), h('label', { class: 'field' }, 'Đến ngày', f.den)),
         h('label', { class: 'field' }, 'Dung sai KL (kg)', f.kg), h('label', { class: 'field' }, 'Dung sai tiền (đ)', f.tien))),
       h('div', { class: 'card' }, h('h3', {}, '2. File của đối tác (bên B)'),
-        h('button', { class: 'btn', 'data-act': 'pick', onclick: async () => { const x = await App.pickFile(); if (!x) return; const o = await call('recon.open', x); if (!o) return; S.o = o; S.sheet = o.suggestedSheet; await sheet(); draw(); } }, S.o ? `📂 ${S.o.fileName} — chọn file khác` : '📂 Chọn file…'),
+        h('div', { class: 'row', style: { marginBottom: '8px' } },
+          h('button', { class: 'btn', 'data-act': 'pick', onclick: async () => { const x = await App.pickFile(); if (!x) return; const o = await call('recon.open', x); if (!o) return; S.o = o; S.sheet = o.suggestedSheet; await sheet(); draw(); } }, S.o ? `📂 ${S.o.fileName} — chọn file khác` : '📂 Chọn file…'),
+          h('button', { class: 'btn ghost sm', 'data-act': 'tpl-partner', onclick: () => App.exportXlsx('template.partner') }, '⬇ Tải file excel mẫu')
+        ),
         S.info ? h('div', { style: { marginTop: '12px' } }, h('div', { class: 'form-grid' },
           h('label', { class: 'field' }, 'Sheet', h('select', { onchange: async (e) => { S.sheet = e.target.value; await sheet(); draw(); } }, S.o.sheets.map((s) => h('option', { value: s.name, selected: s.name === S.sheet }, s.name)))),
           h('label', { class: 'field' }, 'Dòng tiêu đề', h('input', { type: 'number', min: 1, value: S.headerRow + 1, onchange: async (e) => { S.info = await api('recon.sheetInfo', { token: S.o.token, sheetName: S.sheet, headerRow: Number(e.target.value) - 1 }); S.mapping = { ...S.info.mapping }; S.headerRow = S.info.headerRow; draw(); } })),
@@ -73,7 +76,11 @@
     async render(v, params = {}) {
       const rows = await api('recon.batches');
       if (params.batchId) return results(v, rows.find((x) => x.id === params.batchId));
-      v.append(App.pageHead('Đối chiếu', 'So bảng kê / đề nghị thanh toán của đơn vị vận chuyển với phiếu cân trong hệ thống', h('button', { class: 'btn', 'data-act': 'new', onclick: () => { App.clear(v); wizard(v); } }, '+ Đối chiếu mới')),
+      v.append(App.pageHead('Đối chiếu', 'So bảng kê / đề nghị thanh toán của đơn vị vận chuyển với phiếu cân trong hệ thống',
+        h('span', { class: 'row gap-s' },
+          h('button', { class: 'btn ghost', 'data-act': 'tpl-partner', onclick: () => App.exportXlsx('template.partner') }, '⬇ Tải file excel mẫu'),
+          h('button', { class: 'btn', 'data-act': 'new', onclick: () => { App.clear(v); wizard(v); } }, '+ Đối chiếu mới')
+        )),
         h('div', { class: 'card' }, table({ columns: [{ key: 'id', label: '#', num: true }, { key: 'ten', label: 'Tên lô' }, { key: 'don_vi', label: 'Đơn vị' }, { key: 'created_at', label: 'Thời gian', fmt: 'dt' }, { key: 'tong', label: 'Dòng', fmt: 'int' }, { key: 'khop', label: 'Khớp', fmt: 'int' },
           { key: 'lech', label: 'Lệch', num: true, render: (b) => (b.tong - b.khop ? h('span', { class: 'tag red' }, b.tong - b.khop) : h('span', { class: 'tag green' }, 0)) }], rows, empty: 'Chưa có lô đối chiếu nào', onRow: (b) => App.go('reconcile', { batchId: b.id }) })));
     },

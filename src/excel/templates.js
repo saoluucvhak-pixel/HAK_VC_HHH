@@ -134,4 +134,30 @@ async function vehicleTemplate({ carriers = [] } = {}) {
   return Buffer.from(await wb.xlsx.writeBuffer());
 }
 
-module.exports = { ticketTemplate, vehicleTemplate };
+async function partnerTemplate() {
+  const wb = new ExcelJS.Workbook(); wb.creator = 'VC Cost'; wb.created = new Date();
+  const cols = [
+    { header: 'STT', width: 7, align: 'center', fmt: '0', req: false, format: 'Số thứ tự', eg: 'Không bắt buộc.' },
+    { header: 'Số phiếu', width: 16, align: 'center', req: true, text: true, format: 'Văn bản', eg: 'Mã số phiếu cân (VD: 1520, PC-0123). Khóa đối chiếu mạnh nhất.' },
+    { header: 'Biển số', width: 15, align: 'center', req: true, text: true, format: 'Văn bản', eg: 'Biển số xe (VD: 43H-01055, 43C-12345). Tự chuẩn hóa.' },
+    { header: 'Ngày', width: 15, align: 'center', req: true, fmt: 'dd/mm/yyyy', format: 'dd/mm/yyyy', eg: 'Ngày cân hoặc ngày vận chuyển (VD: 29/09/2026).' },
+    { header: 'KL hàng (kg)', width: 16, align: 'right', req: true, fmt: '#,##0', format: 'Số (kg)', eg: 'Khối lượng hàng thực tế tính tiền (VD: 19.530).' },
+    { header: 'Đơn giá (đ/tấn)', width: 18, align: 'right', req: false, fmt: '#,##0', format: 'Số (đồng)', eg: 'Đơn giá cước vận chuyển (VD: 206.500).' },
+    { header: 'Thành tiền (đ)', width: 18, align: 'right', req: false, fmt: '#,##0', format: 'Số (đồng)', eg: 'Cước trước VAT. Có công thức: = KL * Đơn giá / 1000.',
+      formula: (r) => `IF(AND(ISNUMBER(E${r}),ISNUMBER(F${r})),ROUND(E${r}*F${r}/1000,0),"")` },
+    { header: 'VAT (đ)', width: 16, align: 'right', req: false, fmt: '#,##0', format: 'Số (đồng)', eg: 'Tiền thuế VAT (nếu có).' },
+    { header: 'Tổng tiền (đ)', width: 18, align: 'right', req: false, fmt: '#,##0', format: 'Số (đồng)', eg: 'Tổng thanh toán (Thành tiền + VAT).' },
+    { header: 'Ghi chú', width: 22, req: false, format: 'Văn bản', eg: 'Ghi chú thêm của đơn vị vận chuyển (tùy chọn).' },
+  ];
+  dataSheet(wb, { name: 'Bảng kê đối tác', title: 'MẪU BẢNG KÊ VẬN CHUYỂN (ĐỐI TÁC GỬI ĐỐI CHIẾU) — VC COST', cols,
+    subtitle: 'Mẫu chuẩn gửi cho các đơn vị vận chuyển / nhà xe điền và gửi lại để đối chiếu chi phí vận chuyển.' });
+  guideSheet(wb, { title: 'HƯỚNG DẪN ĐIỀN BẢNG KÊ ĐỐI CHIẾU',
+    intro: ['Dùng để đơn vị vận chuyển lập bảng kê cước gửi cho bên thuê vận chuyển kiểm tra, đối chiếu trước khi thanh toán.',
+      'Điền sheet "Bảng kê đối tác", từ dòng 6 trở xuống. Giữ nguyên dòng tiêu đề.'],
+    cols, tips: ['Nên có đủ Số phiếu và Biển số xe để phần mềm đối chiếu tự động chính xác nhất.',
+      'Nếu bảng kê không có Số phiếu, phần mềm vẫn hỗ trợ so khớp tự động theo: Biển số xe + Ngày + Khối lượng cân.',
+      'Đơn giá thường tính theo đồng/tấn; thành tiền = Khối lượng (kg) * Đơn giá / 1.000.'] });
+  return Buffer.from(await wb.xlsx.writeBuffer());
+}
+
+module.exports = { ticketTemplate, vehicleTemplate, partnerTemplate };

@@ -237,6 +237,7 @@ function createHandlers(app, env = {}) {
     // ---------------- xuất Excel
     'template.tickets': async () => writeExport(await require('../excel/templates').ticketTemplate({ locations: app.db.all(`SELECT ten FROM dia_diem WHERE trang_thai='ACTIVE' ORDER BY ten`).map((x) => x.ten) }), 'MAU_Import_Phieu_can.xlsx'),
     'template.vehicles': async () => writeExport(await require('../excel/templates').vehicleTemplate({ carriers: app.db.all(`SELECT ma FROM don_vi_van_chuyen WHERE trang_thai='ACTIVE' ORDER BY ma`).map((x) => x.ma) }), 'MAU_Import_Danh_sach_xe.xlsx'),
+    'template.partner': async () => writeExport(await require('../excel/templates').partnerTemplate(), 'MAU_Bang_ke_doi_tac.xlsx'),
     'export.tickets': async ({ filter }) => {
       const f = filter || {};
       const explicitState = f.trang_thai_duyet === 'NHAP' || f.trang_thai_duyet === 'DA_DUYET';

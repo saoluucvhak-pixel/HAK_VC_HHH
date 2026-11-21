@@ -98,3 +98,20 @@ test('đối chiếu end-to-end: bảng kê đối tác tạo từ hệ thống 
   const d0 = documents.statementDoc(app, { don_vi_id: hak });
   assert.equal(d0.recon, null); assert.ok(!tpl.statementHtml(d0).includes('BIÊN BẢN ĐỐI CHIẾU'));
 });
+
+test('partnerTemplate: tạo file mẫu bảng kê đối tác hợp lệ, mở được và nhận diện đúng các cột', async () => {
+  const { partnerTemplate } = require('../src/excel/templates');
+  const { readWorkbook } = require('../src/excel/workbookReader');
+  const buf = await partnerTemplate();
+  assert.ok(buf.length > 1000);
+  const wb = await readWorkbook({ buffer: buf, fileName: 'MAU_Bang_ke_doi_tac.xlsx' });
+  assert.deepEqual(wb.sheets.map((s) => s.name), ['Bảng kê đối tác', 'Hướng dẫn']);
+  const s = wb.aoa('Bảng kê đối tác');
+  // Hàng 5 (index 4) là tiêu đề cột
+  assert.deepEqual(s[4], ['STT', 'Số phiếu', 'Biển số', 'Ngày', 'KL hàng (kg)', 'Đơn giá (đ/tấn)', 'Thành tiền (đ)', 'VAT (đ)', 'Tổng tiền (đ)', 'Ghi chú']);
+  // Dò mapping thông minh của ReconciliationService
+  const { detectB } = require('../src/services/ReconciliationService');
+  const d = detectB(s);
+  assert.equal(d.headerRow, 4);
+  assert.ok(['so_phieu', 'bien_so', 'ngay', 'kl_hang_kg', 'don_gia', 'tien_truoc_vat', 'tien_vat', 'tong_tien'].every((k) => d.mapping[k] !== undefined));
+});
