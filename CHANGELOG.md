@@ -1,6 +1,7 @@
 # CHANGELOG
 
 ## 0.8.3 — sửa lỗi lần kiểm tra thứ hai (schema 8, không có migration)
+- **Hoàn thiện sau rà soát (chưa phát hành)**: đổi *Ngày căn cứ tính giá cước* (cân 1 ↔ cân 2) nay hỏi xác nhận (nêu số phiếu xuyên đêm bị ảnh hưởng), tính lại các phiếu chưa chốt, giữ nguyên phiếu đã chốt và ghi nhật ký `SETTING_PRICE_BASIS`; `catalog.*` từ chối khóa kiểu prototype (`constructor`, `__proto__`…) bằng `ValidationError`; phím tắt Alt+D/I/B tôn trọng quyền như menu; `ui-smoke` ghi tệp mẫu đối tác vào thư mục tạm thay vì `tests/fixtures`.
 - **P1 đổi trạng thái bảng giá đang dùng**: đưa bảng giá còn phiếu sử dụng ra khỏi ACTIVE (vd INACTIVE) phải xác nhận (`ConfirmRequired`). Câu hỏi nêu số phiếu chưa chốt sẽ được tính lại, số phiếu đã chốt giữ nguyên và chỉ cách mở lại giá cũ (nút 🗑 Xóa bảng giá). Trước đây chỉ một thao tác là làm 381 phiếu mất giá mà không cảnh báo. Khi bật duyệt phiếu, phiếu **đã duyệt** bị đổi tổng tiền được ghi audit `PRICE_RECALC_APPROVED` và mở cảnh báo cùng tên ở Trung tâm cảnh báo; phiếu không tự về Nháp.
 - **P2 hoàn tác lô gốc**: lô nhập lại có dòng `PENDING_ALREADY` (đã chờ kiểm tra ở lô trước) không còn làm mất xung đột khi lô gốc bị hoàn tác. Dòng mới nhất cùng dữ liệu được thăng cấp thành dòng "Cần kiểm tra" (audit `PENDING_PROMOTED`), cảnh báo trùng giữ nguyên, số đếm của lô được cập nhật.
 - **P2 bật phân quyền sau khi đã bật duyệt phiếu**: `auth.enable` cũng cảnh báo "chỉ còn 1 người có quyền duyệt", kèm lựa chọn bật luôn *Cho phép tự duyệt* (`bat_tu_duyet`). Tắt *Cho phép tự duyệt* khi chỉ có 1 người duyệt cũng phải xác nhận. Mọi điều kiện "đủ người duyệt" dồn về một hàm `canhBaoNguoiDuyet` (`src/utils/duyet.js`).
@@ -197,7 +198,7 @@
 - `ReconciliationService`: khớp theo Số phiếu (hoặc Biển số + Ngày + KL nếu file đối tác không có số phiếu); 9 loại kết quả (Khớp / Thiếu bên A / Thiếu bên B / Lệch KL / Lệch đơn giá / Lệch tiền / Lệch VAT / Trùng dữ liệu / Cần kiểm tra); liệt kê đủ mọi cột lệch; dung sai KL và tiền cấu hình được.
 - Cờ `trang_thai_doi_chieu` trên phiếu, 1 cảnh báo tổng hợp cho mỗi lô lệch, xử lý từng dòng (Chấp nhận A/B, Điều chỉnh, Bỏ qua + ghi chú, có audit). Đối chiếu không sửa phiếu cân.
 - Màn hình Đối chiếu (danh sách lô → 2 bước → bảng song song Hệ thống | Đối tác, ô lệch tô màu) và xuất Excel 2 sheet (Bảng đối chiếu, Sai lệch).
-- 3 test mới (37 PASS) + UI e2e mở rộng (25 ảnh chụp); mẫu file đối tác `tests/fixtures/doitac-hak.xlsx`.
+- 3 test mới (37 PASS) + UI e2e mở rộng (25 ảnh chụp); mẫu file đối tác (sinh khi chạy, nay ghi vào thư mục tạm) `tests/fixtures/doitac-hak.xlsx`.
 ### Chưa có
 - Đối chiếu cấp xe (đối tác chỉ gửi tổng theo biển số); build Windows.
 
