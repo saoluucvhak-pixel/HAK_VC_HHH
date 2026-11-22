@@ -166,3 +166,17 @@ test('0.8.4: backup.export (xuất cả CSDL, gồm băm mật khẩu) chỉ dà
     assert.equal(r2.ok, true, r2.error);
   } finally { rt.close(); }
 });
+
+test('0.8.4: kênh ghi chưa từng có test quyền — XEM luôn bị Forbidden; NHAP bị chặn ở kênh mức duyệt; kênh mức nhập qua được cửa quyền', async () => {
+  const rt = mk(); await loadInitialData(rt.app, SEED_DIR);
+  try {
+    assert.equal((await call(rt, 'auth.enable', { ten_dang_nhap: 'admin', ho_ten: 'QT', mat_khau: PW })).ok, true);
+    for (const [u, r] of [['xem1', 'XEM'], ['nhap1', 'NHAP']]) assert.equal((await call(rt, 'auth.createUser', { ten_dang_nhap: u, ho_ten: u, vai_tro: r, mat_khau: PW })).ok, true);
+    const GHI = ['price.remove', 'vehicles.importCommit', 'alerts.setStatus', 'import.cancel', 'recon.weight', 'price.createFuelPeriod', 'tickets.remove', 'cost.recalc'];
+    await login(rt, 'xem1');
+    for (const ch of GHI) { const r = await call(rt, ch, {}); assert.equal(r.type, 'Forbidden', `XEM phải bị chặn ở ${ch}`); }
+    await login(rt, 'nhap1');
+    for (const ch of ['price.remove', 'recon.weight']) assert.equal((await call(rt, ch, {})).type, 'Forbidden', `NHAP phải bị chặn ở ${ch} (mức duyệt)`);
+    for (const ch of ['vehicles.importCommit', 'alerts.setStatus', 'import.cancel', 'cost.recalc']) assert.notEqual((await call(rt, ch, {})).type, 'Forbidden', `NHAP phải qua cửa quyền ở ${ch}`);
+  } finally { rt.close(); }
+});
