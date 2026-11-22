@@ -26,40 +26,67 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Kiểm tra run đã nghiệm thu
+      # Mọi đầu vào đi qua env (không chèn thẳng ${{ }} vào script) và mọi nội dung phát hành (ghi chú, package.json) được đọc ở ĐÚNG commit
+      # của run đã nghiệm thu, không phải ở đầu nhánh main lúc chạy workflow (lỗi v0.8.2: ghi chú của bản sau bị đính nhầm vào bản trước).
+      - name: Kiểm tra run đã nghiệm thu, tag, phiên bản và ghi chú
         id: run
-        env: { GH_TOKEN: '${{ github.token }}' }
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          RUN_ID: ${{ inputs.run_id }}
+          TAG: ${{ inputs.tag }}
+          NOTES: ${{ inputs.notes_file }}
         run: |
           set -euo pipefail
-          info=$(gh api repos/${{ github.repository }}/actions/runs/${{ inputs.run_id }})
+          [[ "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "Tag phải có dạng vX.Y.Z (nhận: $TAG)"; exit 1; }
+          [[ "$NOTES" != /* && "$NOTES" != *..* ]] || { echo "notes_file phải là đường dẫn tương đối trong repo"; exit 1; }
+          VER="${TAG#v}"
+          info=$(gh api "repos/$REPO/actions/runs/$RUN_ID")
           concl=$(jq -r .conclusion <<<"$info"); ev=$(jq -r .event <<<"$info"); sha=$(jq -r .head_sha <<<"$info"); name=$(jq -r .name <<<"$info")
           echo "run: $name / $ev / $concl / $sha"
           [ "$name" = "Windows build" ] || { echo "Không phải run Windows build"; exit 1; }
           [ "$concl" = "success" ] || { echo "Run chưa xanh ($concl) — không phát hành"; exit 1; }
           [ "$ev" = "workflow_dispatch" ] || { echo "Cần run chạy tay với installers=true"; exit 1; }
-          git ls-remote --exit-code origin "refs/tags/${{ inputs.tag }}" >/dev/null 2>&1 && { echo "Tag ${{ inputs.tag }} đã tồn tại"; exit 1; } || true
+          # không trùng tag hay Release có sẵn (kể cả tag do công cụ khác tạo trước)
+          if gh release view "$TAG" >/dev/null 2>&1; then echo "Release $TAG đã tồn tại"; exit 1; fi
+          if gh api "repos/$REPO/git/ref/tags/$TAG" >/dev/null 2>&1; then echo "Tag $TAG đã tồn tại"; exit 1; fi
+          # đọc package.json và ghi chú ở đúng commit đã nghiệm thu
+          git fetch --depth=1 origin "$sha"
+          git checkout -q --detach FETCH_HEAD
+          pkg=$(jq -r .version package.json)
+          [ "$pkg" = "$VER" ] || { echo "package.json tại $sha là $pkg, khác tag $TAG"; exit 1; }
+          [ -f "$NOTES" ] || { echo "Không có $NOTES tại $sha"; exit 1; }
+          head -n 1 "$NOTES" | grep -q "VC Cost $VER" || { echo "Dòng đầu của $NOTES không nêu 'VC Cost $VER'"; exit 1; }
+          cp "$NOTES" "$RUNNER_TEMP/notes-src.md"
           echo "sha=$sha" >> "$GITHUB_OUTPUT"
+          echo "ver=$VER" >> "$GITHUB_OUTPUT"
 
       - name: Tải bộ cài đã nghiệm thu
-        env: { GH_TOKEN: '${{ github.token }}' }
+        env: { GH_TOKEN: '${{ github.token }}', RUN_ID: '${{ inputs.run_id }}' }
         run: |
           set -euo pipefail
-          mkdir -p assets && gh run download ${{ inputs.run_id }} -n vc-cost-installers -D assets
+          mkdir -p assets && gh run download "$RUN_ID" -n vc-cost-installers -D assets
           ls -la assets
 
-      - name: Kiểm tra SHA-256 khớp SHA256SUMS.txt
+      - name: Kiểm tra SHA-256 và tên tệp khớp phiên bản
+        env: { VER: '${{ steps.run.outputs.ver }}' }
         run: |
           set -euo pipefail
           cd assets
           cat SHA256SUMS.txt
           sha256sum -c SHA256SUMS.txt
-          [ "$(ls VC-Cost-*-Setup.exe | wc -l)" = 1 ] && [ "$(ls VC-Cost-*-Portable.exe | wc -l)" = 1 ]
+          [ -f "VC-Cost-$VER-Setup.exe" ] && [ -f "VC-Cost-$VER-Portable.exe" ] || { echo "Thiếu VC-Cost-$VER-Setup.exe / -Portable.exe (bộ cài không đúng phiên bản $VER)"; exit 1; }
+          [ "$(ls VC-Cost-*-Setup.exe | wc -l)" = 1 ] && [ "$(ls VC-Cost-*-Portable.exe | wc -l)" = 1 ] || { echo "Có nhiều hơn một bộ cài"; exit 1; }
 
       - name: Tạo tag và Release
-        env: { GH_TOKEN: '${{ github.token }}' }
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ inputs.tag }}
+          SHA: ${{ steps.run.outputs.sha }}
+          RUN_ID: ${{ inputs.run_id }}
         run: |
           set -euo pipefail
-          { cat "${{ inputs.notes_file }}"; echo; echo '## SHA-256'; echo '```'; cat assets/SHA256SUMS.txt; echo '```'; echo; echo "Commit: ${{ steps.run.outputs.sha }} · build + nghiệm thu: run ${{ inputs.run_id }}"; } > notes.md
-          gh release create "${{ inputs.tag }}" assets/VC-Cost-*-Setup.exe assets/VC-Cost-*-Portable.exe assets/SHA256SUMS.txt \
-            --target "${{ steps.run.outputs.sha }}" --title "VC Cost ${{ inputs.tag }}" --notes-file notes.md --latest
-          gh release view "${{ inputs.tag }}" --json tagName,targetCommitish,assets --jq '{tag: .tagName, target: .targetCommitish, files: [.assets[] | {name, size}]}'
+          { cat "$RUNNER_TEMP/notes-src.md"; echo; echo '## SHA-256'; echo '```'; cat assets/SHA256SUMS.txt; echo '```'; echo; echo "Commit: $SHA · build + nghiệm thu: run $RUN_ID"; } > notes.md
+          gh release create "$TAG" assets/VC-Cost-*-Setup.exe assets/VC-Cost-*-Portable.exe assets/SHA256SUMS.txt \
+            --target "$SHA" --title "VC Cost $TAG" --notes-file notes.md --latest
+          gh release view "$TAG" --json tagName,targetCommitish,assets --jq '{tag: .tagName, target: .targetCommitish, files: [.assets[] | {name, size}]}'

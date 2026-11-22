@@ -16,9 +16,11 @@ on:
 permissions:
   contents: read
 
+# Run chạy tay (nghiệm thu bộ cài) có nhóm riêng theo run_id: không bị hủy khi có push/gộp PR cùng lúc, và không hủy run khác.
+# Chỉ run theo PR/push mới tự hủy bản cũ cùng nhánh (đã từng mất run nghiệm thu 30–40 phút vì bị hủy nhầm).
 concurrency:
-  group: windows-${{ github.ref }}
-  cancel-in-progress: true
+  group: windows-${{ github.event_name == 'workflow_dispatch' && format('dispatch-{0}', github.run_id) || github.ref }}
+  cancel-in-progress: ${{ github.event_name != 'workflow_dispatch' }}
 
 jobs:
   windows:
@@ -114,64 +116,3 @@ jobs:
           name: acceptance-results
           path: ${{ runner.temp }}/smoke-*.json
           if-no-files-found: ignore
-
-  publish-081:
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    needs: windows
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-      actions: read
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          ref: ${{ github.sha }}
-
-      - name: Chọn bản phát hành đã được yêu cầu
-        id: version
-        shell: bash
-        run: |
-          version=$(node -p "require('./package.json').version")
-          if [ "$version" = '0.8.1' ]; then echo 'publish=true' >> "$GITHUB_OUTPUT"; fi
-
-      - name: Xác nhận CI Linux của đúng commit
-        if: steps.version.outputs.publish == 'true'
-        env:
-          GH_TOKEN: ${{ github.token }}
-        shell: bash
-        run: |
-          set -euo pipefail
-          for attempt in $(seq 1 10); do
-            result=$(gh api -X GET "repos/$GITHUB_REPOSITORY/actions/runs" -f head_sha="$GITHUB_SHA" -f per_page=100 |
-              jq -r --arg sha "$GITHUB_SHA" '[.workflow_runs[] | select(.name == "CI" and .head_sha == $sha)][0] | if .status == "completed" then .conclusion else "pending" end')
-            if [ "$result" = 'success' ]; then exit 0; fi
-            if [ "$result" != 'pending' ]; then echo "CI Linux: $result"; exit 1; fi
-            sleep 30
-          done
-          echo 'CI Linux chưa hoàn tất'; exit 1
-
-      - name: Lấy đúng bộ cài của run đã nghiệm thu
-        if: steps.version.outputs.publish == 'true'
-        uses: actions/download-artifact@v4
-        with:
-          name: vc-cost-installers
-          path: release-assets
-
-      - name: Kiểm tra checksum và công bố 0.8.1
-        if: steps.version.outputs.publish == 'true'
-        env:
-          GH_TOKEN: ${{ github.token }}
-        shell: bash
-        run: |
-          set -euo pipefail
-          (cd release-assets && sha256sum -c SHA256SUMS.txt)
-          test -f release-assets/VC-Cost-0.8.1-Setup.exe
-          test -f release-assets/VC-Cost-0.8.1-Portable.exe
-          cp docs/RELEASE_NOTES.md release-notes.md
-          printf '\nCommit `%s` · Windows build + nghiệm thu run %s\n\n' "$GITHUB_SHA" "$GITHUB_RUN_ID" >> release-notes.md
-          printf '```\n' >> release-notes.md
-          cat release-assets/SHA256SUMS.txt >> release-notes.md
-          printf '```\n' >> release-notes.md
-          gh release create v0.8.1 --target "$GITHUB_SHA" --title 'VC Cost v0.8.1' --notes-file release-notes.md --latest \
-            release-assets/VC-Cost-0.8.1-Setup.exe release-assets/VC-Cost-0.8.1-Portable.exe release-assets/SHA256SUMS.txt
-

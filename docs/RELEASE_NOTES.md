@@ -1,8 +1,19 @@
-# VC Cost 0.8.3 — schema SQLite 8
+# VC Cost 0.8.4 — schema SQLite 8
 
+Ứng dụng quản lý chi phí vận chuyển offline cho HAK. Bản vá sau đợt rà soát toàn diện (bảo mật, nghiệp vụ, kiểm thử, phát hành). Không đổi cấu trúc CSDL (vẫn schema 8), cài đè lên 0.8.3 không cần thao tác thêm.
+
+## Thay đổi trong 0.8.4
+- **An toàn**: tên tệp khi nhập/xuất được làm sạch; đọc Excel có giới hạn kích thước (chống tệp phình giải nén); chỉ Admin được xuất sao lưu.
+- **Nhập liệu**: bản xem trước cũ được kiểm tra lại khi ghi (không mất dữ liệu âm thầm); nhận diện trùng trong cùng tệp kể cả khi tên địa điểm viết khác nhau.
+- **Chốt kỳ/đợt**: chốt một phần nhà xe không khóa cả đợt; đổi quy tắc làm tròn khi đã có kỳ chốt phải xác nhận.
+- **Báo cáo**: tiền chỉ tính cho phiếu đã có giá; theo nơi xuất không gộp nơi chưa khớp danh mục.
+- **Duyệt phiếu**: chuyển đợt không đưa phiếu Đã duyệt về Nháp.
+
+
+## 0.8.3
 Ứng dụng quản lý chi phí vận chuyển offline cho HAK. Bản vá sau lần kiểm tra thứ hai trên 0.8.2. Không đổi cấu trúc CSDL (vẫn schema 8), cài đè lên 0.8.2 không cần nâng cấp dữ liệu.
 
-## Thay đổi trong 0.8.3
+### Thay đổi trong 0.8.3
 - **Bảng giá**: đổi trạng thái một bảng giá đang có phiếu sử dụng phải xác nhận; hộp xác nhận nói rõ số phiếu sẽ được tính lại và số phiếu đã chốt giữ nguyên. Khi bật duyệt phiếu, phiếu đã duyệt bị đổi tiền được ghi nhật ký và báo ở Trung tâm cảnh báo.
 - **Nhập liệu**: hoàn tác một lần import không làm mất dòng "Cần kiểm tra" mà lần import sau còn đang dựa vào.
 - **Duyệt phiếu**: bật phân quyền khi duyệt phiếu đã bật mà chỉ có 1 người duyệt → cảnh báo và cho chọn bật luôn *Cho phép tự duyệt*.
@@ -36,6 +47,6 @@ Bản vá sau kiểm tra trên 0.8.1: sửa lỗi vượt quyền bảng giá, n
 5. Đối chiếu cùng bộ lọc sau nâng cấp. Giữ PRE_MIGRATION để phục hồi nếu cần dùng lại bản cũ phù hợp schema.
 
 ## Kiểm tra và giới hạn
-Bộ cài được lấy từ Windows CI sau các bước kiểm thử, cài mới, nâng schema 4/6 lên 7, thư mục tùy chỉnh và Portable. Mỗi bộ cài có SHA-256 kèm theo.
+Bộ cài được lấy từ Windows CI sau các bước kiểm thử, cài mới, nâng từ bản cũ lên schema 8, thư mục tùy chỉnh và Portable. Mỗi bộ cài có SHA-256 kèm theo.
 
 Bộ cài chưa ký số. Tại lần kiểm tra dependency, runtime có 0 cảnh báo; cây công cụ build còn 9 mục high từ picomatch (GHSA-fc5q-39xc-vjpf), chờ bản vá upstream. Kết quả nghiệm thu dùng fixture và DB thử.

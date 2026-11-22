@@ -20,6 +20,11 @@ function Invoke-Smoke([string]$Exe, [hashtable]$EnvVars, [string]$Name) {
   return $r
 }
 function Assert-True([bool]$Cond, [string]$Msg) { if (-not $Cond) { throw $Msg } }
+function Remove-Data([string]$Dir) {
+  Get-Process -Name 'VC Cost' -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
+  for ($i = 0; $i -lt 5; $i++) { try { Remove-Item -LiteralPath $Dir -Recurse -Force -ErrorAction Stop; return } catch { Start-Sleep -Seconds 2 } }
+  Remove-Item -LiteralPath $Dir -Recurse -Force
+}
 
 $setup = (Get-ChildItem $DistDir -Filter 'VC-Cost-*-Setup.exe' | Select-Object -First 1).FullName
 $portable = (Get-ChildItem $DistDir -Filter 'VC-Cost-*-Portable.exe' | Select-Object -First 1).FullName
@@ -27,7 +32,8 @@ Assert-True ($setup -and $portable) 'Thiếu bộ cài Setup hoặc Portable tro
 
 # Cài mới (silent, không quyền quản trị: perMachine=false)
 $inst = Join-Path $Work 'vc-install'
-Start-Process -FilePath $setup -ArgumentList '/S', "/D=$inst" -WindowStyle Hidden -Wait
+$sp = Start-Process -FilePath $setup -ArgumentList '/S', "/D=$inst" -WindowStyle Hidden -PassThru -Wait
+Assert-True ($sp.ExitCode -eq 0) "Cài Setup thất bại, exit $($sp.ExitCode)"
 $exe = Join-Path $inst 'VC Cost.exe'
 Assert-True (Test-Path $exe) "Cài Setup xong nhưng không thấy $exe"
 Write-Host "Đã cài Setup vào $inst"
@@ -39,22 +45,22 @@ Assert-True (Test-Path (Join-Path $appdataDir 'data\app.db')) 'Setup không tạ
 Assert-True ($r.counts.phieu -eq 2035) "Cài mới phải có 2035 phiếu mẫu, thực tế $($r.counts.phieu)"
 
 # Ca 2: nâng từ bản cũ (DB schema 4 có dữ liệu + WAL) ở thư mục mặc định → migrate lên bản mới, có PRE_MIGRATION, giữ dữ liệu
-Remove-Item $appdataDir -Recurse -Force
+Remove-Data $appdataDir
 $old = node --no-warnings scripts/make-old-db.js (Join-Path $appdataDir 'data\app.db') 4
 Write-Host "DB cũ: $old"
 $r = Invoke-Smoke $exe @{ VCCOST_EXPECT_UPGRADE_FROM = '4'; VCCOST_EXPECT_PHIEU = '3' } 'nang-cap-tu-v4'
-Assert-True ($r.schema -ge 6) "Sau nâng cấp schema phải >= 6, thực tế $($r.schema)"
+Assert-True ($r.schema -eq 8) "Sau nâng cấp schema phải = 8, thực tế $($r.schema)"
 Assert-True (@(Get-ChildItem (Join-Path $appdataDir 'backups') -Filter '*_PRE_MIGRATION.db').Count -ge 1) 'Thiếu file PRE_MIGRATION trong %APPDATA%\VCCost\backups'
 
 # Nâng DB của bản 0.7.1 (schema 6) lên schema hiện hành (8), giữ dữ liệu cũ.
-Remove-Item -LiteralPath $appdataDir -Recurse -Force
+Remove-Data $appdataDir
 $old = node --no-warnings scripts/make-old-db.js (Join-Path $appdataDir 'data\app.db') 6
 Write-Host "DB schema 6: $old"
 $r = Invoke-Smoke $exe @{ VCCOST_EXPECT_UPGRADE_FROM = '6'; VCCOST_EXPECT_PHIEU = '3' } 'nang-cap-tu-v6'
 Assert-True ($r.schema -eq 8) "Sau nâng cấp từ v6 phải có schema 8, thực tế $($r.schema)"
 
 # Nâng DB của bản 0.8.0/0.8.1 (schema 7: có duyệt phiếu) lên schema 8, giữ dữ liệu và có PRE_MIGRATION.
-Remove-Item -LiteralPath $appdataDir -Recurse -Force
+Remove-Data $appdataDir
 $old = node --no-warnings scripts/make-old-db.js (Join-Path $appdataDir 'data\app.db') 7
 Write-Host "DB schema 7: $old"
 $r = Invoke-Smoke $exe @{ VCCOST_EXPECT_UPGRADE_FROM = '7'; VCCOST_EXPECT_PHIEU = '3' } 'nang-cap-tu-v7'
@@ -62,7 +68,7 @@ Assert-True ($r.schema -eq 8) "Sau nâng cấp từ v7 phải có schema 8, th�
 Assert-True (@(Get-ChildItem (Join-Path $appdataDir 'backups') -Filter '*_PRE_MIGRATION.db').Count -ge 1) 'Nâng từ v7: thiếu file PRE_MIGRATION'
 
 # Ca 3: thư mục dữ liệu TÙY CHỈNH (VCCOST_DATA_DIR) — không đụng thư mục mặc định
-Remove-Item $appdataDir -Recurse -Force
+Remove-Data $appdataDir
 $custom = Join-Path $Work 'du-lieu-tuy-chinh'
 $r = Invoke-Smoke $exe @{ VCCOST_DATA_DIR = $custom } 'thu-muc-tuy-chinh'
 Assert-True (Test-Path (Join-Path $custom 'data\app.db')) 'Không tạo DB ở thư mục tùy chỉnh'
