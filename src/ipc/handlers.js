@@ -108,6 +108,14 @@ function createHandlers(app, env = {}) {
         const m = canhBaoNguoiDuyet({ duyetBat: true, phanQuyen: app.auth.enabled(), tuDuyet: !!value.cho_tu_duyet, soSau: soNguoiDuyet(app.db), ngu_canh: 'khi bật duyệt phiếu' });
         if (m) throw new ConfirmRequired(m);
       }
+      // Bảng kê luôn tính lại từ dữ liệu sống theo cấu hình làm tròn HIỆN HÀNH (snapshot chốt chỉ lưu từng phiếu): đổi làm tròn khi đã có kỳ chốt
+      // làm Bảng kê/Excel/PDF in ra lệch tổng đã chốt và đã ký → hỏi xác nhận.
+      if (key === 'rounding' && !xac_nhan) {
+        const n = app.db.get(`SELECT COUNT(*) n FROM chot_ky WHERE trang_thai='DA_CHOT'`).n;
+        if (n > 0 && JSON.stringify(value) !== JSON.stringify(app.settings.get('rounding'))) {
+          throw new ConfirmRequired(`Đang có ${n} kỳ/đợt đã chốt. Bảng kê tính lại theo cấu hình làm tròn hiện hành nên đổi làm tròn sẽ làm Bảng kê, Excel và PDF in ra LỆCH so với tổng đã chốt và đã ký. Chỉ đổi nếu chỉ áp dụng cho các kỳ sau. Vẫn đổi?`);
+        }
+      }
       // Đổi căn cứ ngày tính giá (cân 1 ↔ cân 2) làm phiếu XUYÊN ĐÊM đổi bảng giá/đơn vị áp dụng → hỏi xác nhận (nêu số phiếu), rồi tính lại
       // các phiếu chưa chốt; phiếu đã chốt kỳ giữ nguyên số đã chốt.
       if (key === 'ngay_can_cu_gia') {
