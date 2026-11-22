@@ -27,4 +27,16 @@ Số 0 đầu ở khóa phiếu; thông báo số kiểu Anh; làm tròn Dashboa
 ## Kết quả kiểm thử
 - `npm test`: 235/235 đạt với node:sqlite và với better-sqlite3.
 - `npm run test:ui` (Playwright smoke): không có lỗi.
-- CI / nghiệm thu bộ cài Windows: xem mục cuối (điền sau khi chạy).
+- CI / nghiệm thu bộ cài Windows: xem mục "Nghiệm thu bộ cài và phát hành" bên dưới.
+
+## Nghiệm thu bộ cài và phát hành
+- Trên nhánh `claude/ra-soat-0.8.4` (commit `85d6c4c`): CI `test` và `windows` đạt; run nghiệm thu bộ cài [44975666324](https://github.com/saoluucvhak-pixel/HAK_VC_HHH/actions/runs/44975666324) thành công.
+- Sau khi gộp PR #31, trên `main` (commit `c1c3bb7`): run nghiệm thu bộ cài [44976684316](https://github.com/saoluucvhak-pixel/HAK_VC_HHH/actions/runs/44976684316) (`windows.yml`, `installers=true`) thành công ở mọi bước: test hai driver SQLite, giao diện, khởi động thử bản đóng gói, build Setup/Portable, SHA-256, nghiệm thu bộ cài (cài mới, nâng cấp, thư mục dữ liệu, Portable).
+- Phát hành: [v0.8.4](https://github.com/saoluucvhak-pixel/HAK_VC_HHH/releases/tag/v0.8.4) lúc 09:50 (giờ Việt Nam) 22/11/2026 bằng `release.yml` từ đúng bộ cài của run 44976684316.
+
+| Tệp | SHA-256 |
+|-----|---------|
+| `VC-Cost-0.8.4-Setup.exe` | `3b20870dafbe557d064b7ecf4569bbb51c5860f7cfbe123d9be1bc2fb07453ba` |
+| `VC-Cost-0.8.4-Portable.exe` | `3c16afa6cfcf1273077ef76addad364de3700d671075f502ec6290ba41760957` |
+
+Ghi chú trung thực: kết luận nghiệm thu bộ cài dựa trên trạng thái thành công của từng bước trong run; chưa đối chiếu thủ công từng dòng của 6 ca. Bộ cài chưa ký số; chưa thử trên máy Windows thật hay dữ liệu thật.
