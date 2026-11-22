@@ -70,7 +70,9 @@ class ChotKyService {
           VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`, [id, r.id, r.kl_hang_kg, r.don_gia, r.ty_le_vat, r.tien_truoc_vat, r.tien_vat, r.tong_tien, r.bang_gia_id, r.don_vi_van_chuyen_id, r.tuyen_id, JSON.stringify(r)]);
       }
       this.db.run(`UPDATE phieu_can SET chot_ky_id=? WHERE id IN (SELECT phieu_can_id FROM chot_ky_snapshot WHERE chot_ky_id=?)`, [id, id]);
-      if (loai === 'DOT') this.db.run(`UPDATE dot_van_chuyen SET trang_thai='KHOA' WHERE id=?`, [f.dot_id]);
+      // Chỉ khóa CẢ ĐỢT khi chốt toàn đợt. Chốt theo một đơn vị chỉ khóa phiếu của đơn vị đó (qua chot_ky_id); khóa cả đợt sẽ làm
+      // phiếu của đơn vị khác không duyệt/sửa/xóa/chốt được nữa (bế tắc, chỉ gỡ bằng cách mở khóa kỳ vừa chốt).
+      if (loai === 'DOT' && !f.don_vi_id) this.db.run(`UPDATE dot_van_chuyen SET trang_thai='KHOA' WHERE id=?`, [f.dot_id]);
       this.audit.log('LOCK_PERIOD', 'chot_ky', id, null, { ma, loai, so_phieu: rows.length, tong: pv.tong }, o.ghi_chu || null);
       return { id, ma, so_phieu: rows.length, tong: pv.tong };
     });

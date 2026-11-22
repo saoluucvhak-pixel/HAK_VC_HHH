@@ -219,6 +219,14 @@ class TicketImportService {
     const lim = limitsFrom(this.settings);
     const vi = (p.rows || []).filter((r) => (r.phan_loai === 'NEW' || r.phan_loai === 'KEY_CONFLICT') && weightProblem(r.kl_hang_kg, lim));
     if (vi.length) throw new ValidationError(`Ngưỡng khối lượng đã thay đổi sau khi xem trước: ${vi.length} dòng không còn hợp lệ (vd dòng ${vi[0].source_row}, phiếu ${vi[0].so_phieu}: ${weightProblem(vi[0].kl_hang_kg, lim)}). Xem trước lại để cập nhật kết quả`);
+    // Bản xem trước có thể đã cũ (token sống tới 2 giờ): phiếu gốc mà dòng "trùng"/"xung đột" dựa vào có thể đã bị xóa hoặc đổi dữ liệu.
+    // Nếu cứ commit, dòng bị bỏ qua âm thầm và import báo thành công nhưng mất phiếu → bắt xem trước lại.
+    for (const r of p.rows || []) {
+      if (!['EXACT_DUPLICATE', 'KEY_CONFLICT', 'PENDING_ALREADY'].includes(r.phan_loai) || !r.existingId) continue;
+      const ex = this.db.get('SELECT id, so_phieu, trang_thai, fingerprint FROM phieu_can WHERE id=?', [r.existingId]);
+      if (!ex || ex.trang_thai !== 'ACTIVE') throw new ValidationError(`Dữ liệu đã thay đổi sau khi xem trước: phiếu ${r.so_phieu} (dòng ${r.source_row}) đã bị xóa hoặc không còn hiệu lực. Hãy xem trước lại rồi import.`);
+      if (r.phan_loai === 'EXACT_DUPLICATE' && ex.fingerprint !== r.fp) throw new ValidationError(`Dữ liệu đã thay đổi sau khi xem trước: phiếu ${r.so_phieu} (dòng ${r.source_row}) đã được sửa. Hãy xem trước lại rồi import.`);
+    }
     const chuaDuyet = duyetBat(this.settings);    // bật duyệt phiếu → phiếu mới là Nháp cho tới khi được duyệt
     const result = this.db.tx(() => {
       const c = p.counts;
