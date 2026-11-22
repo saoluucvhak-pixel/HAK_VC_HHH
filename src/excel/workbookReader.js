@@ -55,8 +55,30 @@ function parseCsv(text) {
   return rows;
 }
 
+// Giới hạn chống tệp độc hại/hỏng làm hết bộ nhớ của tiến trình chính (Electron sập khi mở tệp của đối tác).
+const MAX_FILE_BYTES = 50 * 1024 * 1024;          // tệp tải vào
+const MAX_UNZIPPED_BYTES = 500 * 1024 * 1024;     // tổng kích thước giải nén khai báo trong zip
+const MAX_ROWS = 300000, MAX_COLS = 256, MAX_CELLS = 8000000;
+
+/** Tổng kích thước giải nén KHAI BÁO trong thư mục trung tâm của zip (không giải nén gì cả). */
+function declaredUnzippedBytes(buf) {
+  let total = 0;
+  for (let i = buf.length - 22; i >= Math.max(0, buf.length - 65557); i--) {
+    if (buf.readUInt32LE(i) !== 0x06054b50) continue;
+    const n = buf.readUInt16LE(i + 10); let p = buf.readUInt32LE(i + 16);
+    for (let k = 0; k < n && p + 46 <= buf.length && buf.readUInt32LE(p) === 0x02014b50; k++) {
+      total += buf.readUInt32LE(p + 24);
+      p += 46 + buf.readUInt16LE(p + 28) + buf.readUInt16LE(p + 30) + buf.readUInt16LE(p + 32);
+    }
+    return total;
+  }
+  return 0;
+}
+
 async function readWorkbook({ filePath, buffer, fileName }) {
+  if (!buffer && filePath) { const sz = fs.statSync(filePath).size; if (sz > MAX_FILE_BYTES) throw new ValidationError(`Tệp quá lớn (${Math.round(sz / 1048576)} MB): giới hạn ${MAX_FILE_BYTES / 1048576} MB. Tách tệp hoặc xóa vùng thừa rồi chọn lại.`); }
   const buf = buffer ? Buffer.from(buffer) : fs.readFileSync(filePath);
+  if (buf.length > MAX_FILE_BYTES) throw new ValidationError(`Tệp quá lớn (${Math.round(buf.length / 1048576)} MB): giới hạn ${MAX_FILE_BYTES / 1048576} MB. Tách tệp hoặc xóa vùng thừa rồi chọn lại.`);
   const name = fileName || (filePath ? path.basename(filePath) : 'file');
   const hash = crypto.createHash('sha256').update(buf).digest('hex');
   const aoaCache = new Map();
@@ -72,6 +94,7 @@ async function readWorkbook({ filePath, buffer, fileName }) {
       throw new ValidationError('Định dạng Excel cũ (.xls) không còn được hỗ trợ — mở file bằng Excel rồi "Lưu thành" .xlsx (hoặc .csv), sau đó chọn lại.');
     }
     if (!buf.subarray(0, 2).equals(ZIP_MAGIC)) throw new ValidationError('Không đọc được file: không phải định dạng .xlsx hợp lệ (hoặc file bị hỏng).');
+    if (declaredUnzippedBytes(buf) > MAX_UNZIPPED_BYTES) throw new ValidationError('Tệp .xlsx có kích thước giải nén quá lớn (nghi tệp độc hại hoặc hỏng) — không đọc.');
     const wb = new ExcelJS.Workbook();
     try { await wb.xlsx.load(buf); } catch (e) { throw new ValidationError(`Không đọc được file .xlsx: ${e.message}`); }
     const byName = new Map(wb.worksheets.map((w) => [w.name, w]));
@@ -80,6 +103,7 @@ async function readWorkbook({ filePath, buffer, fileName }) {
       const ws = byName.get(sheet);
       if (!ws) return [];
       const R = ws.rowCount || 0, C = ws.columnCount || 0, out = [];
+      if (R > MAX_ROWS || C > MAX_COLS || R * C > MAX_CELLS) throw new ValidationError(`Sheet "${sheet}" quá lớn hoặc có dữ liệu bất thường (${R} dòng × ${C} cột, giới hạn ${MAX_ROWS} × ${MAX_COLS}). Xóa các ô thừa ở vùng xa (Ctrl+End trong Excel) hoặc chọn sheet khác.`);
       for (let r = 1; r <= R; r++) {
         const row = ws.getRow(r), line = new Array(C);
         for (let c = 1; c <= C; c++) {
