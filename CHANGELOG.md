@@ -1,7 +1,19 @@
 # CHANGELOG
 
+## 0.8.4 — rà soát toàn diện bằng agent + sửa lỗi (schema 8, không có migration)
+- **An toàn tệp**: tên tệp sao chép khi import/xuất Excel được làm sạch và chốt trong thư mục đích (`safeFileName`, `joinInside`), chặn `..`/đường dẫn tuyệt đối.
+- **Đọc Excel có giới hạn**: tệp > 50 MB, kích thước giải nén khai báo > 500 MB, sheet > 300.000 dòng / 256 cột / 8 triệu ô bị từ chối rõ ràng (chống zip bomb, ô ở XFD1048576).
+- **Phân quyền**: `backup.export` chỉ vai trò Admin.
+- **Chốt đợt theo một đơn vị**: chốt kỳ một phần nhà xe không còn khóa cả đợt vận chuyển.
+- **Import**: xem trước cũ không còn âm thầm mất dữ liệu (kiểm tra lại dòng đích còn hiệu lực lúc ghi); trùng trong cùng tệp được nhận diện sau khi chuẩn hóa tên địa điểm theo bí danh.
+- **Báo cáo nhất quán**: tiền chỉ cộng cho phiếu đã có giá; báo cáo theo nơi xuất không gộp các nơi chưa khớp danh mục.
+- **Làm tròn**: đổi quy tắc làm tròn khi đã có kỳ/đợt chốt phải xác nhận.
+- **Duyệt phiếu**: chuyển phiếu sang đợt khác không đưa phiếu Đã duyệt về Nháp.
+- **Phát hành/CI**: `release.yml` đọc ghi chú và phiên bản tại đúng commit đã nghiệm thu, từ chối tag/release trùng, kiểm tra SHA-256 và tên tệp; `windows.yml` không hủy lần nghiệm thu đang chạy; nghiệm thu kiểm exit code Setup và schema = 8 sau nâng cấp.
+- Chi tiết, ma trận lỗi → test: `docs/NGHIEM_THU_0.8.4.md`.
+
 ## 0.8.3 — sửa lỗi lần kiểm tra thứ hai (schema 8, không có migration)
-- **Hoàn thiện sau rà soát (chưa phát hành)**: đổi *Ngày căn cứ tính giá cước* (cân 1 ↔ cân 2) nay hỏi xác nhận (nêu số phiếu xuyên đêm bị ảnh hưởng), tính lại các phiếu chưa chốt, giữ nguyên phiếu đã chốt và ghi nhật ký `SETTING_PRICE_BASIS`; `catalog.*` từ chối khóa kiểu prototype (`constructor`, `__proto__`…) bằng `ValidationError`; phím tắt Alt+D/I/B tôn trọng quyền như menu; `ui-smoke` ghi tệp mẫu đối tác vào thư mục tạm thay vì `tests/fixtures`.
+- **Hoàn thiện sau rà soát**: đổi *Ngày căn cứ tính giá cước* (cân 1 ↔ cân 2) nay hỏi xác nhận (nêu số phiếu xuyên đêm bị ảnh hưởng), tính lại các phiếu chưa chốt, giữ nguyên phiếu đã chốt và ghi nhật ký `SETTING_PRICE_BASIS`; `catalog.*` từ chối khóa kiểu prototype (`constructor`, `__proto__`…) bằng `ValidationError`; phím tắt Alt+D/I/B tôn trọng quyền như menu; `ui-smoke` ghi tệp mẫu đối tác vào thư mục tạm thay vì `tests/fixtures`.
 - **Phân phối bộ cài**: gỡ các mảnh `setup/*.part*` và `NOI_FILE_VA_CAI.bat` khỏi mã nguồn (bộ cài build cục bộ, không qua CI, 113 MB mỗi phiên bản làm phình kho). Bộ cài chính thức chỉ lấy từ trang Releases (đã nghiệm thu bằng CI, có `SHA256SUMS.txt`); `setup/HUONG_DAN.md` hướng dẫn tải và kiểm tra SHA-256. Lịch sử git vẫn giữ các bản cũ (kho chưa được thu nhỏ).
 - **P1 đổi trạng thái bảng giá đang dùng**: đưa bảng giá còn phiếu sử dụng ra khỏi ACTIVE (vd INACTIVE) phải xác nhận (`ConfirmRequired`). Câu hỏi nêu số phiếu chưa chốt sẽ được tính lại, số phiếu đã chốt giữ nguyên và chỉ cách mở lại giá cũ (nút 🗑 Xóa bảng giá). Trước đây chỉ một thao tác là làm 381 phiếu mất giá mà không cảnh báo. Khi bật duyệt phiếu, phiếu **đã duyệt** bị đổi tổng tiền được ghi audit `PRICE_RECALC_APPROVED` và mở cảnh báo cùng tên ở Trung tâm cảnh báo; phiếu không tự về Nháp.
 - **P2 hoàn tác lô gốc**: lô nhập lại có dòng `PENDING_ALREADY` (đã chờ kiểm tra ở lô trước) không còn làm mất xung đột khi lô gốc bị hoàn tác. Dòng mới nhất cùng dữ liệu được thăng cấp thành dòng "Cần kiểm tra" (audit `PENDING_PROMOTED`), cảnh báo trùng giữ nguyên, số đếm của lô được cập nhật.

@@ -9,6 +9,7 @@ const path = require('path');
 const { CATALOGS } = require('../models/catalogs');
 const { ALERT_DEF } = require('../services/AlertService');
 const { ValidationError } = require('../services/CatalogService');
+const { joinInside } = require('../utils/safePath');
 const { fromDb } = require('../utils/dbMoney');
 const exporters = require('../excel/exporters');
 const documents = require('../print/documents');
@@ -45,16 +46,16 @@ function createHandlers(app, env = {}) {
   const saveImportCopy = (buf, name) => {
     if (!importsDir || !buf) return null;
     fs.mkdirSync(importsDir, { recursive: true });
-    const p = path.join(importsDir, `${new Date().toISOString().replace(/[:.]/g, '-')}_${name}`);
+    const p = joinInside(importsDir, `${new Date().toISOString().replace(/[:.]/g, '-')}_${name}`);   // fileName do người dùng đưa: không cho thoát khỏi thư mục imports
     fs.writeFileSync(p, buf);
     return p;
   };
   const writeExport = (wbBuffer, name) => {
     if (!exportsDir) return { base64: Buffer.from(wbBuffer).toString('base64'), fileName: name };
     fs.mkdirSync(exportsDir, { recursive: true });
-    const p = path.join(exportsDir, name);
+    const p = joinInside(exportsDir, name);   // tên tệp dựng từ tham số (biển số, mã đợt…): không cho thoát khỏi thư mục exports
     fs.writeFileSync(p, Buffer.from(wbBuffer));
-    return { path: p, fileName: name };
+    return { path: p, fileName: path.basename(p) };
   };
   const writePdf = async (html, name, opt = {}) => {
     if (!env.renderPdf) throw new Error('Xuất PDF chưa khả dụng trong môi trường này');
@@ -106,6 +107,14 @@ function createHandlers(app, env = {}) {
       if (key === 'duyet_phieu' && value && value.bat === true && !xac_nhan && (!duyetBat(app.settings) || duyetTuDuyet(app.settings))) {
         const m = canhBaoNguoiDuyet({ duyetBat: true, phanQuyen: app.auth.enabled(), tuDuyet: !!value.cho_tu_duyet, soSau: soNguoiDuyet(app.db), ngu_canh: 'khi bật duyệt phiếu' });
         if (m) throw new ConfirmRequired(m);
+      }
+      // Bảng kê luôn tính lại từ dữ liệu sống theo cấu hình làm tròn HIỆN HÀNH (snapshot chốt chỉ lưu từng phiếu): đổi làm tròn khi đã có kỳ chốt
+      // làm Bảng kê/Excel/PDF in ra lệch tổng đã chốt và đã ký → hỏi xác nhận.
+      if (key === 'rounding' && !xac_nhan) {
+        const n = app.db.get(`SELECT COUNT(*) n FROM chot_ky WHERE trang_thai='DA_CHOT'`).n;
+        if (n > 0 && JSON.stringify(value) !== JSON.stringify(app.settings.get('rounding'))) {
+          throw new ConfirmRequired(`Đang có ${n} kỳ/đợt đã chốt. Bảng kê tính lại theo cấu hình làm tròn hiện hành nên đổi làm tròn sẽ làm Bảng kê, Excel và PDF in ra LỆCH so với tổng đã chốt và đã ký. Chỉ đổi nếu chỉ áp dụng cho các kỳ sau. Vẫn đổi?`);
+        }
       }
       // Đổi căn cứ ngày tính giá (cân 1 ↔ cân 2) làm phiếu XUYÊN ĐÊM đổi bảng giá/đơn vị áp dụng → hỏi xác nhận (nêu số phiếu), rồi tính lại
       // các phiếu chưa chốt; phiếu đã chốt kỳ giữ nguyên số đã chốt.

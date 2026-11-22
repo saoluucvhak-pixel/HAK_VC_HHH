@@ -98,37 +98,41 @@ class ReportService {
     const col = SORTABLE.has(sort) ? (sort === 'don_vi' ? 'd.ma' : `p.${sort}`) : 'p.ngay_gio_can_1';
     const base = `FROM phieu_can p LEFT JOIN don_vi_van_chuyen d ON d.id=p.don_vi_van_chuyen_id LEFT JOIN tuyen_van_chuyen t ON t.id=p.tuyen_id
                   LEFT JOIN dot_van_chuyen dt ON dt.id=p.dot_van_chuyen_id WHERE ${sql}`;
-    const tot = this.db.get(`SELECT COUNT(*) n, SUM(p.kl_hang_kg) kg, SUM(p.tien_truoc_vat) tien_truoc_vat, SUM(p.tien_vat) tien_vat, SUM(p.tong_tien) tong_tien ${base}`, params);
+    const pr = pricedSql('p');   // tiền chỉ cộng/hiển thị cho phiếu ĐÃ TÍNH GIÁ (khớp Dashboard và Bảng kê); phiếu xe lạ… có thể còn don_gia/tiền nhưng chưa hợp lệ
+    const tot = this.db.get(`SELECT COUNT(*) n, SUM(p.kl_hang_kg) kg, SUM(CASE WHEN ${pr} THEN p.tien_truoc_vat END) tien_truoc_vat, SUM(CASE WHEN ${pr} THEN p.tien_vat END) tien_vat, SUM(CASE WHEN ${pr} THEN p.tong_tien END) tong_tien ${base}`, params);
     const rows = this.db.all(`SELECT p.id, p.so_phieu, p.ngay_can, p.ngay_gio_can_1, p.ngay_gio_can_2, p.bien_so, d.ma AS don_vi, p.noi_xuat, p.noi_xuat_goc, p.noi_den,
-        t.ma_tuyen AS tuyen, p.tuyen_id, p.don_vi_tinh, p.can_lan_1, p.can_lan_2, p.kl_hang_kg, p.kl_hang_tan, p.don_gia, p.tien_truoc_vat, p.ty_le_vat, p.tien_vat, p.tong_tien,
+        t.ma_tuyen AS tuyen, p.tuyen_id, p.don_vi_tinh, p.can_lan_1, p.can_lan_2, p.kl_hang_kg, p.kl_hang_tan, p.don_gia, (CASE WHEN ${pr} THEN p.tien_truoc_vat END) AS tien_truoc_vat, p.ty_le_vat, (CASE WHEN ${pr} THEN p.tien_vat END) AS tien_vat, (CASE WHEN ${pr} THEN p.tong_tien END) AS tong_tien,
         dt.ma_dot AS dot, p.trang_thai_tinh_gia, p.trang_thai_doi_chieu, p.xe_tra_ve, (CASE WHEN p.duyet_boi IS NOT NULL AND p.duyet_boi = p.nhap_boi THEN 1 ELSE 0 END) AS tu_duyet, p.chot_ky_id, p.ghi_chu, p.bang_gia_id, p.trang_thai_duyet, ${ticketVersionSql('p')} AS ver
         ${base} ORDER BY ${col} ${dir === 'desc' ? 'DESC' : 'ASC'}, p.id LIMIT ${Number(limit)} OFFSET ${Number(offset)}`, params).map(conv);
     return { total: tot.n, totals: { so_chuyen: tot.n, tong_kg: tot.kg || 0, tien_truoc_vat: fromDb(tot.tien_truoc_vat) || 0, tien_vat: fromDb(tot.tien_vat) || 0, tong_tien: fromDb(tot.tong_tien) || 0 }, rows };
   }
 
-  _group(f, keySql, labelSql, extraJoin = '') {
-    const { sql, params } = this.approvedWhere(f);
+  _group(f, keySql, labelSql, extraJoin = '', groupSql = keySql) {
+    const { sql, params } = this.approvedWhere(f); const pr = pricedSql('p');
     return this.db.all(`SELECT ${keySql} AS k, ${labelSql} AS label, COUNT(*) so_chuyen, COUNT(DISTINCT p.bien_so_chuan) so_xe,
         SUM(p.kl_hang_kg) tong_kg, SUM(p.kl_hang_kg)/1000.0 tong_tan, group_concat(DISTINCT p.don_gia) don_gia_list,
-        SUM(p.tien_truoc_vat) tien_truoc_vat, SUM(p.tien_vat) tien_vat, SUM(p.tong_tien) tong_tien,
+        SUM(CASE WHEN ${pr} THEN p.tien_truoc_vat END) tien_truoc_vat, SUM(CASE WHEN ${pr} THEN p.tien_vat END) tien_vat, SUM(CASE WHEN ${pr} THEN p.tong_tien END) tong_tien,
         SUM(CASE WHEN p.trang_thai_tinh_gia NOT IN ('OK','LOCKED') THEN 1 ELSE 0 END) chua_tinh_gia
       FROM phieu_can p LEFT JOIN don_vi_van_chuyen d ON d.id=p.don_vi_van_chuyen_id ${extraJoin}
-      WHERE ${sql} GROUP BY ${keySql} ORDER BY label`, params)
+      WHERE ${sql} GROUP BY ${groupSql} ORDER BY label`, params)
       .map((r) => ({ ...conv(r), don_gia: (r.don_gia_list ? String(r.don_gia_list).split(',').map((x) => fromDb(Number(x))).sort((a, b) => a - b) : []) }));
   }
 
   byVehicle(f = {}) {
-    const { sql, params } = this.approvedWhere(f);
+    const { sql, params } = this.approvedWhere(f); const pr = pricedSql('p');
     return this.db.all(`SELECT p.bien_so_chuan k, MIN(p.bien_so) label, group_concat(DISTINCT d.ma) don_vi, COUNT(*) so_chuyen,
         SUM(p.kl_hang_kg) tong_kg, SUM(p.kl_hang_kg)/1000.0 tong_tan, group_concat(DISTINCT p.don_gia) don_gia_list,
-        SUM(p.tien_truoc_vat) tien_truoc_vat, SUM(p.tien_vat) tien_vat, SUM(p.tong_tien) tong_tien,
+        SUM(CASE WHEN ${pr} THEN p.tien_truoc_vat END) tien_truoc_vat, SUM(CASE WHEN ${pr} THEN p.tien_vat END) tien_vat, SUM(CASE WHEN ${pr} THEN p.tong_tien END) tong_tien,
         SUM(CASE WHEN p.trang_thai_tinh_gia NOT IN ('OK','LOCKED') THEN 1 ELSE 0 END) chua_tinh_gia
       FROM phieu_can p LEFT JOIN don_vi_van_chuyen d ON d.id=p.don_vi_van_chuyen_id WHERE ${sql}
       GROUP BY p.bien_so_chuan ORDER BY label`, params)
       .map((r) => ({ ...conv(r), don_gia: r.don_gia_list ? String(r.don_gia_list).split(',').map((x) => fromDb(Number(x))).sort((a, b) => a - b) : [] }));
   }
   byCarrier(f = {}) { return this._group(f, 'p.don_vi_van_chuyen_id', `COALESCE(d.ma, '(Chưa xác định)')`); }
-  byOrigin(f = {}) { return this._group(f, 'p.noi_xuat_id', `COALESCE(p.noi_xuat, p.noi_xuat_goc, '(Chưa xác định)')`); }
+  byOrigin(f = {}) {
+    // nơi xuất chưa nhận diện (noi_xuat_id NULL) không bị gộp vào MỘT nhóm: tách theo tên gốc, nhãn lấy đúng từ tên gốc
+    return this._group(f, 'p.noi_xuat_id', `COALESCE(p.noi_xuat, p.noi_xuat_goc, '(Chưa xác định)')`, '', `p.noi_xuat_id, (CASE WHEN p.noi_xuat_id IS NULL THEN COALESCE(p.noi_xuat_goc, '') END)`);
+  }
   byDate(f = {}) { return this._group(f, 'p.ngay_can', 'p.ngay_can'); }
   /** Theo đợt/tàu. KL giám định chỉ để đối chiếu — cước luôn tính theo KL cân (chốt 07/10/2026). */
   byDot(f = {}) {

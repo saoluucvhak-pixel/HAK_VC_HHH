@@ -142,6 +142,7 @@ class TicketImportService {
     // tính thử
     const { ctx, alias } = this.cost.loadContext();
     const counts = Object.fromEntries(COUNT_KEYS.map((k) => [k, 0]));
+    const seenNorm = new Map();   // (số phiếu | nơi xuất đã quy đổi alias) → dòng đầu tiên trong file
     const out = rows.map((r, i) => {
       let c = cls[i];
       const nx = alias.get(fold(r.noi_xuat)) || null;
@@ -154,6 +155,14 @@ class TicketImportService {
           const diffs = (alt.diffs || []).filter((d) => d.field !== 'noi_xuat_key');
           c = diffs.length ? { ...c, status: 'KEY_CONFLICT', existingId: dup.id, diffs } : { ...c, status: 'EXACT_DUPLICATE', existingId: dup.id };
         }
+      }
+      // Cùng số phiếu + cùng nơi xuất sau khi quy đổi alias ("QS" = "Quế Sơn") trong CÙNG file là trùng trong file, dù viết khác chữ
+      // (business_key theo chữ không thấy); nếu không, xem trước báo 2 phiếu mới nhưng commit luôn thất bại ở dòng sau.
+      if (c.status === 'NEW' && nx && !r.errors.length) {
+        const nk = `${String(r.so_phieu ?? '').trim()}|${nx}`; const first = seenNorm.get(nk);
+        const fpn = fingerprint({ ...r, noi_xuat: String(nx) });   // so nội dung sau khi quy đổi nơi xuất về cùng một giá trị (tên viết khác không tính là nội dung khác)
+        if (first) c = { ...c, status: 'IN_FILE_DUPLICATE', firstIdx: first.idx, differs: first.fp !== fpn };
+        else seenNorm.set(nk, { idx: i, fp: fpn });
       }
       const calc = computeTicket({ ...r, noi_xuat_id: nx, noi_den_id: nd }, ctx);
       if (c.status === 'IN_FILE_DUPLICATE' && c.differs) r.errors.push(`Trùng số phiếu + nơi xuất với dòng ${rows[c.firstIdx].source_row} trong file nhưng nội dung khác — kiểm tra file nguồn`);
@@ -219,6 +228,14 @@ class TicketImportService {
     const lim = limitsFrom(this.settings);
     const vi = (p.rows || []).filter((r) => (r.phan_loai === 'NEW' || r.phan_loai === 'KEY_CONFLICT') && weightProblem(r.kl_hang_kg, lim));
     if (vi.length) throw new ValidationError(`Ngưỡng khối lượng đã thay đổi sau khi xem trước: ${vi.length} dòng không còn hợp lệ (vd dòng ${vi[0].source_row}, phiếu ${vi[0].so_phieu}: ${weightProblem(vi[0].kl_hang_kg, lim)}). Xem trước lại để cập nhật kết quả`);
+    // Bản xem trước có thể đã cũ (token sống tới 2 giờ): phiếu gốc mà dòng "trùng"/"xung đột" dựa vào có thể đã bị xóa hoặc đổi dữ liệu.
+    // Nếu cứ commit, dòng bị bỏ qua âm thầm và import báo thành công nhưng mất phiếu → bắt xem trước lại.
+    for (const r of p.rows || []) {
+      if (!['EXACT_DUPLICATE', 'KEY_CONFLICT', 'PENDING_ALREADY'].includes(r.phan_loai) || !r.existingId) continue;
+      const ex = this.db.get('SELECT id, so_phieu, trang_thai, fingerprint FROM phieu_can WHERE id=?', [r.existingId]);
+      if (!ex || ex.trang_thai !== 'ACTIVE') throw new ValidationError(`Dữ liệu đã thay đổi sau khi xem trước: phiếu ${r.so_phieu} (dòng ${r.source_row}) đã bị xóa hoặc không còn hiệu lực. Hãy xem trước lại rồi import.`);
+      if (r.phan_loai === 'EXACT_DUPLICATE' && ex.fingerprint !== r.fp) throw new ValidationError(`Dữ liệu đã thay đổi sau khi xem trước: phiếu ${r.so_phieu} (dòng ${r.source_row}) đã được sửa. Hãy xem trước lại rồi import.`);
+    }
     const chuaDuyet = duyetBat(this.settings);    // bật duyệt phiếu → phiếu mới là Nháp cho tới khi được duyệt
     const result = this.db.tx(() => {
       const c = p.counts;

@@ -60,3 +60,23 @@ test('catalog.*: khóa kiểu prototype (constructor, __proto__, toString) bị 
     }
   } finally { rt.close(); }
 });
+
+test('0.8.4: đổi cấu hình làm tròn khi đã có kỳ chốt → ConfirmRequired (Bảng kê in ra sẽ lệch số đã chốt); chưa có kỳ chốt thì đổi thẳng', async () => {
+  const rt = await mk();
+  const mkVal = (d) => ({ level: 'STATEMENT', statement: { lineAmount: { digits: d, mode: 'HALF_UP' }, vat: { digits: 0, mode: 'HALF_UP' } } });
+  try {
+    const ok0 = await call(rt, 'settings.set', { key: 'rounding', value: mkVal(-2) });
+    assert.equal(ok0.ok, true, 'chưa có kỳ chốt: đổi thẳng — ' + ok0.error);
+    // chốt một đợt
+    let locked = false;
+    for (const d of rt.app.db.all(`SELECT DISTINCT dot_van_chuyen_id id FROM phieu_can WHERE trang_thai='ACTIVE' AND dot_van_chuyen_id IS NOT NULL AND chot_ky_id IS NULL`)) {
+      if (rt.app.lock.preview({ loai: 'DOT', dot_id: d.id }).chot_duoc) { rt.app.lock.lock({ loai: 'DOT', dot_id: d.id }); locked = true; break; }
+    }
+    assert.ok(locked, 'cần chốt được một đợt trong dữ liệu mẫu');
+    const r = await call(rt, 'settings.set', { key: 'rounding', value: mkVal(-3) });
+    assert.equal(r.ok, false); assert.equal(r.type, 'ConfirmRequired'); assert.match(r.error, /đã chốt/i);
+    assert.equal(rt.app.settings.get('rounding').statement.lineAmount.digits, -2, 'chưa xác nhận thì chưa đổi');
+    const ok = await call(rt, 'settings.set', { key: 'rounding', value: mkVal(-3), xac_nhan: true });
+    assert.equal(ok.ok, true, ok.error); assert.equal(rt.app.settings.get('rounding').statement.lineAmount.digits, -3);
+  } finally { rt.close(); }
+});

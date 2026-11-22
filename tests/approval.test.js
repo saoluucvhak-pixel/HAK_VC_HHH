@@ -92,3 +92,15 @@ test('phiên bản duyệt nhận ra thay đổi xe trả về dù cùng giây v
     assert.match(result.results[0].reason, /đã thay đổi/);
   } finally { app.close(); }
 });
+
+test('0.8.4: chuyển phiếu sang đợt khác không đổi tiền → phiếu đã duyệt giữ Đã duyệt; đổi dữ liệu tính tiền (KL/loại hàng/xe trả về) → về Nháp', async () => {
+  const app = await mk();
+  app.settings.set('duyet_phieu', { bat: true });
+  const t = app.db.get(`SELECT id, dot_van_chuyen_id d FROM phieu_can WHERE trang_thai='ACTIVE' AND chot_ky_id IS NULL AND dot_van_chuyen_id IS NOT NULL ORDER BY id LIMIT 1`);
+  const created = app.catalog.create('dot_van_chuyen', { ma_dot: 'D-DICH-084', ten_tau: 'Đợt đích thử' }); const dot2 = { id: created.id !== undefined ? created.id : created };
+  app.tickets.update(t.id, { dot_van_chuyen_id: dot2.id }, 'chuyển đợt');
+  const a = app.tickets.get(t.id);
+  assert.equal(a.dot_van_chuyen_id, dot2.id); assert.equal(a.trang_thai_duyet, 'DA_DUYET', 'chuyển đợt không được đưa phiếu về Nháp');
+  app.tickets.update(t.id, { xe_tra_ve: 1 }, 'đổi xe trả về');
+  assert.equal(app.tickets.get(t.id).trang_thai_duyet, 'NHAP');
+});

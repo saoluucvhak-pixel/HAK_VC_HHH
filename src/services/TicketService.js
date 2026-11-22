@@ -62,7 +62,8 @@ class TicketService {
       }
       if ('xe_tra_ve' in ch) ch.xe_tra_ve = ch.xe_tra_ve ? 1 : 0;
       // Bật duyệt phiếu: sửa số liệu → phiếu về Nháp, người sửa gần nhất không tự duyệt được (cần duyệt lại)
-      if (duyetBat(this.cost && this.cost.settings) && Object.keys(ch).some((k) => FINANCIAL.includes(k))) { ch.trang_thai_duyet = 'NHAP'; ch.duyet_boi = null; ch.duyet_luc = null; ch.nhap_boi = this.audit.actor() || null; }
+      // Chuyển đợt không đổi tiền nên KHÔNG đưa phiếu đã duyệt về Nháp (nếu có, phiếu biến khỏi Dashboard/Bảng kê và chặn chốt đợt đích)
+      if (duyetBat(this.cost && this.cost.settings) && Object.keys(ch).some((k) => FINANCIAL.includes(k) && k !== 'dot_van_chuyen_id')) { ch.trang_thai_duyet = 'NHAP'; ch.duyet_boi = null; ch.duyet_luc = null; ch.nhap_boi = this.audit.actor() || null; }
       const merged = { ...old, ...ch, noi_xuat: old.noi_xuat_goc, bien_so: ch.bien_so || old.bien_so_goc };
       ch.business_key = businessKey(merged); ch.strong_key = strongKey(merged); ch.fingerprint = fingerprint(merged);
       const cols = Object.keys(ch);
