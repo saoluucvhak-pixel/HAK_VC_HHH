@@ -142,6 +142,7 @@ class TicketImportService {
     // tính thử
     const { ctx, alias } = this.cost.loadContext();
     const counts = Object.fromEntries(COUNT_KEYS.map((k) => [k, 0]));
+    const seenNorm = new Map();   // (số phiếu | nơi xuất đã quy đổi alias) → dòng đầu tiên trong file
     const out = rows.map((r, i) => {
       let c = cls[i];
       const nx = alias.get(fold(r.noi_xuat)) || null;
@@ -154,6 +155,14 @@ class TicketImportService {
           const diffs = (alt.diffs || []).filter((d) => d.field !== 'noi_xuat_key');
           c = diffs.length ? { ...c, status: 'KEY_CONFLICT', existingId: dup.id, diffs } : { ...c, status: 'EXACT_DUPLICATE', existingId: dup.id };
         }
+      }
+      // Cùng số phiếu + cùng nơi xuất sau khi quy đổi alias ("QS" = "Quế Sơn") trong CÙNG file là trùng trong file, dù viết khác chữ
+      // (business_key theo chữ không thấy); nếu không, xem trước báo 2 phiếu mới nhưng commit luôn thất bại ở dòng sau.
+      if (c.status === 'NEW' && nx && !r.errors.length) {
+        const nk = `${String(r.so_phieu ?? '').trim()}|${nx}`; const first = seenNorm.get(nk);
+        const fpn = fingerprint({ ...r, noi_xuat: String(nx) });   // so nội dung sau khi quy đổi nơi xuất về cùng một giá trị (tên viết khác không tính là nội dung khác)
+        if (first) c = { ...c, status: 'IN_FILE_DUPLICATE', firstIdx: first.idx, differs: first.fp !== fpn };
+        else seenNorm.set(nk, { idx: i, fp: fpn });
       }
       const calc = computeTicket({ ...r, noi_xuat_id: nx, noi_den_id: nd }, ctx);
       if (c.status === 'IN_FILE_DUPLICATE' && c.differs) r.errors.push(`Trùng số phiếu + nơi xuất với dòng ${rows[c.firstIdx].source_row} trong file nhưng nội dung khác — kiểm tra file nguồn`);

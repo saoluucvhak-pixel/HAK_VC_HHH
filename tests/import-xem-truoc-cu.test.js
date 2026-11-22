@@ -53,3 +53,16 @@ test('xem trước thấy "trùng hoàn toàn", phiếu gốc bị sửa dữ li
     assert.equal(rt.app.db.get('SELECT fingerprint f FROM phieu_can WHERE id=?', [t.id]).f, before);
   } finally { rt.close(); }
 });
+
+test('cùng số phiếu viết nơi xuất bằng hai tên gọi khác nhau trong MỘT file: xem trước nhận ra trùng trong file (không báo 2 phiếu mới rồi commit thất bại)', async () => {
+  const rt = await mk();
+  try {
+    const plate = rt.app.db.get('SELECT bien_so_chuan b FROM xe LIMIT 1').b;
+    const rows = [['QS01', plate, 'QS', '06/10/2026 08:00:00', '06/10/2026 08:30:00', 30000, 13000, 17000], ['QS01', plate, 'Quế Sơn', '06/10/2026 08:00:00', '06/10/2026 08:30:00', 30000, 13000, 17000]];
+    const a = await preview(rt, rows, 'qs.xlsx');
+    assert.equal(a.pv.counts.new, 1, 'chỉ 1 phiếu mới: ' + JSON.stringify(a.pv.counts)); assert.equal(a.pv.counts.inFile, 1);
+    const r = await ok(rt, 'import.commit', { token: a.token });
+    assert.equal(r.inserted, 1);
+    assert.equal(rt.app.db.get(`SELECT COUNT(*) n FROM phieu_can WHERE so_phieu='QS01' AND trang_thai='ACTIVE'`).n, 1);
+  } finally { rt.close(); }
+});
