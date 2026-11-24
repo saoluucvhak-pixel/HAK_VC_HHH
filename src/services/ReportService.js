@@ -175,7 +175,7 @@ class ReportService {
       }
     }
     if (f.chot_ky_id) throw new ValidationError('Không có Bảng kê đã chốt theo phạm vi đã chọn');
-    return this._buildStatement(rows, dvId);
+    return { ...this._buildStatement(rows, dvId), ...(rows.some((row) => row.chot_ky_id) ? { tham_khao: true } : {}) };
   }
 
   _buildStatement(rows, carrierId, rounding = this.settings.get('rounding')?.statement) {

@@ -22,5 +22,8 @@ https://github.com/saoluucvhak-pixel/HAK_VC_HHH/releases
 ## Nâng cấp từ bản cũ
 Trong bản cũ, tạo bản sao lưu và xuất ra thư mục riêng (màn *Backup & khôi phục* → *Xuất ra…*), đóng ứng dụng, rồi cài đè bản mới. Dữ liệu được giữ nguyên.
 
+## Sao lưu và chuyển hồ sơ
+Bản sao lưu thủ công hoặc tự động mới chứa cơ sở dữ liệu và các tệp nguồn trong `imports` bên trong cùng tệp `.db`. Xuất bản sao lưu đó ra ổ khác để chuyển hồ sơ. Bản sao lưu cũ và bản trước import chỉ chứa cơ sở dữ liệu. Khi khôi phục các bản này, thư mục tệp nguồn hiện có được giữ nguyên.
+
 ## Tự đóng gói
 Nhà phát triển có thể tạo bộ cài từ mã nguồn bằng `npm run dist:win` hoặc `python installer/make-setup.py <phiên bản>`. Bản phát hành chính thức luôn là bản đã chạy qua workflow nghiệm thu trên CI.

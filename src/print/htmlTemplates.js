@@ -77,6 +77,7 @@ function statementHtml(doc) {
   const lines = st.lines.map((l, i) => `<tr><td class="c">${i + 1}</td><td>${esc(l.tuyen_ten)}</td><td class="c">${nf(l.so_xe)}</td><td class="c">${nf(l.so_chuyen)}</td><td class="n">${nf(kg(l))}</td><td class="n">${tan(l.tong_tan)}</td><td class="n">${money(l.don_gia)}</td><td class="n">${money(l.thanh_tien)}</td></tr>`).join('');
   const vat = st.vatLines.map((v) => `<tr><td class="l">Thuế GTGT ${v.vat_percent}% (trên ${money(v.thanh_tien)})</td><td class="v">${money(v.tien_vat)}</td></tr>`).join('');
   const p1 = `${national}<h1>${esc(doc.tieu_de || 'BẢNG KÊ CHI PHÍ VẬN CHUYỂN')}</h1><div class="center">${esc(doc.period)}</div>
+    ${doc.notice ? `<div class="center"><b>${esc(doc.notice)}</b></div>` : ''}
     <div class="center">Số: ………… / BK-${esc(benB.ma)}${doc.thang ? `-${esc(doc.thang.replace('/', ''))}` : ''}</div>
     ${doc.contract ? `<div class="center"><i>${esc(doc.contract)}</i></div>` : ''}
     <div style="margin-top:4mm">${partyBlock('BÊN A (Bên thuê vận chuyển)', benA)}${partyBlock('BÊN B (Bên vận chuyển)', benB)}

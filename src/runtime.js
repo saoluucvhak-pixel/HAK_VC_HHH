@@ -42,7 +42,7 @@ function createRuntime({ dataDir, version = 'dev', driver = null, autoInit = fal
     rt.handlers = createHandlers(rt.app, { exportsDir: dirs.exports, importsDir: dirs.imports, seedDir: SEED_DIR, backup: rt.backup, session: rt.session, log, version, dataDir, renderPdf: (...a) => { const f = rt.renderPdf || renderPdf; if (!f) throw new Error('Xuất PDF chưa khả dụng trong môi trường này'); return f(...a); } });
     log(`Mở DB (${rt.app.db.driver}), migration: ${JSON.stringify(rt.app.db.migration)}`);
   };
-  rt.backup = new BackupService({ getDb: () => rt.app.db, dbFile: dirs.db, backupsDir: dirs.backups, settings: { get: (k) => rt.app.settings.get(k), set: (k, v) => rt.app.settings.set(k, v) }, reopen: () => open() });
+  rt.backup = new BackupService({ getDb: () => rt.app.db, dbFile: dirs.db, backupsDir: dirs.backups, importsDir: dirs.imports, settings: { get: (k) => rt.app.settings.get(k), set: (k, v) => rt.app.settings.set(k, v) }, reopen: () => open() });
   open();
   // Nạp dữ liệu ban đầu (đọc Excel bất đồng bộ) rồi sao lưu tự động; dispatch đợi `rt.ready` xong mới xử lý yêu cầu đầu tiên.
   rt.ready = (async () => {

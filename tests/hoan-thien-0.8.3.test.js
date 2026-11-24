@@ -67,6 +67,10 @@ test('Bảng kê đã chốt giữ tiền, VAT và chi tiết khi đổi cấu h
   try {
     assert.equal((await call(rt, 'settings.set', { key: 'rounding', value: config(-2) })).ok, true);
     const dot = rt.app.db.get("SELECT DISTINCT dot_van_chuyen_id id FROM phieu_can WHERE dot_van_chuyen_id IS NOT NULL");
+    const carrierForTest = rt.app.db.get('SELECT don_vi_van_chuyen_id id FROM phieu_can WHERE dot_van_chuyen_id=? LIMIT 1', [dot.id]).id;
+    rt.app.settings.set('company', { ten: 'Bên A tại lúc chốt' });
+    const originalContract = rt.app.catalog.create('hop_dong', { ma: 'AUDIT-KY', so_hop_dong: 'HD-GOC',
+      don_vi_van_chuyen_id: carrierForTest, noi_ky: 'Nơi ký gốc' });
     const scope = { loai: 'DOT', dot_id: dot.id };
     const { data: period, ok } = await call(rt, 'lock.create', scope);
     assert.equal(ok, true);
@@ -76,13 +80,32 @@ test('Bảng kê đã chốt giữ tiền, VAT và chi tiết khi đổi cấu h
     assert.equal(before.reduce((total, st) => total + st.tong_tien, 0), period.tong.tong_tien);
     assert.equal((await call(rt, 'settings.set', { key: 'rounding', value: config(-3) })).ok, true);
     assert.deepEqual((await call(rt, 'reports.statements', archived)).data, before);
-    const carrier = before[0].don_vi.id;
+    rt.app.settings.set('company', { ten: 'Bên A mới' });
+    rt.app.catalog.update('hop_dong', originalContract.id, { so_hop_dong: 'HD-MOI', noi_ky: 'Nơi ký mới' });
+    const saved = before.find((s) => s.don_vi.id === carrierForTest);
+    const carrier = saved.don_vi.id;
     const explicit = { ...archived, don_vi_id: carrier };
-    assert.deepEqual((await call(rt, 'reports.statement', explicit)).data, before[0]);
-    assert.deepEqual((await call(rt, 'reports.statement', { dot_id: dot.id, don_vi_id: carrier })).data, before[0]);
+    assert.deepEqual((await call(rt, 'reports.statement', explicit)).data, saved);
+    assert.deepEqual((await call(rt, 'reports.statement', { dot_id: dot.id, don_vi_id: carrier })).data, saved);
     const exported = await call(rt, 'export.statement', { filter: explicit });
     assert.equal(exported.ok, true, exported.error);
-    assert.match(exported.data.fileName, new RegExp(before[0].ky_chot.ma));
+    assert.match(exported.data.fileName, new RegExp(saved.ky_chot.ma));
+    const docs = require('../src/print/documents');
+    const archivedDoc = docs.statementDoc(rt.app, explicit);
+    assert.equal(archivedDoc.benA.ten, 'Bên A tại lúc chốt');
+    assert.match(archivedDoc.contract, /HD-GOC/);
+    assert.equal(archivedDoc.benB.noi_ky, 'Nơi ký gốc');
+    const ticket = rt.app.db.get('SELECT bien_so FROM phieu_can WHERE chot_ky_id=? AND don_vi_van_chuyen_id=? LIMIT 1', [period.id, carrier]);
+    const filtered = { don_vi_id: carrier, dot_id: dot.id, bien_so: ticket.bien_so };
+    const previewDoc = docs.statementDoc(rt.app, filtered);
+    assert.equal(previewDoc.st.tham_khao, true);
+    assert.match(previewDoc.tieu_de, /THAM KHẢO/);
+    assert.match(require('../src/print/htmlTemplates').statementHtml(previewDoc), /THAM KHẢO/);
+    const xlsx = await call(rt, 'export.statement', { filter: filtered });
+    assert.equal(xlsx.ok, true, xlsx.error);
+    const workbook = new (require('exceljs').Workbook)();
+    await workbook.xlsx.readFile(xlsx.data.path);
+    assert.match(workbook.getWorksheet('Bảng kê').getCell('A4').text, /THAM KHẢO/);
     assert.equal((await call(rt, 'lock.unlock', { id: period.id, reason: 'Kiểm thử' })).ok, true);
     assert.equal((await call(rt, 'reports.statement', explicit)).ok, false);
   } finally { rt.close(); }

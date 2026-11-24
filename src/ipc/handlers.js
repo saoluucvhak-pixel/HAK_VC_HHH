@@ -46,7 +46,7 @@ function createHandlers(app, env = {}) {
   const saveImportCopy = (buf, name) => {
     if (!importsDir || !buf) return null;
     fs.mkdirSync(importsDir, { recursive: true });
-    const p = joinInside(importsDir, `${new Date().toISOString().replace(/[:.]/g, '-')}_${name}`);   // fileName do người dùng đưa: không cho thoát khỏi thư mục imports
+    const p = joinInside(importsDir, `${new Date().toISOString().replace(/[:.]/g, '-')}_${name}`).replace(/[. ]+$/, '');   // fileName do người dùng đưa: không cho thoát khỏi thư mục imports
     fs.writeFileSync(p, buf);
     return p;
   };

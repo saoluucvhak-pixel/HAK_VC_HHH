@@ -9,12 +9,12 @@
  */
 const fs = require('fs');
 const path = require('path');
-const crypto = require('crypto');
+const { hashFile, packImports, stageImports } = require('../database/backupImports');
 const { uniqueBackupPath, vacuumInto, inspect, driverOf, latestVersion } = require('../database/snapshot');
 
 class BackupService {
-  constructor({ getDb, dbFile, backupsDir, settings, reopen }) {
-    Object.assign(this, { getDb, dbFile, backupsDir, settings, reopen });
+  constructor({ getDb, dbFile, backupsDir, importsDir, settings, reopen }) {
+    Object.assign(this, { getDb, dbFile, backupsDir, importsDir, settings, reopen });
     fs.mkdirSync(backupsDir, { recursive: true });
   }
 
@@ -26,17 +26,18 @@ class BackupService {
     const file = uniqueBackupPath(this.backupsDir, kind);
     try {
       vacuumInto(raw, file);
+      if (this.importsDir && kind !== 'PRE_IMPORT') packImports(file, driverOf(raw), this.importsDir);
       const chk = inspect(file, driverOf(raw), { expectVersion });
       if (!chk.ok) throw new Error(chk.reason);
     } catch (e) {
       try { fs.unlinkSync(file); } catch { /* chưa tạo */ }
       throw new Error(`Không tạo/xác minh được bản sao lưu ${kind}: ${e.message}`);
     }
-    const buf = fs.readFileSync(file);
-    const sha = crypto.createHash('sha256').update(buf).digest('hex');
-    if (logFn) { try { logFn(file, buf.length, sha); } catch (e) { /* DB chỉ đọc / bảng chưa có */ } }
+    const size = fs.statSync(file).size;
+    const sha = hashFile(file);
+    if (logFn) { try { logFn(file, size, sha); } catch (e) { /* DB chỉ đọc / bảng chưa có */ } }
     this.applyRetention(file, protect);
-    return { file, size: buf.length, sha256: sha };
+    return { file, size, sha256: sha };
   }
 
   backupNow(kind = 'MANUAL', note = null, { protect = [] } = {}) {
@@ -105,9 +106,8 @@ class BackupService {
     let out = path.join(dest, `${base}.db`);
     for (let i = 2; fs.existsSync(out); i++) out = path.join(dest, `${base}-${i}.db`);
     fs.copyFileSync(full, out, fs.constants.COPYFILE_EXCL);
-    const h = (f) => crypto.createHash('sha256').update(fs.readFileSync(f)).digest('hex');
-    const sha = h(out);
-    if (sha !== h(full)) { try { fs.unlinkSync(out); } catch { /* bỏ qua */ } throw new Error('Chép ra thư mục đích không khớp bản gốc (SHA-256) — đã hủy, hãy thử ổ khác'); }
+    const sha = hashFile(out);
+    if (sha !== hashFile(full)) { try { fs.unlinkSync(out); } catch { /* bỏ qua */ } throw new Error('Chép ra thư mục đích không khớp bản gốc (SHA-256) — đã hủy, hãy thử ổ khác'); }
     // Ghi mốc "xuất ra ổ khác gần nhất" CHỈ khi đã chép và đối chiếu SHA-256 thành công
     const at = new Date().toISOString();
     try { if (this.settings && this.settings.set) this.settings.set('backup_export_last', { at }); } catch { /* không chặn việc xuất */ }
@@ -149,27 +149,46 @@ class BackupService {
     cleanTmp(); fs.copyFileSync(full, tmp);
     const chk = inspect(tmp, driver);
     if (!chk.ok) { cleanTmp(); throw new Error(`Không khôi phục được "${path.basename(full)}": ${chk.reason}. Dữ liệu hiện tại không bị thay đổi.`); }
+    // Giải nén tệp nguồn và xác minh băm trước khi thay đổi dữ liệu đang dùng.
+    let staged;
+    try { staged = this.importsDir ? fs.mkdtempSync(path.join(path.dirname(this.importsDir), '.restore-imports-')) : null; }
+    catch (e) { cleanTmp(); throw e; }
+    const incoming = staged && path.join(staged, 'incoming');
+    const previous = staged && path.join(staged, 'previous');
+    const cleanStage = () => { if (staged) fs.rmSync(staged, { recursive: true, force: true }); };
+    let hasImports;
+    try { hasImports = incoming ? stageImports(tmp, driver, incoming) : false; }
+    catch (e) { cleanTmp(); cleanStage(); throw e; }
     // 2) PRE_RESTORE
     let pre;
     try { pre = this.backupNow('PRE_RESTORE', `Trước khi khôi phục ${path.basename(full)}`, { protect: [full] }); }
-    catch (e) { cleanTmp(); throw new Error(`Không tạo được bản an toàn trước khi khôi phục, đã dừng: ${e.message}. Dữ liệu hiện tại không bị thay đổi.`); }
-    if (!fs.existsSync(full)) { cleanTmp(); throw new Error('File backup đã bị dọn trong lúc khôi phục — đã dừng, dữ liệu hiện tại không bị thay đổi.'); }
+    catch (e) { cleanTmp(); cleanStage(); throw new Error(`Không tạo được bản an toàn trước khi khôi phục, đã dừng: ${e.message}. Dữ liệu hiện tại không bị thay đổi.`); }
+    if (!fs.existsSync(full)) { cleanTmp(); cleanStage(); throw new Error('File backup đã bị dọn trong lúc khôi phục — đã dừng, dữ liệu hiện tại không bị thay đổi.'); }
     // 3) thay thế
     const exts = ['', '-wal', '-shm'];
     const moved = [];
     let replacementInstalled = false;
+    let importsMoved = false;
+    let importsInstalled = false;
     const putBack = () => {
       // Trước khi thay thế, chỉ dọn đường dẫn đã dời đi thành công.
       // Nếu rename bị từ chối, DB/WAL còn tại chỗ vẫn là dữ liệu gốc.
       for (const e of replacementInstalled ? exts : moved) rm(this.dbFile + e);
       for (const e of moved) fs.renameSync(old + e, this.dbFile + e);
     };
-    this.getDb().close();
+    try { this.getDb().close(); }
+    catch (e) { cleanTmp(); cleanStage(); throw e; }
     try {
       for (const e of exts) rm(old + e);
       for (const e of exts) if (fs.existsSync(this.dbFile + e)) { fs.renameSync(this.dbFile + e, old + e); moved.push(e); }
       fs.renameSync(tmp, this.dbFile);
       replacementInstalled = true;
+      if (hasImports) {
+        fs.renameSync(this.importsDir, previous);
+        importsMoved = true;
+        fs.renameSync(incoming, this.importsDir);
+        importsInstalled = true;
+      }
       this.reopen();
       const r = this.getDb().get('SELECT MAX(version) v FROM schema_version');
       this.getDb().get('SELECT COUNT(*) n FROM phieu_can');
@@ -179,18 +198,23 @@ class BackupService {
       let back = '';
       try { try { this.getDb().close(); } catch { /* đã đóng */ } } catch { /* bỏ qua */ }
       try {
-        putBack(); this.reopen();
+        putBack();
+        if (importsInstalled) fs.renameSync(this.importsDir, incoming);
+        if (importsMoved) fs.renameSync(previous, this.importsDir);
+        this.reopen();
+        cleanStage();
         const c = this.getDb().get('SELECT COUNT(*) n FROM phieu_can');
         back = `Đã quay về dữ liệu ban đầu (${c.n} phiếu cân), đọc/ghi bình thường.`;
       } catch (e2) {
-        back = `CẢNH BÁO: quay về dữ liệu ban đầu cũng lỗi (${e2.message}). Bản gốc nằm ở ${old}; bản an toàn: ${pre.file}.`;
+        back = `CẢNH BÁO: quay về dữ liệu ban đầu cũng lỗi (${e2.message}). Bản gốc nằm ở ${old}; tệp nguồn tạm: ${previous || "—"}; bản an toàn: ${pre.file}.`;
       }
       cleanTmp();
       throw new Error(`Khôi phục thất bại (${err.message}). ${back} Bản an toàn trước khôi phục: ${path.basename(pre.file)}.`);
     }
     for (const e of exts) rm(old + e);
     cleanTmp();
-    return { restored: path.basename(full), safetyBackup: pre.file, schemaFrom: chk.version, schemaTo: latestVersion(), migrated: chk.needsMigration, counts: chk.counts };
+    cleanStage();
+    return { importsRestored: hasImports, restored: path.basename(full), safetyBackup: pre.file, schemaFrom: chk.version, schemaTo: latestVersion(), migrated: chk.needsMigration, counts: chk.counts };
   }
 }
 
