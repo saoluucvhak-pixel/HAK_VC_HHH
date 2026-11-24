@@ -61,22 +61,29 @@ test('catalog.*: khóa kiểu prototype (constructor, __proto__, toString) bị 
   } finally { rt.close(); }
 });
 
-test('0.8.4: đổi cấu hình làm tròn khi đã có kỳ chốt → ConfirmRequired (Bảng kê in ra sẽ lệch số đã chốt); chưa có kỳ chốt thì đổi thẳng', async () => {
+test('Bảng kê đã chốt giữ tiền, VAT và chi tiết khi đổi cấu hình làm tròn', async () => {
   const rt = await mk();
-  const mkVal = (d) => ({ level: 'STATEMENT', statement: { lineAmount: { digits: d, mode: 'HALF_UP' }, vat: { digits: 0, mode: 'HALF_UP' } } });
+  const config = (digits) => ({ level: 'STATEMENT', statement: { lineAmount: { digits, mode: 'HALF_UP' }, vat: { digits: 0, mode: 'HALF_UP' } } });
   try {
-    const ok0 = await call(rt, 'settings.set', { key: 'rounding', value: mkVal(-2) });
-    assert.equal(ok0.ok, true, 'chưa có kỳ chốt: đổi thẳng — ' + ok0.error);
-    // chốt một đợt
-    let locked = false;
-    for (const d of rt.app.db.all(`SELECT DISTINCT dot_van_chuyen_id id FROM phieu_can WHERE trang_thai='ACTIVE' AND dot_van_chuyen_id IS NOT NULL AND chot_ky_id IS NULL`)) {
-      if (rt.app.lock.preview({ loai: 'DOT', dot_id: d.id }).chot_duoc) { rt.app.lock.lock({ loai: 'DOT', dot_id: d.id }); locked = true; break; }
-    }
-    assert.ok(locked, 'cần chốt được một đợt trong dữ liệu mẫu');
-    const r = await call(rt, 'settings.set', { key: 'rounding', value: mkVal(-3) });
-    assert.equal(r.ok, false); assert.equal(r.type, 'ConfirmRequired'); assert.match(r.error, /đã chốt/i);
-    assert.equal(rt.app.settings.get('rounding').statement.lineAmount.digits, -2, 'chưa xác nhận thì chưa đổi');
-    const ok = await call(rt, 'settings.set', { key: 'rounding', value: mkVal(-3), xac_nhan: true });
-    assert.equal(ok.ok, true, ok.error); assert.equal(rt.app.settings.get('rounding').statement.lineAmount.digits, -3);
+    assert.equal((await call(rt, 'settings.set', { key: 'rounding', value: config(-2) })).ok, true);
+    const dot = rt.app.db.get("SELECT DISTINCT dot_van_chuyen_id id FROM phieu_can WHERE dot_van_chuyen_id IS NOT NULL");
+    const scope = { loai: 'DOT', dot_id: dot.id };
+    const { data: period, ok } = await call(rt, 'lock.create', scope);
+    assert.equal(ok, true);
+    const archived = { chot_ky_id: period.id };
+    const before = (await call(rt, 'reports.statements', archived)).data;
+    assert.ok(before.length > 1);
+    assert.equal(before.reduce((total, st) => total + st.tong_tien, 0), period.tong.tong_tien);
+    assert.equal((await call(rt, 'settings.set', { key: 'rounding', value: config(-3) })).ok, true);
+    assert.deepEqual((await call(rt, 'reports.statements', archived)).data, before);
+    const carrier = before[0].don_vi.id;
+    const explicit = { ...archived, don_vi_id: carrier };
+    assert.deepEqual((await call(rt, 'reports.statement', explicit)).data, before[0]);
+    assert.deepEqual((await call(rt, 'reports.statement', { dot_id: dot.id, don_vi_id: carrier })).data, before[0]);
+    const exported = await call(rt, 'export.statement', { filter: explicit });
+    assert.equal(exported.ok, true, exported.error);
+    assert.match(exported.data.fileName, new RegExp(before[0].ky_chot.ma));
+    assert.equal((await call(rt, 'lock.unlock', { id: period.id, reason: 'Kiểm thử' })).ok, true);
+    assert.equal((await call(rt, 'reports.statement', explicit)).ok, false);
   } finally { rt.close(); }
 });

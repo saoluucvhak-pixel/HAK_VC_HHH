@@ -1,5 +1,11 @@
 # CHANGELOG
 
+## 0.8.5 — chốt kỳ và Bảng kê lịch sử (schema 9)
+- Mở lại phần còn lại của đợt khi mở khóa chốt toàn đợt, kể cả khi một đơn vị còn lần chốt riêng.
+- Áp dụng phạm vi đơn vị của kỳ ngày khi nhập, sửa, duyệt phiếu.
+- Lưu Bảng kê khi chốt và dùng chung cho màn hình, Excel và PDF.
+- Nghiệm thu nâng từ schema 8 và xuất lại Bảng kê từ bộ cài.
+
 ## 0.8.4 — rà soát toàn diện bằng agent + sửa lỗi (schema 8, không có migration)
 - **An toàn tệp**: tên tệp sao chép khi import/xuất Excel được làm sạch và chốt trong thư mục đích (`safeFileName`, `joinInside`), chặn `..`/đường dẫn tuyệt đối.
 - **Đọc Excel có giới hạn**: tệp > 50 MB, kích thước giải nén khai báo > 500 MB, sheet > 300.000 dòng / 256 cột / 8 triệu ô bị từ chối rõ ràng (chống zip bomb, ô ở XFD1048576).

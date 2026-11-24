@@ -108,12 +108,11 @@ function createHandlers(app, env = {}) {
         const m = canhBaoNguoiDuyet({ duyetBat: true, phanQuyen: app.auth.enabled(), tuDuyet: !!value.cho_tu_duyet, soSau: soNguoiDuyet(app.db), ngu_canh: 'khi bật duyệt phiếu' });
         if (m) throw new ConfirmRequired(m);
       }
-      // Bảng kê luôn tính lại từ dữ liệu sống theo cấu hình làm tròn HIỆN HÀNH (snapshot chốt chỉ lưu từng phiếu): đổi làm tròn khi đã có kỳ chốt
-      // làm Bảng kê/Excel/PDF in ra lệch tổng đã chốt và đã ký → hỏi xác nhận.
+      // Kỳ cũ chỉ có snapshot phiếu và tổng, nên đổi quy tắc có thể làm mất khả năng lập lại chi tiết.
       if (key === 'rounding' && !xac_nhan) {
-        const n = app.db.get(`SELECT COUNT(*) n FROM chot_ky WHERE trang_thai='DA_CHOT'`).n;
+        const n = app.db.get(`SELECT COUNT(*) n FROM chot_ky WHERE trang_thai='DA_CHOT' AND statements_json IS NULL`).n;
         if (n > 0 && JSON.stringify(value) !== JSON.stringify(app.settings.get('rounding'))) {
-          throw new ConfirmRequired(`Đang có ${n} kỳ/đợt đã chốt. Bảng kê tính lại theo cấu hình làm tròn hiện hành nên đổi làm tròn sẽ làm Bảng kê, Excel và PDF in ra LỆCH so với tổng đã chốt và đã ký. Chỉ đổi nếu chỉ áp dụng cho các kỳ sau. Vẫn đổi?`);
+          throw new ConfirmRequired(`Đang có ${n} kỳ/đợt đã chốt theo phiên bản cũ. Sau khi đổi làm tròn, có thể cần chứng từ gốc để đối chiếu các kỳ này. Vẫn đổi?`);
         }
       }
       // Đổi căn cứ ngày tính giá (cân 1 ↔ cân 2) làm phiếu XUYÊN ĐÊM đổi bảng giá/đơn vị áp dụng → hỏi xác nhận (nêu số phiếu), rồi tính lại

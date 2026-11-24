@@ -44,3 +44,18 @@ test('chốt cả đợt (không lọc đơn vị) vẫn chuyển đợt sang KH
   }
   assert.fail('không có đợt nào chốt được trong dữ liệu mẫu');
 });
+
+test('mở lần chốt toàn đợt giữ khóa riêng và mở phần phiếu còn lại', async () => {
+  const app = await mk();
+  try {
+    const c = findDotCarrier(app);
+    assert.ok(c && c.soDv > 1);
+    const scope = { loai: 'DOT', dot_id: c.dot };
+    const partial = app.lock.lock({ ...scope, don_vi_id: c.dv });
+    const whole = app.lock.lock(scope);
+    assert.ok(whole.so_phieu > 0);
+    app.lock.unlock(whole.id, 'Kiểm thử');
+    assert.equal(app.db.get('SELECT trang_thai FROM dot_van_chuyen WHERE id=?', [c.dot]).trang_thai, 'MO');
+    assert.equal(app.db.get('SELECT COUNT(*) n FROM phieu_can WHERE chot_ky_id=?', [partial.id]).n, partial.so_phieu);
+  } finally { app.close(); }
+});

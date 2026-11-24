@@ -3,9 +3,10 @@
  * Báo cáo — tổng hợp bằng SQL (GROUP BY + index), không tải toàn bộ dữ liệu lên giao diện.
  * Tiền theo phiếu/xe là giá trị chưa làm tròn (tham khảo); SỐ THANH TOÁN chính thức = bảng kê (StatementService).
  */
-const { fromDb } = require('../utils/dbMoney');
+const { fromDb, toDb } = require('../utils/dbMoney');
 const { buildTimeline } = require('./TimeAnomalyService');
 const { buildStatement } = require('./StatementService');
+const { ValidationError } = require('./CatalogService');
 const { normalizePlate } = require('../utils/plate');
 const { asIds, oneId } = require('../utils/filterIds');
 const { fold } = require('../excel/columnMapping');
@@ -160,16 +161,63 @@ class ReportService {
     const dvId = f ? oneId(f.don_vi_id) : null;
     if (dvId === null) throw new Error('Cần chọn đúng một đơn vị vận chuyển');
     const { sql, params } = this.approvedWhere(f);
-    const rows = this.db.all(`SELECT p.kl_hang_kg, p.don_gia, p.tuyen_id, p.don_vi_tinh, p.ty_le_vat AS vat_percent, p.bien_so, p.trang_thai_tinh_gia AS status
+    const rows = this.db.all(`SELECT p.kl_hang_kg, p.don_gia, p.tuyen_id, p.don_vi_tinh, p.ty_le_vat AS vat_percent,
+                                    p.bien_so, p.trang_thai_tinh_gia AS status, p.chot_ky_id
                               FROM phieu_can p WHERE ${sql}`, params).map(conv);
-    const routes = new Map(this.db.all('SELECT id, ma_tuyen FROM tuyen_van_chuyen').map((t) => [t.id, t.ma_tuyen]));
-    const r = this.settings.get('rounding') || {};
-    const st = buildStatement(rows, { rounding: r.statement, routeLabel: (id) => routes.get(id) || '(chưa có tuyến)' });
-    st.don_vi = this.db.get('SELECT * FROM don_vi_van_chuyen WHERE id=?', [dvId]);
-    return st;
+    const closeId = rows[0]?.chot_ky_id;
+    if (closeId && rows.every((row) => row.chot_ky_id === closeId)) {
+      const n = this.db.get(`SELECT COUNT(*) n FROM chot_ky_snapshot
+                             WHERE chot_ky_id=? AND don_vi_van_chuyen_id=?`, [closeId, dvId]).n;
+      if (rows.length === n) {
+        const statement = this._closedStatements(closeId).find((st) => st.don_vi.id === dvId);
+        if (!statement) throw new ValidationError('Không tìm thấy đơn vị trong Bảng kê đã chốt');
+        return statement;
+      }
+    }
+    if (f.chot_ky_id) throw new ValidationError('Không có Bảng kê đã chốt theo phạm vi đã chọn');
+    return this._buildStatement(rows, dvId);
+  }
+
+  _buildStatement(rows, carrierId, rounding = this.settings.get('rounding')?.statement) {
+    const routes = new Map(this.db.all('SELECT id, ma_tuyen FROM tuyen_van_chuyen').map((r) => [r.id, r.ma_tuyen]));
+    const statement = buildStatement(rows, { rounding, routeLabel: (id) => routes.get(id) || '(chưa có tuyến)' });
+    statement.don_vi = this.db.get('SELECT * FROM don_vi_van_chuyen WHERE id=?', [carrierId]);
+    return statement;
+  }
+
+  _closedStatements(id) {
+    const period = this.db.get("SELECT * FROM chot_ky WHERE id=? AND trang_thai='DA_CHOT'", [id]);
+    if (!period) throw new ValidationError('Kỳ chốt không còn hiệu lực');
+    let statements;
+    if (period.statements_json) {
+      statements = JSON.parse(period.statements_json);
+    } else {
+      const snapshots = this.db.all('SELECT snapshot_json FROM chot_ky_snapshot WHERE chot_ky_id=?', [id]);
+      const carriers = new Map();
+      for (const row of snapshots) {
+        const t = conv(JSON.parse(row.snapshot_json));
+        const group = carriers.get(t.don_vi_van_chuyen_id) || [];
+        group.push({ ...t, status: t.trang_thai_tinh_gia, vat_percent: t.ty_le_vat });
+        carriers.set(t.don_vi_van_chuyen_id, group);
+      }
+      const changed = this.db.get(`SELECT s.old_value FROM audit_log s
+        WHERE s.id > (
+          SELECT MAX(l.id) FROM audit_log l WHERE l.action='LOCK_PERIOD' AND l.entity='chot_ky' AND l.entity_id=?
+        ) AND s.action='SETTING' AND s.entity='settings' AND json_type(s.new_value, '$.rounding') IS NOT NULL
+        ORDER BY s.id LIMIT 1`, [id]);
+      const rounding = changed ? (JSON.parse(changed.old_value).rounding?.statement ?? {}) : this.settings.get('rounding')?.statement;
+      statements = Array.from(carriers, ([carrier, rows]) => this._buildStatement(rows, carrier, rounding));
+      const sums = (key) => statements.reduce((total, st) => total + st[key], 0);
+      const matches = sums('so_chuyen') === period.so_phieu && Math.abs(sums('tong_kg') - period.tong_kg) < 1e-6
+        && ['tien_truoc_vat', 'tien_vat', 'tong_tien'].every((key) => toDb(sums(key)) === period[key]);
+      if (!matches) throw new ValidationError('Kỳ chốt cũ: không dựng lại được chi tiết khớp tổng đã lưu. Dùng chứng từ gốc để đối chiếu.');
+    }
+    return statements.map((st) => ({ ...st, ky_chot: { id, ma: period.ma, dot_id: period.dot_van_chuyen_id,
+      tu_ngay: period.tu_ngay, den_ngay: period.den_ngay } }));
   }
 
   statements(f = {}) {
+    if (f.chot_ky_id && !f.don_vi_id && Object.keys(f).length === 1) return this._closedStatements(f.chot_ky_id);
     const ids = this.db.all(`SELECT DISTINCT p.don_vi_van_chuyen_id id FROM phieu_can p WHERE ${this.approvedWhere(f).sql} AND p.don_vi_van_chuyen_id IS NOT NULL`, this.approvedWhere(f).params);
     return ids.map((x) => this.statement({ ...f, don_vi_id: x.id }));
   }

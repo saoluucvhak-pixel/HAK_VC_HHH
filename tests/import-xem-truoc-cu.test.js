@@ -66,3 +66,24 @@ test('cùng số phiếu viết nơi xuất bằng hai tên gọi khác nhau tro
     assert.equal(rt.app.db.get(`SELECT COUNT(*) n FROM phieu_can WHERE so_phieu='QS01' AND trang_thai='ACTIVE'`).n, 1);
   } finally { rt.close(); }
 });
+
+test('chốt ngày theo đơn vị chỉ chặn phiếu của đơn vị đã chốt, kể cả khi lô có nhiều đơn vị', async () => {
+  const rt = await mk();
+  try {
+    const { l, h } = rt.app.db.get('SELECT min(ngay_can) l, max(ngay_can) h FROM phieu_can');
+    const { id } = rt.app.db.get('SELECT don_vi_van_chuyen_id id FROM phieu_can GROUP BY don_vi_van_chuyen_id ORDER BY count(*) DESC LIMIT 1');
+    const src = (op) => rt.app.db.get(`SELECT * FROM phieu_can WHERE don_vi_van_chuyen_id ${op} ? LIMIT 1`, [id]);
+    const row = (t, key) => [key, t.bien_so, t.noi_xuat_goc, t.ngay_gio_can_1, t.ngay_gio_can_2, t.can_lan_1, t.can_lan_2, t.kl_hang_kg];
+    await ok(rt, 'lock.create', { loai: 'KY', tu_ngay: l, den_ngay: h, don_vi_id: id });
+    const allowed = await preview(rt, [row(src('<>'), 'SCOPE-OPEN')], 'open.xlsx');
+    assert.equal((await ok(rt, 'import.commit', { token: allowed.token })).inserted, 1);
+    const mixed = await preview(rt, [row(src('<>'), 'SCOPE-MIX'), row(src('='), 'SCOPE-LOCK')], 'mixed.xlsx');
+    assert.equal(mixed.pv.counts.new, 2);
+    const count = rt.app.db.get('SELECT COUNT(*) n FROM import_batch').n;
+    const blocked = await rt.dispatch('import.commit', { token: mixed.token });
+    assert.equal(blocked.ok, false);
+    assert.match(blocked.error, /thuộc kỳ đã chốt/);
+    assert.equal(rt.app.db.get('SELECT COUNT(*) n FROM import_batch').n, count);
+    assert.equal(rt.app.db.get("SELECT COUNT(*) n FROM phieu_can WHERE so_phieu IN ('SCOPE-MIX','SCOPE-LOCK')").n, 0);
+  } finally { rt.close(); }
+});

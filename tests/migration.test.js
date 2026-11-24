@@ -13,7 +13,7 @@ function freshDb() {
 test('migration chạy được (v1→v2), idempotent, có đủ bảng & index', () => {
   const db = freshDb();
   const r1 = migrate(db);
-  assert.equal(r1.to, 8);
+  assert.equal(r1.to, 9);
   const cols = db.prepare('PRAGMA table_info(don_vi_van_chuyen)').all().map((c) => c.name);
   for (const c of ['dai_dien', 'ke_toan', 'so_hop_dong', 'ngay_hop_dong', 'so_tai_khoan', 'ten_in_bao_cao', 'noi_ky']) assert.ok(cols.includes(c), `thiếu cột ${c}`);
   const r2 = migrate(db);
@@ -64,7 +64,7 @@ test('migration lỗi thì rollback, không làm hỏng DB', () => {
   assert.ok(!cols.includes('mau_xe'));
 });
 
-test('nâng cấp DB v7 (có dữ liệu hàng chờ import) lên v8: giữ nguyên id/dữ liệu, CHECK mới nhận PENDING_ALREADY, chạy lại không đổi', () => {
+test('nâng cấp DB v7 (có dữ liệu hàng chờ import) lên v9: giữ nguyên id/dữ liệu, CHECK mới nhận PENDING_ALREADY, chạy lại không đổi', () => {
   const fs = require('fs'); const os = require('os'); const path = require('path');
   const { listMigrations } = require('../src/database/migrator');
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'mig7-'));
@@ -82,7 +82,7 @@ test('nâng cấp DB v7 (có dữ liệu hàng chờ import) lên v8: giữ nguy
   assert.throws(() => ins.run(bid, 4, 'PENDING_ALREADY', 'SKIP', pid, '{}', null), /CHECK/);      // trước 008: bị chặn
   const before = db.prepare('SELECT * FROM import_batch_row ORDER BY id').all();
   const r = migrate(db);
-  assert.equal(r.from, 7); assert.equal(r.to, 8); assert.deepEqual(r.applied, ['008_pending_already.sql']);
+  assert.equal(r.from, 7); assert.equal(r.to, 9); assert.deepEqual(r.applied, ['008_pending_already.sql', '009_chot_ky_bang_ke.sql']);
   assert.deepEqual(db.prepare('SELECT * FROM import_batch_row ORDER BY id').all(), before, 'dữ liệu và id giữ nguyên');
   ins.run(bid, 4, 'PENDING_ALREADY', 'SKIP', pid, '{}', null);                                       // sau 008: được nhận
   assert.throws(() => ins.run(bid, 5, 'KHAC', 'SKIP', pid, '{}', null), /CHECK/);                   // vẫn chặn giá trị lạ

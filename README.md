@@ -1,6 +1,6 @@
 # VC Cost — Quản lý · Tính toán · Đối chiếu chi phí vận chuyển (offline)
 
-Phiên bản **0.8.4** (schema 8) — ứng dụng desktop (Electron, chạy offline, dữ liệu SQLite cục bộ) cho HAK Group: import phiếu cân, tính cước vận chuyển, lập Bảng kê, chốt kỳ, đối chiếu với đối tác. Engine tính giá được kiểm chứng khớp với file Excel mẫu PRINCE OF NATURE V.47 (`docs/EXCEL_VS_APP_VALIDATION.md`).
+Phiên bản **0.8.5** (schema 9) — ứng dụng desktop (Electron, chạy offline, dữ liệu SQLite cục bộ) cho HAK Group: import phiếu cân, tính cước vận chuyển, lập Bảng kê, chốt kỳ, đối chiếu với đối tác. Engine tính giá được kiểm chứng khớp với file Excel mẫu PRINCE OF NATURE V.47 (`docs/EXCEL_VS_APP_VALIDATION.md`).
 
 Lịch sử thay đổi: `CHANGELOG.md`.
 
@@ -14,7 +14,7 @@ Lịch sử thay đổi: `CHANGELOG.md`.
 - **Danh mục**: xe (lịch sử xe → đơn vị theo ngày), đơn vị vận chuyển, địa điểm, tuyến, đợt/tàu, bảng giá, kỳ điều chỉnh giá dầu.
 - **Tính giá** (`TransportCostEngine`): nơi duy nhất tính tiền; giao diện chỉ hiển thị.
 - **Bảng kê / biểu mẫu**: Bảng kê từng đơn vị, Tổng hợp tàu, Chi tiết vận chuyển, Bảng tính đơn giá — xuất PDF và Excel.
-- **Chốt kỳ**: khóa số liệu theo khoảng ngày hoặc đợt/tàu; mở khóa bắt buộc có lý do, có nhật ký.
+- **Chốt kỳ**: khóa số liệu theo khoảng ngày hoặc đợt/tàu; mở khóa bắt buộc có lý do, có nhật ký. Mở **Lịch sử chốt kỳ → Bảng kê đã chốt** để xem và xuất lại số đã chốt.
 - **Đối chiếu** với file đối tác (khớp / lệch KL / lệch đơn giá / thiếu bên).
 - **Cảnh báo & nhật ký**: bất thường thời gian cân, thiếu xe/giá/địa điểm; audit log.
 - **Duyệt từng phiếu (tùy chọn, mặc định tắt)**: Cài đặt → bật; phiếu mới/vừa sửa là Nháp, chỉ vào Dashboard, Bảng kê, báo cáo, đối chiếu, chốt kỳ sau khi được duyệt (duyệt theo lô, kèm phiên bản phiếu; người nhập/sửa không tự duyệt khi bật phân quyền).

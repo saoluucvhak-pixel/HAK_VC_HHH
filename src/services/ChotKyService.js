@@ -24,14 +24,14 @@ class ChotKyService {
   }
 
   /** Xem trước: số phiếu, tổng theo Bảng kê, phiếu chưa tính giá (chặn chốt). */
-  preview(o) {
+  preview(o, savedStatements) {
     const { loai, f } = this._filter(o);
     const { sql, params } = this.reports.where(f);
     const n = this.db.get(`SELECT COUNT(*) n FROM phieu_can p WHERE ${sql}`, params).n;
     const u = this.reports.where({ ...f, chua_tinh_gia: true });
     const un = this.db.all(`SELECT CASE WHEN p.trang_thai_tinh_gia IN ('OK','LOCKED') THEN 'THIEU_DU_LIEU_GIA' ELSE p.trang_thai_tinh_gia END trang_thai, COUNT(*) so_chuyen
                             FROM phieu_can p WHERE ${u.sql} GROUP BY 1 ORDER BY 2 DESC`, u.params);
-    const statements = this.reports.statements({ ...f, da_tinh_gia: true }).map((s) => ({
+    const statements = (savedStatements || this.reports.statements({ ...f, da_tinh_gia: true })).map((s) => ({
       don_vi: s.don_vi.ma, so_chuyen: s.so_chuyen, tong_kg: s.tong_kg, tien_truoc_vat: s.tien_truoc_vat, tien_vat: s.tien_vat, tong_tien: s.tong_tien }));
     const tot = statements.reduce((a, s) => ({ so_chuyen: a.so_chuyen + s.so_chuyen, tong_kg: a.tong_kg + s.tong_kg, tien_truoc_vat: a.tien_truoc_vat + s.tien_truoc_vat, tien_vat: a.tien_vat + s.tien_vat, tong_tien: a.tong_tien + s.tong_tien }),
       { so_chuyen: 0, tong_kg: 0, tien_truoc_vat: 0, tien_vat: 0, tong_tien: 0 });
@@ -51,7 +51,8 @@ class ChotKyService {
   lock(o) {
     const { loai, f } = this._filter(o);
     return this.db.tx(() => {
-      const pv = this.preview(o);
+      const statements = this.reports.statements({ ...f, da_tinh_gia: true });
+      const pv = this.preview(o, statements);
       if (pv.chua_duyet) throw new ValidationError(`Còn ${pv.chua_duyet} phiếu Nháp chưa duyệt trong phạm vi — duyệt (hoặc xóa) xong mới chốt được, để số chốt không bỏ sót phiếu`);
       if (!pv.so_phieu) throw new ValidationError('Không có phiếu nào chưa chốt trong phạm vi này');
       if (pv.chua_tinh_gia) throw new ValidationError(`Còn ${pv.chua_tinh_gia} phiếu chưa tính giá trong phạm vi (${pv.chua_tinh_theo_ly_do.map((x) => `${x.trang_thai}: ${x.so_chuyen}`).join(', ')}). Xử lý xong mới chốt được.`);
@@ -60,9 +61,9 @@ class ChotKyService {
         if (!d) throw new ValidationError('Đợt không tồn tại');
       }
       const ma = this._ma();
-      const id = this.db.run(`INSERT INTO chot_ky(ma, loai, dot_van_chuyen_id, tu_ngay, den_ngay, don_vi_van_chuyen_id, trang_thai, so_phieu, tong_kg, tien_truoc_vat, tien_vat, tong_tien, ghi_chu)
-        VALUES (?,?,?,?,?,?, 'DA_CHOT', ?,?,?,?,?, ?)`, [ma, loai, f.dot_id || null, f.tu_ngay || null, f.den_ngay || null, f.don_vi_id || null,
-        pv.tong.so_chuyen, pv.tong.tong_kg, toDb(pv.tong.tien_truoc_vat), toDb(pv.tong.tien_vat), toDb(pv.tong.tong_tien), o.ghi_chu || null]).id;
+      const id = this.db.run(`INSERT INTO chot_ky(ma, loai, dot_van_chuyen_id, tu_ngay, den_ngay, don_vi_van_chuyen_id, trang_thai, so_phieu, tong_kg, tien_truoc_vat, tien_vat, tong_tien, ghi_chu, statements_json)
+        VALUES (?,?,?,?,?,?, 'DA_CHOT', ?,?,?,?,?, ?,?)`, [ma, loai, f.dot_id || null, f.tu_ngay || null, f.den_ngay || null, f.don_vi_id || null,
+        pv.tong.so_chuyen, pv.tong.tong_kg, toDb(pv.tong.tien_truoc_vat), toDb(pv.tong.tien_vat), toDb(pv.tong.tong_tien), o.ghi_chu || null, JSON.stringify(statements)]).id;
       const { sql, params } = this.reports.where({ ...f, da_tinh_gia: true });
       const rows = this.db.all(`SELECT p.* FROM phieu_can p WHERE ${sql}`, params);
       for (const r of rows) {
@@ -79,7 +80,7 @@ class ChotKyService {
   }
 
   list() {
-    return this.db.all(`SELECT k.*, d.ma_dot, v.ma don_vi FROM chot_ky k LEFT JOIN dot_van_chuyen d ON d.id=k.dot_van_chuyen_id
+    return this.db.all(`SELECT k.id, k.ma, k.loai, k.dot_van_chuyen_id, k.tu_ngay, k.den_ngay, k.don_vi_van_chuyen_id, k.trang_thai, k.so_phieu, k.tong_kg, k.tien_truoc_vat, k.tien_vat, k.tong_tien, k.ghi_chu, k.chot_luc, k.mo_khoa_luc, k.ly_do_mo_khoa, d.ma_dot, v.ma don_vi FROM chot_ky k LEFT JOIN dot_van_chuyen d ON d.id=k.dot_van_chuyen_id
                         LEFT JOIN don_vi_van_chuyen v ON v.id=k.don_vi_van_chuyen_id ORDER BY k.id DESC`)
       .map((k) => ({ ...k, tien_truoc_vat: fromDb(k.tien_truoc_vat), tien_vat: fromDb(k.tien_vat), tong_tien: fromDb(k.tong_tien) }));
   }
@@ -92,8 +93,8 @@ class ChotKyService {
       if (k.trang_thai !== 'DA_CHOT') throw new ValidationError('Kỳ này đã được mở khóa');
       const n = this.db.run(`UPDATE phieu_can SET chot_ky_id=NULL WHERE chot_ky_id=?`, [id]).changes;
       this.db.run(`UPDATE chot_ky SET trang_thai='DA_MO_KHOA', mo_khoa_luc=strftime('%Y-%m-%dT%H:%M:%S','now','localtime'), ly_do_mo_khoa=? WHERE id=?`, [String(reason).trim(), id]);
-      if (k.loai === 'DOT' && k.dot_van_chuyen_id) {
-        const other = this.db.get(`SELECT COUNT(*) n FROM chot_ky WHERE dot_van_chuyen_id=? AND trang_thai='DA_CHOT' AND id<>?`, [k.dot_van_chuyen_id, id]).n;
+      if (k.loai === 'DOT' && k.dot_van_chuyen_id && k.don_vi_van_chuyen_id === null) {
+        const other = this.db.get(`SELECT COUNT(*) n FROM chot_ky WHERE loai='DOT' AND dot_van_chuyen_id=? AND don_vi_van_chuyen_id IS NULL AND trang_thai='DA_CHOT' AND id<>?`, [k.dot_van_chuyen_id, id]).n;
         if (!other) this.db.run(`UPDATE dot_van_chuyen SET trang_thai='MO' WHERE id=?`, [k.dot_van_chuyen_id]);
       }
       this.audit.log('UNLOCK_PERIOD', 'chot_ky', id, { trang_thai: 'DA_CHOT' }, { trang_thai: 'DA_MO_KHOA', so_phieu: n }, String(reason).trim());
@@ -101,17 +102,20 @@ class ChotKyService {
     });
   }
 
-  /** Phiếu mới (import) rơi vào kỳ ngày đã chốt → chặn, tránh số liệu đã ký bị thay đổi. */
-  assertOpenForDates(dates) {
-    const ds = [...new Set(dates.filter(Boolean))];
-    if (!ds.length) return;
-    const k = this.db.all(`SELECT ma, tu_ngay, den_ngay FROM chot_ky WHERE loai='KY' AND trang_thai='DA_CHOT'`);
-    const hit = ds.filter((d) => k.some((x) => d >= x.tu_ngay && d <= x.den_ngay));
-    if (hit.length) {
-      const ky = k.filter((x) => hit.some((d) => d >= x.tu_ngay && d <= x.den_ngay)).map((x) => x.ma);
-      throw new ValidationError(`Có phiếu mới thuộc kỳ đã chốt (${[...new Set(ky)].join(', ')}), ngày ${hit.slice(0, 3).join(', ')}${hit.length > 3 ? '…' : ''}. Mở khóa kỳ trước khi import thêm.`);
-    }
+}
+
+function assertOpenForTickets(db, tickets) {
+  if (!tickets.length) return;
+  const periods = db.all(`SELECT ma, tu_ngay, den_ngay, don_vi_van_chuyen_id FROM chot_ky
+                          WHERE loai='KY' AND trang_thai='DA_CHOT'`);
+  for (const t of tickets) {
+    const date = t.ngay_gio_can_1?.slice(0, 10);
+    if (!date) continue;
+    const carrier = t.don_vi_van_chuyen_id;
+    const hit = periods.find((p) => date >= p.tu_ngay && date <= p.den_ngay
+      && (p.don_vi_van_chuyen_id === null || p.don_vi_van_chuyen_id === carrier));
+    if (hit) throw new ValidationError(`Có phiếu thuộc kỳ đã chốt (${hit.ma}), ngày ${date}. Mở khóa kỳ trước khi ghi phiếu.`);
   }
 }
 
-module.exports = { ChotKyService };
+module.exports = { ChotKyService, assertOpenForTickets };
