@@ -1,4 +1,5 @@
 'use strict';
+const { assertOpenForTickets } = require('./ChotKyService');
 /** Sửa phiếu cân (có audit), gán/chuyển đợt, đánh dấu xe trả về. Không sửa phiếu đã chốt. */
 const { ValidationError } = require('./CatalogService');
 const { businessKey, strongKey, fingerprint } = require('./DuplicateDetector');
@@ -35,10 +36,6 @@ class TicketService {
         if (!iso) throw new ValidationError(`${k === 'ngay_gio_can_1' ? 'Ngày giờ cân 1' : 'Ngày giờ cân 2'}: sai định dạng hoặc ngày không tồn tại`);
         ch[k] = iso;
       }
-      // Đổi ngày cân 1 sang một ngày thuộc kỳ đã chốt → số đã chốt sẽ lệch Bảng kê: phải mở khóa kỳ trước
-      if (ch.ngay_gio_can_1 && ch.ngay_gio_can_1.slice(0, 10) !== (old.ngay_gio_can_1 || '').slice(0, 10)) {
-        require('./ChotKyService').ChotKyService.prototype.assertOpenForDates.call({ db: this.db }, [ch.ngay_gio_can_1.slice(0, 10)]);
-      }
       const t1 = Object.hasOwn(ch, 'ngay_gio_can_1') ? ch.ngay_gio_can_1 : old.ngay_gio_can_1;
       const t2 = Object.hasOwn(ch, 'ngay_gio_can_2') ? ch.ngay_gio_can_2 : old.ngay_gio_can_2;
       if (('ngay_gio_can_1' in ch || 'ngay_gio_can_2' in ch) && t1 && t2 && t2 < t1) throw new ValidationError('Giờ cân 2 phải sau giờ cân 1');
@@ -72,7 +69,11 @@ class TicketService {
       this.audit.log('dot_van_chuyen_id' in ch && cols.length <= 4 ? 'MOVE_TICKET' : 'UPDATE_TICKET', 'phieu_can', id, oldVals, ch, note);
       this.cost.recalc({ ids: [id] });
       if ('bien_so' in ch) this.cost.syncTimeAlerts([old.bien_so_chuan]);
-      return this.get(id);
+      const updated = this.get(id);
+      if (updated.ngay_can !== old.ngay_can || updated.don_vi_van_chuyen_id !== old.don_vi_van_chuyen_id) {
+        assertOpenForTickets(this.db, [updated]);
+      }
+      return updated;
     });
   }
 
@@ -136,7 +137,7 @@ class TicketService {
         if (authOn && actor && t.nhap_boi === actor) { if (!duyetTuDuyet(this.cost && this.cost.settings)) throw new ValidationError('Người nhập/sửa phiếu không tự duyệt phiếu của mình — cần một người có quyền Duyệt khác. Nếu chỉ có một người dùng, bật "Cho phép tự duyệt" ở Cài đặt → Duyệt từng phiếu'); }
         if (t.dot_van_chuyen_id) { const d = this.db.get('SELECT trang_thai FROM dot_van_chuyen WHERE id=?', [t.dot_van_chuyen_id]); if (d && d.trang_thai === 'KHOA') throw new ValidationError('Phiếu thuộc đợt đã khóa'); }
         this.db.tx(() => {
-          require('./ChotKyService').ChotKyService.prototype.assertOpenForDates.call({ db: this.db }, [(t.ngay_gio_can_1 || '').slice(0, 10)]);
+          assertOpenForTickets(this.db, [t]);
           this.db.run(`UPDATE phieu_can SET trang_thai_duyet='DA_DUYET', duyet_boi=?, duyet_luc=strftime('%Y-%m-%dT%H:%M:%S','now','localtime') WHERE id=?`, [actor, id]);
           this.audit.log('APPROVE_TICKET', 'phieu_can', id, { trang_thai_duyet: 'NHAP' }, { trang_thai_duyet: 'DA_DUYET', tu_duyet: !!(authOn && actor && t.nhap_boi === actor) }, note);
         });

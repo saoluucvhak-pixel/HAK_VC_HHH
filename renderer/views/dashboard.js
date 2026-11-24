@@ -163,24 +163,26 @@
 
   // ------------------------------------------------------------ bảng kê
   App.register('statements', {
-    async render(v) {
+    async render(v, { closeId, carrierId } = {}) {
       const body = h('div', {});
       const load = App.latestRender(body, async (body) => {
-        const f = App.cleanFilter(App.state.filter);
+        const f = closeId ? { chot_ky_id: closeId, ...(carrierId ? { don_vi_id: carrierId } : {}) } : App.cleanFilter(App.state.filter);
         App.clear(body);
         const dvOne = App.one(f.don_vi_id);
         if (!dvOne) {
-          const sts = await api('reports.statements', f);
+          const sts = await App.call('reports.statements', f);
+          if (!sts) { body.append(h('p', { class: 'empty' }, 'Không thể lập lại Bảng kê. Xem Lịch sử chốt kỳ để đối chiếu.')); return; }
           body.append(h('div', { class: 'card' }, h('h3', {}, 'Tổng hợp bảng kê theo từng đơn vị (hóa đơn xuất riêng)'),
             table({
               columns: [{ key: 'don_vi', label: 'Đơn vị', render: (s) => s.don_vi.ma, mono: true }, { key: 'so_chuyen', label: 'Chuyến', fmt: 'int' }, { key: 'tong_tan', label: 'KL (tấn)', fmt: 'tan' },
                 { key: 'tien_truoc_vat', label: 'Thành tiền', fmt: 'money' }, { key: 'tien_vat', label: 'VAT', fmt: 'money' }, { key: 'tong_tien', label: 'Tổng thanh toán', fmt: 'money' }],
-              rows: sts, onRow: (s) => { App.state.filter.don_vi_id = [String(s.don_vi.id)]; App.reload(); },
+              rows: sts, onRow: (s) => { if (closeId) return App.go('statements', { closeId, carrierId: s.don_vi.id }); App.state.filter.don_vi_id = [String(s.don_vi.id)]; App.reload(); },
             }), (() => { const n = sts.reduce((a, s) => a + (s.so_chuyen_chua_tinh_gia || 0), 0); return n ? h('p', { class: 'tag amber' }, `⚠ ${n} chuyến chưa tính được giá — chưa nằm trong bảng kê`) : null; })(),
             h('p', { class: 'muted' }, 'Chọn đơn vị ở bộ lọc (hoặc bấm một dòng) để xem bảng kê chi tiết, xuất Excel/PDF để in và ký.')));
           return;
         }
-        const st = await api('reports.statement', f);
+        const st = await App.call('reports.statement', f);
+        if (!st) { body.append(h('p', { class: 'empty' }, 'Không thể lập Bảng kê theo phạm vi này. Xem Lịch sử chốt kỳ để đối chiếu.')); return; }
         // Lô đối chiếu khối lượng 2 bên (tùy chọn): lọc theo đơn vị đang xem
         const batches = (await api('recon.batches')).filter((b) => !b.don_vi_van_chuyen_id || String(b.don_vi_van_chuyen_id) === String(f.don_vi_id));
         if (!batches.some((b) => String(b.id) === String(App.state.reconBatch))) App.state.reconBatch = '';
@@ -190,7 +192,7 @@
         const reconSel = h('select', { 'data-f': 'recon-batch', onchange: (e) => { App.state.reconBatch = e.target.value; load(); } }, h('option', { value: '' }, '— Không kèm đối chiếu —'),
           batches.map((b) => h('option', { value: b.id, selected: String(b.id) === String(rid) }, `#${b.id} ${b.ten}${b.don_vi ? ` (${b.don_vi})` : ''}`)));
         body.append(h('div', { class: 'card stmt' },
-          h('div', { class: 'row' }, h('div', { class: 'grow' }, h('h3', { style: { fontSize: '17px' } }, `BẢNG KÊ — ${st.don_vi.ten || st.don_vi.ma}`), h('div', { class: 'muted' }, `MST: ${st.don_vi.ma_so_thue || '—'} · ${st.so_chuyen} chuyến · ${st.so_xe} xe · ${fmt.tan(st.tong_tan)} tấn`)),
+          h('div', { class: 'row' }, h('div', { class: 'grow' }, h('h3', { style: { fontSize: '17px' } }, `BẢNG KÊ — ${st.don_vi.ten || st.don_vi.ma}`), h('div', { class: 'muted' }, `${st.ky_chot ? st.ky_chot.ma + ' · ' : ''}MST: ${st.don_vi.ma_so_thue || '—'} · ${st.so_chuyen} chuyến · ${st.so_xe} xe · ${fmt.tan(st.tong_tan)} tấn`)),
             h('span', { class: 'row gap-s' }, h('button', { class: 'btn', 'data-act': 'xlsx', onclick: () => App.exportXlsx('export.statement', { filter: f, reconBatchId: rid }) }, '⬇ Excel (in/ký)'), h('button', { class: 'btn ghost', 'data-act': 'pdf', onclick: () => App.exportXlsx('export.statementPdf', { filter: f, reconBatchId: rid }) }, '⬇ PDF'))),
           st.so_chuyen_chua_tinh_gia ? h('p', { class: 'tag red' }, `${st.so_chuyen_chua_tinh_gia} chuyến chưa tính được giá — không có trong bảng kê`) : null,
           table({
@@ -212,7 +214,7 @@
             { key: 'so_chuyen', label: 'Chuyến', fmt: 'int' }, { key: 'tong_tan', label: 'KL (tấn)', fmt: 'tan' }, { key: 'don_gia', label: 'Đơn giá', num: true, fmt: (x) => (typeof x === 'number' ? fmt.money(x) : x) },
             { key: 'thanh_tien', label: 'Thành tiền', fmt: 'money' }, { key: 'tien_vat', label: 'VAT', fmt: 'money' }, { key: 'tong_tien', label: 'Tổng', fmt: 'money' }], rows: st.vehicles })));
       });
-      v.append(App.pageHead('Bảng kê thanh toán', 'Làm tròn theo bảng kê · hóa đơn xuất riêng từng đơn vị'), await App.filterBar(load, { fields: ['tu_ngay', 'den_ngay', 'dot_id', 'don_vi_id', 'noi_xuat_id', 'tuyen_id', 'bien_so'] }), body);
+      v.append(App.pageHead('Bảng kê thanh toán', 'Làm tròn theo bảng kê · hóa đơn xuất riêng từng đơn vị'), closeId ? h('button', { class: 'btn ghost', onclick: () => App.go('lock') }, 'Về lịch sử chốt kỳ') : await App.filterBar(load, { fields: ['tu_ngay', 'den_ngay', 'dot_id', 'don_vi_id', 'noi_xuat_id', 'tuyen_id', 'bien_so'] }), body);
       await load();
     },
   });

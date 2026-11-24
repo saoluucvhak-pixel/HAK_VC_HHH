@@ -152,6 +152,25 @@ function runSmoke() {
           acc.approval = { draftTripsInStatement: draftBill.data && draftBill.data.so_chuyen, draftVisible: draftCount.data && draftCount.data.kept, approved: approved.data && approved.data.ok };
           const lk = await rt.dispatch('lock.create', { loai: 'KY', tu_ngay: '2026-09-28', den_ngay: '2026-10-01' });
           if (!lk.ok) problems.push('chốt kỳ lỗi: ' + lk.error); else acc.chot = { so_phieu: lk.data.so_phieu };
+          if (lk.ok) {
+            const closed = await rt.dispatch('reports.statements', { chot_ky_id: lk.data.id });
+            if (!closed.ok || !closed.data.length) throw new Error('Không mở được Bảng kê đã chốt');
+            const before = closed.data[0];
+            const filter = { chot_ky_id: lk.data.id, don_vi_id: before.don_vi.id };
+            const change = await rt.dispatch('settings.set', { key: 'rounding',
+              value: { level: 'STATEMENT', statement: { lineAmount: { digits: -3, mode: 'HALF_UP' } } } });
+            const after = await rt.dispatch('reports.statement', filter);
+            if (!change.ok || !after.ok || JSON.stringify(after.data) !== JSON.stringify(before)) {
+              throw new Error('Bảng kê đã chốt thay đổi sau khi đổi làm tròn');
+            }
+            for (const [channel, magic] of [['export.statement', 'PK'], ['export.statementPdf', '%PDF']]) {
+              const result = await rt.dispatch(channel, { filter });
+              if (!result.ok || fs.readFileSync(result.data.path).subarray(0, magic.length).toString() !== magic) {
+                throw new Error('Xuất Bảng kê đã chốt thất bại: ' + channel);
+              }
+            }
+            acc.chot.bang_ke_giu_nguyen = true;
+          }
           const lst = await rt.dispatch('lock.list', {}); if (!lst.ok || !lst.data.length) problems.push('danh sách kỳ chốt rỗng sau khi chốt');
         }
         const ig = await rt.dispatch('system.integrity', {}); acc.integrity = ig.ok ? { ok: ig.data.ok, loi: ig.data.loi } : null;

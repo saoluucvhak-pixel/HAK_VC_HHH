@@ -1,4 +1,14 @@
-# VC Cost 0.8.4 — schema SQLite 8
+# VC Cost 0.8.5 — schema SQLite 9
+
+- Mở khóa chốt toàn đợt sẽ mở lại đợt và giữ nguyên các phiếu còn khóa theo lần chốt riêng.
+- Chốt theo khoảng ngày cho một đơn vị chỉ giới hạn nhập, sửa và duyệt phiếu thuộc phạm vi đó.
+- Mở **Lịch sử chốt kỳ → Bảng kê đã chốt** để xem hoặc xuất Excel/PDF theo đúng dữ liệu và quy tắc làm tròn khi chốt. Với kỳ cũ, ứng dụng đối chiếu chi tiết dựng lại với tổng đã lưu. Nếu không khớp, cần dùng chứng từ gốc.
+- Kiểm thử giao diện sẽ báo thất bại khi bảng vi phạm quy tắc hiển thị số, ngày hoặc căn lề.
+
+## Nâng cấp
+Tạo và xuất bản sao lưu ra thư mục riêng trong bản đang dùng, sau đó đóng ứng dụng rồi chạy Setup. Lần mở đầu tự tạo bản `PRE_MIGRATION` và nâng dữ liệu từ schema 8 lên 9. Để quay lại 0.8.4, dùng bản sao lưu trước nâng cấp. Setup và Portable chưa ký số. Kiểm tra tệp tải về theo `SHA256SUMS.txt`.
+
+## VC Cost 0.8.4 — schema SQLite 8
 
 Ứng dụng quản lý chi phí vận chuyển offline cho HAK. Bản vá sau đợt rà soát toàn diện (bảo mật, nghiệp vụ, kiểm thử, phát hành). Không đổi cấu trúc CSDL (vẫn schema 8), cài đè lên 0.8.3 không cần thao tác thêm.
 

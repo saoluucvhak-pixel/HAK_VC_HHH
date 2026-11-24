@@ -69,7 +69,7 @@ for (const [id, n] of [['dashboard', '05-dashboard'], ['tickets', '06-tickets'],
     });
     return [...new Set(out)].slice(0, 6);
   });
-  if (bad.length) console.log('ALIGN', id, JSON.stringify(bad));
+  if (bad.length) errors.push(`Định dạng bảng ${id}: ${bad.join('; ')}`);
 }
 // bảng kê 1 đơn vị
 await nav('statements'); await page.click('[data-fkey="sf:statements:don_vi_id"]'); await page.locator('[data-fpop] .fpop-row input').nth(0).check(); await page.click('[data-fpop] .btn.pri'); await page.waitForSelector('.stmt'); await shot('21-statement-one');

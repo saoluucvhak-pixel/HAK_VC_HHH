@@ -21,6 +21,9 @@
             { key: 'so_phieu', label: 'Số phiếu', fmt: 'int' }, { key: 'tong_kg', label: 'Khối lượng (kg)', fmt: 'kg' },
             { key: 'tong_tien', label: 'Tổng tiền (đ)', fmt: 'money' },
             { key: 'trang_thai', label: 'Trạng thái', tag: true },
+            { key: '_statement', label: '', render: (r) => r.trang_thai === 'DA_CHOT' ? h('button', {
+              class: 'btn sm', onclick: () => App.go('statements', { closeId: r.id, carrierId: r.don_vi_van_chuyen_id }),
+            }, 'Bảng kê đã chốt') : '' },
             { key: '_a', label: '', render: (r) => (r.trang_thai === 'DA_CHOT' ? h('button', { class: 'btn danger sm', 'data-act': 'lock-unlock', onclick: async () => {
               const reason = await App.promptBox('Mở khóa kỳ ' + r.ma, 'Lý do mở khóa');
               if (!reason) return;

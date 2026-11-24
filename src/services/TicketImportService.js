@@ -1,4 +1,5 @@
 'use strict';
+const { assertOpenForTickets } = require('./ChotKyService');
 /**
  * IMPORT PHIẾU CÂN: CHỌN FILE → PREVIEW → VALIDATE → NGƯỜI DÙNG XÁC NHẬN → COMMIT (transaction).
  * Không ghi DB ở bước preview. Commit lỗi giữa chừng → rollback toàn bộ.
@@ -223,7 +224,6 @@ class TicketImportService {
       if (d.trang_thai === 'KHOA') throw new ValidationError('Đợt đã khóa — không import thêm phiếu');
     }
     const nd = noiDenId || p.noiDenId;
-    require('./ChotKyService').ChotKyService.prototype.assertOpenForDates.call({ db: this.db }, (p.rows || []).filter((r) => r.phan_loai === 'NEW').map((r) => (r.ngay_gio_can_1 || '').slice(0, 10)));
     // Cấu hình ngưỡng KL có thể đã đổi sau khi xem trước: kiểm lại các dòng sắp ghi theo ngưỡng HIỆN HÀNH
     const lim = limitsFrom(this.settings);
     const vi = (p.rows || []).filter((r) => (r.phan_loai === 'NEW' || r.phan_loai === 'KEY_CONFLICT') && weightProblem(r.kl_hang_kg, lim));
@@ -281,6 +281,8 @@ class TicketImportService {
       this.db.run('UPDATE import_batch SET inserted_rows=?, duplicate_rows=?, conflict_rows=?, error_rows=? WHERE id=?', [inserted, dup, conflict, err, batchId]);
       this.audit.log('IMPORT', 'import_batch', batchId, null, { file: p.wb.fileName, sheet: p.sheetName, inserted, dup, conflict, err });
       const calc = this.cost.recalc({ batchId });
+      assertOpenForTickets(this.db, this.db.all(
+        'SELECT ngay_gio_can_1, don_vi_van_chuyen_id FROM phieu_can WHERE import_batch_id=?', [batchId]));
       return { batchId, inserted, duplicate: dup, conflict, error: err, pendingAlready: pendingSkipped, calculated: calc.count };
     });
     this.previews.delete(token);
@@ -395,7 +397,6 @@ class TicketImportService {
           const sd = this.db.get('SELECT trang_thai FROM dot_van_chuyen WHERE id=?', [old.dot_van_chuyen_id]);
           if (sd && sd.trang_thai === 'KHOA') throw new ValidationError('Phiếu thuộc đợt đã khóa — mở khóa đợt trước khi cập nhật');
         }
-        require('./ChotKyService').ChotKyService.prototype.assertOpenForDates.call({ db: this.db }, [(t.ngay_gio_can_1 || '').slice(0, 10)]);
         const clash = this.db.get(`SELECT id FROM phieu_can WHERE business_key=? AND trang_thai='ACTIVE' AND id<>?`, [businessKey(t), old.id]);
         if (clash) throw new ValidationError(`Dữ liệu mới trùng khóa với phiếu khác (#${clash.id}) — không cập nhật được`);
         // Bản chụp "ngay trước lần cập nhật" (không phải lúc vào hàng chờ): hoàn tác khôi phục đúng trạng thái này
@@ -407,6 +408,7 @@ class TicketImportService {
         this.db.run(`UPDATE import_batch SET updated_rows = updated_rows + 1 WHERE id=?`, [r.batch_id]);
         if (duyetBat(this.settings)) this.db.run(`UPDATE phieu_can SET trang_thai_duyet='NHAP', duyet_boi=NULL, duyet_luc=NULL, nhap_boi=? WHERE id=?`, [this.audit.actor() || null, old.id]);   // dữ liệu đổi → cần duyệt lại
         this.cost.recalc({ ids: [old.id] });
+        assertOpenForTickets(this.db, [this.db.get('SELECT ngay_gio_can_1, don_vi_van_chuyen_id FROM phieu_can WHERE id=?', [old.id])]);
       }
       this.db.run(`UPDATE import_batch_row SET hanh_dong=? WHERE id=?`, [action, rowId]);
       this.audit.log(action === 'UPDATE' ? 'UPDATE_TICKET_FROM_IMPORT' : 'REVIEW_' + action, 'phieu_can', r.phieu_can_id, action === 'UPDATE' ? old : null, action === 'UPDATE' ? JSON.parse(r.raw_json) : null, note);

@@ -57,9 +57,13 @@ const contractText = (c, benB, prefix = 'Căn cứ Hợp đồng vận chuyển'
 
 function statementDoc(app, filter = {}, opt = {}) {
   const st = app.reports.statement(filter);
+  if (st.ky_chot) {
+    const { id, dot_id, tu_ngay, den_ngay } = st.ky_chot;
+    filter = { chot_ky_id: id, don_vi_id: st.don_vi.id, dot_id, tu_ngay, den_ngay };
+  }
   const dot = oneId(filter.dot_id) !== null ? app.db.get('SELECT * FROM dot_van_chuyen WHERE id=?', [oneId(filter.dot_id)]) : null;
   const rn = routeNames(app);
-  st.lines.forEach((l) => { l.tuyen_ten = rn.get(l.tuyen_id) || l.tuyen; });
+  st.lines.forEach((l) => { l.tuyen_ten = st.ky_chot ? l.tuyen : (rn.get(l.tuyen_id) || l.tuyen); });
   const all = app.reports.tickets(filter, { offset: 0, limit: 10_000_000, sort: 'ngay_gio_can_1', dir: 'asc', approvedOnly: true }).rows;
   const tickets = all.filter((t) => (t.trang_thai_tinh_gia === 'OK' || t.trang_thai_tinh_gia === 'LOCKED') && t.don_gia !== null);
   const period = dot ? `Đợt/Tàu: ${[dot.ten_tau, dot.voyage].filter(Boolean).join(' ')} (${dot.ma_dot})${dot.tu_ngay ? ` — ${dmy(dot.tu_ngay)} → ${dmy(dot.den_ngay)}` : ''}`
@@ -69,16 +73,16 @@ function statementDoc(app, filter = {}, opt = {}) {
       return `Kỳ: ${tu ? dmy(tu) : '…'} → ${den ? dmy(den) : '…'}`;
     })();
   const extra = filterLabels(app, { ...filter, tu_ngay: null, den_ngay: null, dot_id: null, don_vi_id: null }).map(([k, v]) => `${k}: ${v}`).join('; ');
-  const full = app.db.get('SELECT * FROM don_vi_van_chuyen WHERE id=?', [st.don_vi.id]) || st.don_vi;
+  const full = st.ky_chot ? st.don_vi : (app.db.get('SELECT * FROM don_vi_van_chuyen WHERE id=?', [st.don_vi.id]) || st.don_vi);
   const benA = companyInfo(app), benB = carrierInfo(full);
   const hopDong = contractFor(app, st.don_vi.id, filter.den_ngay || (tickets[tickets.length - 1] && tickets[tickets.length - 1].ngay_can));
   if (hopDong && hopDong.noi_ky) benB.noi_ky = hopDong.noi_ky;
   const recon = opt.reconBatchId ? app.recon.weightByVehicle(Number(opt.reconBatchId)) : null;
   const thang = (() => { const d = (filter.den_ngay || (tickets[tickets.length - 1] && tickets[tickets.length - 1].ngay_can) || '').slice(0, 10); return d ? `${d.slice(5, 7)}/${d.slice(0, 4)}` : ''; })();
   return {
-    st, dot, tickets, period, extra, benA, benB, recon, thang,
+    st, dot, tickets, period: st.ky_chot ? `${period} · ${st.ky_chot.ma}` : period, extra, benA, benB, recon, thang,
     hopDong, tieu_de: (hopDong && hopDong.tieu_de_bao_cao) || 'BẢNG KÊ CHI PHÍ VẬN CHUYỂN', contract: contractText(hopDong, benB),
-    bangChu: docTienBangChu(st.tong_tien), file: `BangKe_${st.don_vi.ma}_${dot ? dot.ma_dot : (filter.tu_ngay || (tickets[0] && tickets[0].ngay_can) || 'ky')}`,
+    bangChu: docTienBangChu(st.tong_tien), file: `BangKe_${st.don_vi.ma}_${st.ky_chot ? st.ky_chot.ma : dot ? dot.ma_dot : (filter.tu_ngay || (tickets[0] && tickets[0].ngay_can) || 'ky')}`,
   };
 }
 
