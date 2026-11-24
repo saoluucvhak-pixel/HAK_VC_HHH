@@ -1,4 +1,14 @@
-# VC Cost 0.8.5 — schema SQLite 9
+# VC Cost 0.8.6 — schema SQLite 9
+
+- Bản sao lưu thủ công và tự động mới chứa SQLite và tệp Excel/CSV nguồn trong cùng tệp `.db`. Khôi phục kiểm SHA-256 từng tệp. Bản sao lưu cũ và bản trước import vẫn khôi phục được dữ liệu SQLite.
+- Bảng kê chốt mới giữ thông tin bên ký và hợp đồng. Với kỳ cũ, đối chiếu thông tin này với chứng từ gốc.
+- Bảng kê lọc có phiếu đã chốt, nhưng không khớp trọn một lần chốt, có nhãn **Tham khảo** trên màn hình, Excel và PDF. Dùng **Lịch sử chốt kỳ** để lấy chứng từ in ký.
+
+## Cài đặt và nâng cấp
+
+Xuất bản sao lưu ra ổ khác rồi đóng VC Cost trước khi chạy Setup. Từ 0.8.5, schema vẫn là 9. Setup và Portable chưa ký số. Đối chiếu tệp tải về với `SHA256SUMS.txt`.
+
+## VC Cost 0.8.5 — schema SQLite 9
 
 - Mở khóa chốt toàn đợt sẽ mở lại đợt và giữ nguyên các phiếu còn khóa theo lần chốt riêng.
 - Chốt theo khoảng ngày cho một đơn vị chỉ giới hạn nhập, sửa và duyệt phiếu thuộc phạm vi đó.

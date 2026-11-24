@@ -133,6 +133,16 @@ function runSmoke() {
           const cm = await rt.dispatch('import.commit', { token: o.data.token });
           acc.reimport = { exact: pv.data.counts.exact, new: pv.data.counts.new, inserted: cm.data && cm.data.inserted };
           if (!cm.ok || cm.data.inserted !== 0 || pv.data.counts.exact !== 2035) problems.push('nhập lại file mẫu phải ra 2035 phiếu trùng hoàn toàn và 0 phiếu mới: ' + JSON.stringify(acc.reimport));
+          const sourceCopy = cm.data?.savedCopy;
+          if (!sourceCopy) throw new Error('Thiếu tệp nguồn sau khi nhập');
+          const sourceBytes = fs.readFileSync(sourceCopy);
+          const fullBackup = await rt.dispatch('backup.now', {});
+          if (!fullBackup.ok) throw new Error('Không sao lưu được hồ sơ: ' + fullBackup.error);
+          const restored = await rt.dispatch('backup.restore', { file: fullBackup.data.file });
+          if (!restored.ok || !restored.data.importsRestored || !fs.readFileSync(sourceCopy).equals(sourceBytes)) {
+            throw new Error('Khôi phục hồ sơ không giữ nguyên tệp nguồn');
+          }
+          acc.tep_nguon_khoi_phuc = true;
           const dv = rt.app.db.get('SELECT id FROM don_vi_van_chuyen ORDER BY id LIMIT 1');
           const x = await rt.dispatch('export.statement', { filter: { don_vi_id: dv.id, da_tinh_gia: true } });
           if (!x.ok) problems.push('xuất Excel lỗi: ' + x.error);

@@ -1,6 +1,6 @@
 {
   "name": "vc-cost-app",
-  "version": "0.8.5",
+  "version": "0.8.6",
   "description": "Hệ thống quản lý – tính toán – đối chiếu chi phí vận chuyển (offline)",
   "main": "electron/main.js",
   "scripts": {

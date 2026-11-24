@@ -1,5 +1,10 @@
 # CHANGELOG
 
+## 0.8.6 — bảo toàn hồ sơ và Bảng kê đã chốt (schema 9)
+- Bản sao lưu thủ công và tự động lưu cả SQLite lẫn tệp nguồn import.
+- Cố định bên ký và hợp đồng tại thời điểm chốt.
+- Đánh dấu Bảng kê lọc có phiếu đã chốt mang tính tham khảo trên màn hình, Excel và PDF.
+
 ## 0.8.5 — chốt kỳ và Bảng kê lịch sử (schema 9)
 - Mở lại phần còn lại của đợt khi mở khóa chốt toàn đợt, kể cả khi một đơn vị còn lần chốt riêng.
 - Áp dụng phạm vi đơn vị của kỳ ngày khi nhập, sửa, duyệt phiếu.
