@@ -6,6 +6,7 @@
  *  - Phiếu đã chốt: không tính lại, không sửa, không hoàn tác import; trigger DB chặn thêm 1 lớp.
  *  - Chốt theo ĐỢT: đợt chuyển KHOA. Mở khóa bắt buộc có lý do, ghi nhật ký; đợt trở lại MO.
  */
+const { statementParties } = require('../print/documents');
 const { toDb, fromDb } = require('../utils/dbMoney');
 const { ValidationError } = require('./CatalogService');
 
@@ -60,12 +61,21 @@ class ChotKyService {
         const d = this.db.get('SELECT * FROM dot_van_chuyen WHERE id=?', [f.dot_id]);
         if (!d) throw new ValidationError('Đợt không tồn tại');
       }
+      const { sql, params } = this.reports.where({ ...f, da_tinh_gia: true });
+      const rows = this.db.all(`SELECT p.* FROM phieu_can p WHERE ${sql}`, params);
+      const endByCarrier = new Map();
+      for (const row of rows) {
+        const carrier = row.don_vi_van_chuyen_id;
+        if (row.ngay_can > (endByCarrier.get(carrier) || '')) endByCarrier.set(carrier, row.ngay_can);
+      }
+      for (const st of statements) {
+        st.thong_tin_in = statementParties({ db: this.db, settings: this.reports.settings }, st.don_vi,
+          f.den_ngay || endByCarrier.get(st.don_vi.id));
+      }
       const ma = this._ma();
       const id = this.db.run(`INSERT INTO chot_ky(ma, loai, dot_van_chuyen_id, tu_ngay, den_ngay, don_vi_van_chuyen_id, trang_thai, so_phieu, tong_kg, tien_truoc_vat, tien_vat, tong_tien, ghi_chu, statements_json)
         VALUES (?,?,?,?,?,?, 'DA_CHOT', ?,?,?,?,?, ?,?)`, [ma, loai, f.dot_id || null, f.tu_ngay || null, f.den_ngay || null, f.don_vi_id || null,
         pv.tong.so_chuyen, pv.tong.tong_kg, toDb(pv.tong.tien_truoc_vat), toDb(pv.tong.tien_vat), toDb(pv.tong.tong_tien), o.ghi_chu || null, JSON.stringify(statements)]).id;
-      const { sql, params } = this.reports.where({ ...f, da_tinh_gia: true });
-      const rows = this.db.all(`SELECT p.* FROM phieu_can p WHERE ${sql}`, params);
       for (const r of rows) {
         this.db.run(`INSERT INTO chot_ky_snapshot(chot_ky_id, phieu_can_id, kl_hang_kg, don_gia, ty_le_vat, tien_truoc_vat, tien_vat, tong_tien, bang_gia_id, don_vi_van_chuyen_id, tuyen_id, snapshot_json)
           VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`, [id, r.id, r.kl_hang_kg, r.don_gia, r.ty_le_vat, r.tien_truoc_vat, r.tien_vat, r.tong_tien, r.bang_gia_id, r.don_vi_van_chuyen_id, r.tuyen_id, JSON.stringify(r)]);

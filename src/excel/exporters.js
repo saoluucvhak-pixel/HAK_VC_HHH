@@ -276,6 +276,7 @@ async function statementWorkbook(doc) {
   r++;
   merged(doc.tieu_de || 'BẢNG KÊ CHI PHÍ VẬN CHUYỂN', { size: 16, bold: true }, 'center'); ws.getRow(r - 1).height = 26;
   merged(doc.period, {}, 'center');
+  if (doc.notice) merged(doc.notice, { bold: true }, 'center');
   merged(`Số: ………… / BK-${benB.ma}${doc.thang ? `-${doc.thang.replace('/', '')}` : ''}`, {}, 'center');
   if (doc.contract) merged(doc.contract, { italic: true }, 'center');
   r++;

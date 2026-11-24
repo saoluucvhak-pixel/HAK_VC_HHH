@@ -55,6 +55,17 @@ const contractText = (c, benB, prefix = 'Căn cứ Hợp đồng vận chuyển'
   return so ? `${prefix} số ${so}${ngay ? ` ngày ${dmy(ngay)}` : ''}` : '';
 };
 
+function statementParties(app, carrier, date) {
+  const benA = companyInfo(app);
+  const benB = carrierInfo(carrier);
+  const hopDong = contractFor(app, carrier.id, date);
+  if (hopDong && hopDong.noi_ky) benB.noi_ky = hopDong.noi_ky;
+  return { benA, benB, hopDong, contract: contractText(hopDong, benB),
+    title: hopDong?.tieu_de_bao_cao || 'BẢNG KÊ CHI PHÍ VẬN CHUYỂN' };
+}
+
+const CLOSED_FILTER_NOTICE = 'THAM KHẢO · Phạm vi lọc có phiếu đã chốt. Dùng Bảng kê trong Lịch sử chốt kỳ để in ký.';
+
 function statementDoc(app, filter = {}, opt = {}) {
   const st = app.reports.statement(filter);
   if (st.ky_chot) {
@@ -73,15 +84,14 @@ function statementDoc(app, filter = {}, opt = {}) {
       return `Kỳ: ${tu ? dmy(tu) : '…'} → ${den ? dmy(den) : '…'}`;
     })();
   const extra = filterLabels(app, { ...filter, tu_ngay: null, den_ngay: null, dot_id: null, don_vi_id: null }).map(([k, v]) => `${k}: ${v}`).join('; ');
-  const full = st.ky_chot ? st.don_vi : (app.db.get('SELECT * FROM don_vi_van_chuyen WHERE id=?', [st.don_vi.id]) || st.don_vi);
-  const benA = companyInfo(app), benB = carrierInfo(full);
-  const hopDong = contractFor(app, st.don_vi.id, filter.den_ngay || (tickets[tickets.length - 1] && tickets[tickets.length - 1].ngay_can));
-  if (hopDong && hopDong.noi_ky) benB.noi_ky = hopDong.noi_ky;
+  const parties = st.thong_tin_in || statementParties(app, st.don_vi, filter.den_ngay || tickets.at(-1)?.ngay_can);
+  const notice = st.tham_khao ? CLOSED_FILTER_NOTICE : st.ky_chot && !st.thong_tin_in
+    ? 'Kỳ cũ: Thông tin bên ký và hợp đồng lấy theo danh mục hiện tại. Đối chiếu chứng từ gốc.' : '';
   const recon = opt.reconBatchId ? app.recon.weightByVehicle(Number(opt.reconBatchId)) : null;
   const thang = (() => { const d = (filter.den_ngay || (tickets[tickets.length - 1] && tickets[tickets.length - 1].ngay_can) || '').slice(0, 10); return d ? `${d.slice(5, 7)}/${d.slice(0, 4)}` : ''; })();
   return {
-    st, dot, tickets, period: st.ky_chot ? `${period} · ${st.ky_chot.ma}` : period, extra, benA, benB, recon, thang,
-    hopDong, tieu_de: (hopDong && hopDong.tieu_de_bao_cao) || 'BẢNG KÊ CHI PHÍ VẬN CHUYỂN', contract: contractText(hopDong, benB),
+    st, dot, tickets, period: st.ky_chot ? `${period} · ${st.ky_chot.ma}` : period, extra, recon, thang, notice,
+    ...parties, tieu_de: st.tham_khao ? `THAM KHẢO — ${parties.title}` : parties.title,
     bangChu: docTienBangChu(st.tong_tien), file: `BangKe_${st.don_vi.ma}_${st.ky_chot ? st.ky_chot.ma : dot ? dot.ma_dot : (filter.tu_ngay || (tickets[0] && tickets[0].ngay_can) || 'ky')}`,
   };
 }
@@ -106,4 +116,4 @@ function reportDoc(app, kind, filter = {}) {
   };
 }
 
-module.exports = { contractFor, contractText, carrierInfo, statementDoc, reportDoc, REPORTS, companyInfo, filterLabels, dmy, dmyHm };
+module.exports = { statementParties, contractFor, contractText, carrierInfo, statementDoc, reportDoc, REPORTS, companyInfo, filterLabels, dmy, dmyHm };

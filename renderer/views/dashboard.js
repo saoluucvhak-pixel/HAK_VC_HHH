@@ -178,7 +178,9 @@
                 { key: 'tien_truoc_vat', label: 'Thành tiền', fmt: 'money' }, { key: 'tien_vat', label: 'VAT', fmt: 'money' }, { key: 'tong_tien', label: 'Tổng thanh toán', fmt: 'money' }],
               rows: sts, onRow: (s) => { if (closeId) return App.go('statements', { closeId, carrierId: s.don_vi.id }); App.state.filter.don_vi_id = [String(s.don_vi.id)]; App.reload(); },
             }), (() => { const n = sts.reduce((a, s) => a + (s.so_chuyen_chua_tinh_gia || 0), 0); return n ? h('p', { class: 'tag amber' }, `⚠ ${n} chuyến chưa tính được giá — chưa nằm trong bảng kê`) : null; })(),
-            h('p', { class: 'muted' }, 'Chọn đơn vị ở bộ lọc (hoặc bấm một dòng) để xem bảng kê chi tiết, xuất Excel/PDF để in và ký.')));
+            sts.some((s) => s.tham_khao) ? h('p', { class: 'tag amber' }, 'Có số liệu tham khảo từ phạm vi lọc chứa phiếu đã chốt. ',
+              h('button', { class: 'btn ghost sm', onclick: () => App.go('lock') }, 'Mở Lịch sử chốt kỳ')) : null,
+            h('p', { class: 'muted' }, 'Chọn đơn vị hoặc bấm một dòng để xem bảng kê chi tiết và xuất Excel/PDF.')));
           return;
         }
         const st = await App.call('reports.statement', f);
@@ -193,7 +195,10 @@
           batches.map((b) => h('option', { value: b.id, selected: String(b.id) === String(rid) }, `#${b.id} ${b.ten}${b.don_vi ? ` (${b.don_vi})` : ''}`)));
         body.append(h('div', { class: 'card stmt' },
           h('div', { class: 'row' }, h('div', { class: 'grow' }, h('h3', { style: { fontSize: '17px' } }, `BẢNG KÊ — ${st.don_vi.ten || st.don_vi.ma}`), h('div', { class: 'muted' }, `${st.ky_chot ? st.ky_chot.ma + ' · ' : ''}MST: ${st.don_vi.ma_so_thue || '—'} · ${st.so_chuyen} chuyến · ${st.so_xe} xe · ${fmt.tan(st.tong_tan)} tấn`)),
-            h('span', { class: 'row gap-s' }, h('button', { class: 'btn', 'data-act': 'xlsx', onclick: () => App.exportXlsx('export.statement', { filter: f, reconBatchId: rid }) }, '⬇ Excel (in/ký)'), h('button', { class: 'btn ghost', 'data-act': 'pdf', onclick: () => App.exportXlsx('export.statementPdf', { filter: f, reconBatchId: rid }) }, '⬇ PDF'))),
+            h('span', { class: 'row gap-s' }, h('button', { class: 'btn', 'data-act': 'xlsx', onclick: () => App.exportXlsx('export.statement', { filter: f, reconBatchId: rid }) }, st.tham_khao ? '⬇ Excel tham khảo' : '⬇ Excel (in/ký)'), h('button', { class: 'btn ghost', 'data-act': 'pdf', onclick: () => App.exportXlsx('export.statementPdf', { filter: f, reconBatchId: rid }) }, st.tham_khao ? '⬇ PDF tham khảo' : '⬇ PDF'))),
+          st.tham_khao ? h('p', { class: 'tag amber' }, 'Tham khảo · Phạm vi lọc có phiếu đã chốt. ',
+            h('button', { class: 'btn ghost sm', onclick: () => App.go('lock') }, 'Mở Lịch sử chốt kỳ')) : null,
+          st.ky_chot && !st.thong_tin_in ? h('p', { class: 'tag amber' }, 'Kỳ cũ: đối chiếu thông tin bên ký và hợp đồng với chứng từ gốc.') : null,
           st.so_chuyen_chua_tinh_gia ? h('p', { class: 'tag red' }, `${st.so_chuyen_chua_tinh_gia} chuyến chưa tính được giá — không có trong bảng kê`) : null,
           table({
             columns: [{ key: 'tuyen', label: 'Tuyến' }, { key: 'so_xe', label: 'Xe', fmt: 'int' }, { key: 'so_chuyen', label: 'Chuyến', fmt: 'int' }, { key: 'tong_tan', label: 'KL (tấn)', fmt: 'tan' },
