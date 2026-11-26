@@ -34,8 +34,10 @@ try {
     sheet.getRow(4).getCell(order.indexOf(0) + 1).numFmt = '00000';
     if (alternatives) {
       const alternate = book.addWorksheet('Cột đổi vị trí');
+      alternate.addRow(['PHIẾU CÂN TỔNG HỢP']);
       for (const row of rows) alternate.addRow([6, 5, 4, 3, 2, 1, 0].map((index) => row[index]));
       const missing = book.addWorksheet('Thiếu tiêu đề');
+      missing.addRow(['PHIẾU CÂN TỔNG HỢP']);
       rows.forEach((row, i) => missing.addRow(i === 1 ? [...row.slice(0, 6), 'Cột khác'] : row));
     }
     return { name: 'phieu-can-tong-hop.xlsx', mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', buffer: Buffer.from(await book.xlsx.writeBuffer()) };
