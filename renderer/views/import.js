@@ -52,9 +52,13 @@
             await loadSheet();
             S.step = 2; draw();
           } }, '📂 Chọn file…'), h('button', { class: 'btn ghost', onclick: () => importVehicles() }, '🚛 Import danh mục xe (sheet "Số xe")…')),
-          h('div', { class: 'row', style: { marginTop: '10px', paddingTop: '10px', borderTop: '1px dashed var(--line)' } }, h('span', { class: 'muted' }, 'Chưa có file? Tải file mẫu chuẩn rồi điền dữ liệu:'),
-            h('button', { class: 'btn ghost sm', 'data-act': 'tpl-tickets', onclick: () => App.exportXlsx('template.tickets', {}) }, '⬇ File mẫu phiếu cân'),
-            h('button', { class: 'btn ghost sm', 'data-act': 'tpl-vehicles', onclick: () => App.exportXlsx('template.vehicles', {}) }, '⬇ File mẫu danh sách xe'))));
+          h('div', { class: 'row', style: { marginTop: '12px', paddingTop: '12px', borderTop: '1px dashed var(--line)', flexWrap: 'wrap', gap: '8px', alignItems: 'center' } },
+            h('span', { class: 'muted', style: { fontWeight: '600' } }, '📥 Tải file mẫu chuẩn doanh nghiệp:'),
+            h('button', { class: 'btn ghost sm', 'data-act': 'tpl-tickets', onclick: () => App.exportXlsx('template.tickets', {}) }, '⬇ Mẫu Phiếu cân (chuẩn)'),
+            h('button', { class: 'btn ghost sm', 'data-act': 'tpl-vehicles', onclick: () => App.exportXlsx('template.vehicles', {}) }, '⬇ Mẫu Danh sách xe'),
+            h('button', { class: 'btn ghost sm', 'data-act': 'tpl-partner', onclick: () => App.exportXlsx('template.partner', {}) }, '⬇ Mẫu Bảng kê đối tác'),
+            h('button', { class: 'btn ghost sm', 'data-act': 'tpl-fuel', onclick: () => App.exportXlsx('template.fuel', {}) }, '⬇ Mẫu Giá dầu'),
+            h('button', { class: 'btn ghost sm', onclick: () => App.navigate('settings') }, '⚙ Quản lý mẫu Excel…'))));
       }
       const selectedTemplate = () => S.open?.templates.find((item) => item.id === S.templateId);
       const activeName = () => selectedTemplate()?.name || (S.strict ? 'Ghép thủ công' : 'Tự nhận diện');

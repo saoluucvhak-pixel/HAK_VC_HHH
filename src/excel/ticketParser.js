@@ -11,15 +11,28 @@ const { fold } = require('./columnMapping');
 const { weightProblem, DEFAULT_LIMITS } = require('../utils/weight');
 
 function parseClock(value) {
-  if (typeof value === 'number' && value >= 0 && value < 1) {
-    const seconds = Math.round(value * 86400);
-    if (seconds >= 86400) return null;
+  if (value === null || value === undefined || value === '') return null;
+  if (typeof value === 'number' && value >= 0) {
+    const fraction = value < 1 ? value : (value - Math.floor(value));
+    const seconds = Math.round(fraction * 86400);
+    if (seconds >= 86400) return '00:00:00';
     return [Math.floor(seconds / 3600), Math.floor(seconds / 60) % 60, seconds % 60]
       .map((part) => String(part).padStart(2, '0')).join(':');
   }
-  const match = String(value ?? '').trim().match(/^(\d{1,2}):(\d{2})(?::(\d{2}))?$/);
+  let s = String(value).trim();
+  if (!s) return null;
+  // Hỗ trợ định dạng thời gian Việt Nam: 8h30, 08h30p, 8g30
+  s = s.replace(/^(\d{1,2})[hHgGpP](\d{1,2})(?:[mMpPsS](\d{1,2}))?$/, (_, h, m, sec) => `${h}:${m}${sec ? ':' + sec : ''}`);
+  const match = s.match(/^(\d{1,2}):(\d{2})(?::(\d{2}))?(?:\s*(AM|PM))?$/i);
   if (!match) return null;
-  return parseDateTime(`01/01/2000 ${match[0]}`)?.slice(11) ?? null;
+  let h = parseInt(match[1], 10);
+  const m = match[2];
+  const sec = match[3] || '00';
+  const ampm = match[4]?.toUpperCase();
+  if (ampm === 'PM' && h < 12) h += 12;
+  if (ampm === 'AM' && h === 12) h = 0;
+  if (h > 23) return null;
+  return `${String(h).padStart(2, '0')}:${m}:${sec}`;
 }
 
 /**

@@ -20,8 +20,9 @@
       ['can_lan_1', 'Cân lần 1 (kg)'], ['can_lan_2', 'Cân lần 2 (kg)'],
     ].filter(([key]) => sample.some((row) => row[key] != null))
       .map(([key, label]) => ({ key, label, num: true, render: (row) => fmt.kgDecimal(row[key]) }));
+    const hasCan2 = sample.some((row) => row.ngay_gio_can_2);
     return h('div', { 'data-template-trial': '1' },
-      h('h3', {}, 'Kết quả đọc thử'),
+      h('h3', {}, 'Kết quả đọc thử & Ghép dữ liệu'),
       h('p', { class: 'chk ' + (summary.dong_loi ? 'warn' : 'ok') },
         `${fmt.int(summary.tong_dong)} phiếu · ${kg(readKg)} · ${fmt.int(summary.dong_loi)} dòng có lỗi`),
       totalRow && h('p', { class: deltaKg ? 'chk warn' : 'muted' }, fileKg === null
@@ -32,7 +33,9 @@
         `${reason.text} · ${reason.so_dong} dòng, bắt đầu tại dòng Excel ${reason.dong_dau}`))),
       sample.length > 0 && table({ columns: [
         { key: 'source_row', label: 'Dòng Excel', num: true }, { key: 'so_phieu', label: 'Số phiếu', mono: true },
-        { key: 'ngay_gio_can_1', label: 'Ngày giờ cân 1', fmt: 'dt' }, { key: 'bien_so', label: 'Biển số' },
+        { key: 'ngay_gio_can_1', label: 'Ngày giờ cân 1', fmt: 'dt' },
+        ...(hasCan2 ? [{ key: 'ngay_gio_can_2', label: 'Ngày giờ cân 2', fmt: 'dt' }] : []),
+        { key: 'bien_so', label: 'Biển số' },
         { key: 'kl_hang_kg', label: 'KL (kg)', num: true, render: (row) => fmt.kgDecimal(row.kl_hang_kg) },
         ...weights, { key: 'noi_xuat_goc', label: 'Kho' },
         ...(sample.some((row) => row.cong_ty_vc_nguon) ? [{ key: 'cong_ty_vc_nguon', label: 'Đơn vị vận chuyển' }] : []),
@@ -91,10 +94,16 @@
     };
     function draw() {
       const defaultName = config.templates.find((item) => item.id === config.defaultId)?.name || 'Tự nhận diện';
-      App.clear(root).append(h('h3', {}, 'Mẫu nhập Excel'),
+      App.clear(root).append(h('h3', {}, 'Mẫu nhập Excel Doanh nghiệp'),
+        h('p', { class: 'muted', style: { marginBottom: '8px' } }, 'Tạo mẫu Excel cho phép tùy biến tên cột, vị trí cột và định dạng theo mẫu của đối tác/nhà cung cấp. Điền dữ liệu vào file mẫu rồi tải lên tại màn hình Import.'),
         h('p', { 'data-template-default': '1' }, 'Mặc định khi nhập phiếu cân ', h('strong', { class: 'tag green' }, defaultName)),
-        h('div', { class: 'row gap-s' }, btn('Tạo mẫu', lock(() => edit(null)), { 'data-template-new': '1' }),
-          config.defaultId && btn('Dùng Tự nhận diện', lock(() => act({ action: 'default', id: null })))),
+        h('div', { class: 'row gap-s', style: { flexWrap: 'wrap', marginBottom: '12px' } },
+          btn('➕ Tạo mẫu mới', lock(() => edit(null)), { class: 'btn sm', 'data-template-new': '1' }),
+          config.defaultId && btn('Dùng Tự nhận diện', lock(() => act({ action: 'default', id: null }))),
+          btn('⬇ Tải Mẫu Phiếu cân chuẩn', () => App.exportXlsx('template.tickets', {})),
+          btn('⬇ Mẫu Danh sách xe', () => App.exportXlsx('template.vehicles', {})),
+          btn('⬇ Mẫu Bảng kê đối tác', () => App.exportXlsx('template.partner', {})),
+          btn('⬇ Mẫu Giá dầu', () => App.exportXlsx('template.fuel', {}))),
         config.templates.length ? table({ columns: [
           { key: 'name', label: 'Tên mẫu' },
           { key: 'id', label: 'Trạng thái', render: (item) => item.id === config.defaultId ? h('span', { class: 'tag green' }, 'Mặc định') : '' },
@@ -160,22 +169,37 @@
       editor.append(section('1. Chọn tệp và tiêu đề', source, ...(sheetFields ? [sheetFields] : [])));
       if (info) {
         const headerText = (key) => info.headers.find((column) => column.index === mapping[key])?.text || '—';
+        const sampleValue = (key) => {
+          const idx = mapping[key];
+          if (idx == null || !info.sample?.[0]) return '—';
+          const val = info.sample[0][idx];
+          return val != null ? String(val) : '—';
+        };
         const mappingTable = h('div', { class: 'excel-template-table' }, h('table', { class: 't' },
-          h('thead', {}, h('tr', {}, ['Trường phiếu cân', 'Cột nguồn trong Excel', 'Tiêu đề lưu theo mẫu'].map((label) => h('th', { scope: 'col' }, label)))),
+          h('thead', {}, h('tr', {}, ['Trường phiếu cân', 'Cột nguồn trong Excel', 'Tiêu đề lưu theo mẫu', 'Mẫu dòng 1'].map((label) => h('th', { scope: 'col' }, label)))),
           h('tbody', {}, FIELDS.map(([key, label]) => {
             const chosen = h('td', { 'data-template-heading': key }, headerText(key));
+            const sampleCell = h('td', { class: 'muted mono sm' }, sampleValue(key));
             const select = h('select', { 'aria-label': label, 'data-template-map': key, onchange: (event) => {
               if (event.target.value === '') delete mapping[key]; else mapping[key] = Number(event.target.value);
               chosen.textContent = headerText(key);
+              sampleCell.textContent = sampleValue(key);
               updateSave();
             } }, option('', '— bỏ qua —', mapping[key] == null), info.headers.filter((col) => col.text)
               .map((col) => option(col.index, `${col.index + 1}. ${col.text}`, mapping[key] === col.index)));
-            return h('tr', {}, h('th', { scope: 'row' }, label), h('td', {}, select), chosen);
+            return h('tr', {}, h('th', { scope: 'row' }, label), h('td', {}, select), chosen, sampleCell);
           }))));
-        editor.append(section('2. Ghép cột', h('div', { class: 'form-grid' }, field('Tên mẫu', name),
-          field('Đơn vị dự phòng', h('select', { onchange: (event) => { draft.fallbackUnit = event.target.value; updateSave(); } }, units(draft.fallbackUnit)))),
-          h('p', { class: 'muted' }, 'Ghép biển số, ngày giờ cân 1 và KL hàng hoặc cả hai cột trọng lượng. Bỏ qua số phiếu để ứng dụng tạo mã.'),
-          h('p', { class: 'muted' }, 'Nếu Excel tách ngày và giờ, chọn cột ngày ở Ngày giờ cân và cột giờ ở Giờ cân (cột riêng) của cùng lần cân. Đọc thử sẽ hiển thị một giá trị ngày giờ, ví dụ 05/10/2026 23:30.'),
+        const helpBox = h('div', { class: 'card-subtle', style: { padding: '10px 14px', marginBottom: '10px', background: 'var(--zebra)', borderLeft: '3px solid var(--brand)', fontSize: '13px' } },
+          h('strong', { style: { color: 'var(--brand)' } }, '💡 Hướng dẫn ghép trường ngày giờ & khối lượng:'),
+          h('ul', { style: { margin: '4px 0 0', paddingLeft: '18px', lineHeight: '1.5' } },
+            h('li', {}, h('b', {}, 'Ngày giờ cân: '), 'Nếu file có cột chung ngày giờ (VD: 05/10/2026 08:30), chọn ở ', h('em', {}, 'Ngày giờ cân 1'), '. Nếu tách riêng 2 cột (ngày riêng, giờ riêng), hãy chọn cột ngày ở ', h('em', {}, 'Ngày giờ cân 1'), ' và cột giờ ở ', h('em', {}, 'Giờ cân 1 (cột riêng)'), '. Phần mềm tự động ghép chuẩn.'),
+            h('li', {}, h('b', {}, 'Khối lượng: '), 'Ghép vào ', h('em', {}, 'KL hàng'), '; hoặc ghép cả ', h('em', {}, 'Cân lần 1'), ' và ', h('em', {}, 'Cân lần 2'), ' để tự tính hiệu số.'),
+            h('li', {}, h('b', {}, 'Số phiếu & biển số: '), 'Bắt buộc ghép Biển số. Số phiếu nếu bỏ qua sẽ được tự động cấp mã duy nhất.')
+          )
+        );
+        editor.append(section('2. Ghép cột',
+          h('div', { class: 'form-grid' }, field('Tên mẫu', name), field('Đơn vị dự phòng', h('select', { onchange: (event) => { draft.fallbackUnit = event.target.value; updateSave(); } }, units(draft.fallbackUnit)))),
+          helpBox,
           mappingTable));
         editor.append(section('3. Đọc thử và đối chiếu', btn('Đọc thử', lock(async () => {
           result = await call('import.check', { token: opened.token, sheetName: sheet, draft: { ...draftConfig(), name: draft.name.trim() || 'Mẫu đang sửa' } });

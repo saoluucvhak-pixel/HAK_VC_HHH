@@ -1,4 +1,13 @@
-# VC Cost 0.8.9 — schema SQLite 9
+# VC Cost 0.8.10 — schema SQLite 9
+
+- **Nâng cấp Bộ Biểu Mẫu Doanh Nghiệp (Corporate Grade)**: Đồng bộ cả 4 file mẫu chuẩn (Phiếu cân `BM-01`, Danh sách xe `BM-02`, Bảng kê đối tác `BM-03`, Giá dầu `BM-04`) và mẫu tùy chỉnh theo palette Navy `#1F4E79` & Header Dark `#143452`. Cài đặt Sheet Protection bảo vệ ô công thức và tiêu đề, mở khóa vùng nhập liệu cho người dùng.
+- **Xử lý ngày giờ linh hoạt**: Tự động ghép ngày và giờ khi nằm ở 2 cột riêng, hỗ trợ mọi định dạng văn bản (tiếng Việt `8h30`, `08h30p`, số thập phân ngày `0.5`, `1:30 PM`), kiểm tra chống xung đột thời gian.
+- **Trực quan hóa màn hình Tạo mẫu Excel**: Bảng ghép cột hiển thị ngay dữ liệu mẫu thực tế của dòng 1 khi chọn cột nguồn, có hướng dẫn ghép ngày giờ chi tiết và xem trước ngày giờ đã ghép tại bước Đọc thử & đối chiếu.
+- **Tải mẫu nhanh**: Tích hợp các nút tải mẫu chuẩn Doanh nghiệp trực tiếp tại màn hình Import và quản lý mẫu.
+
+Cài đặt và nâng cấp: Xuất bản sao lưu ra ổ khác rồi đóng VC Cost trước khi chạy Setup. Schema vẫn là 9. Bộ cài chưa ký số. Kiểm tra SHA-256 trước khi chạy.
+
+## VC Cost 0.8.9 — schema SQLite 9
 
 - **Cài đặt → Mẫu nhập Excel → Tạo mẫu** trình bày thành ba bước. Bảng ghép cột hiển thị trường phiếu cân, cột nguồn và tiêu đề lưu theo mẫu.
 - Phiếu cân và xem trước import dùng tiêu đề **Ngày giờ cân 1/2**. Tệp có ngày và giờ ở hai cột có thể ghép thành một giá trị datetime cho mỗi lần cân.

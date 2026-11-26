@@ -1,5 +1,12 @@
 # CHANGELOG
 
+## 0.8.10 — biểu mẫu Excel Doanh nghiệp và xử lý ngày giờ linh hoạt (schema 9)
+- **Biểu mẫu Doanh nghiệp chuẩn**: Thiết kế chuẩn Corporate Palette (Navy `#1F4E79`, Header Dark `#143452`), tích hợp mã biểu mẫu ISO (`BM-01` đến `BM-04`), thanh Legend Badge 3 màu trực quan, sheet Hướng dẫn chi tiết và liên kết Dropdown CSDL danh mục ACTIVE.
+- **Bảo vệ bảng tính (Sheet Protection)**: Khóa cứng tiêu đề và ô công thức tự tính (`=ABS(Cân1-Cân2)`, `=ROUND(KL*Đơn giá/1000, 0)`), mở khóa toàn bộ vùng nhập liệu cho người dùng.
+- **Xử lý ngày giờ chuyên nghiệp**: Nâng cấp bộ phân tích `parseClock` và `weighTime` hỗ trợ đầy đủ các định dạng giờ thực tế (chuỗi tiếng Việt `8h30`, `08h30p`, `8g30`, định dạng 12h `AM/PM`, số thập phân ngày Excel `0.5`), tự động ghép mốc thời gian chuẩn xác khi ngày và giờ nằm ở 2 cột riêng.
+- **Trải nghiệm màn hình Tạo mẫu Excel**: Bổ sung hướng dẫn ghép trường ngày giờ & khối lượng, cột xem trước dữ liệu mẫu thực tế của dòng 1 ngay khi chọn cột nguồn, và hiển thị rõ ngày giờ đã ghép tại bước Đọc thử & đối chiếu.
+- **Thanh tải mẫu chuẩn nhanh**: Thêm thanh công cụ tải 4 file mẫu chuẩn Doanh nghiệp (Phiếu cân, Danh mục xe, Bảng kê đối tác, Giá dầu) tại màn hình Import và quản lý mẫu.
+
 ## 0.8.9 — giao diện tạo mẫu Excel và ghép ngày giờ cân (schema 9)
 - Chia trình tạo mẫu thành chọn tệp và tiêu đề, bảng ghép cột, đọc thử và đối chiếu.
 - Đồng bộ tiêu đề ngày giờ cân và hỗ trợ tệp có ngày, giờ ở hai cột riêng.
