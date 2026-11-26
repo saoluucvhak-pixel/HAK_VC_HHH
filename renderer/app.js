@@ -72,6 +72,7 @@ const App = (() => {
     money: (v) => num(v, 0),
     money2: (v) => num(v, 2),
     kg: (v) => num(v, 0),
+    kgDecimal: (v) => num(v, 0, 3),
     tan: (v) => num(v, 3),
     pct: (v) => (blank(v) ? '' : num(v, 0, 2) + '%'),
     date: (v) => (v ? `${String(v).slice(8, 10)}/${String(v).slice(5, 7)}/${String(v).slice(0, 4)}` : ''),
@@ -128,13 +129,15 @@ const App = (() => {
     if (window.vcApi && window.vcApi.isElectron) return window.vcApi.openFile({}).then((p) => (p ? { filePath: p } : null));
     return new Promise((resolve) => {
       const inp = h('input', { type: 'file', accept, style: { display: 'none' } });
+      inp.addEventListener('cancel', () => { inp.remove(); resolve(null); });
       inp.addEventListener('change', () => {
-        const f = inp.files[0]; if (!f) return resolve(null);
+        const f = inp.files[0]; inp.remove(); if (!f) return resolve(null);
         const rd = new FileReader();
         rd.onload = () => resolve({ base64: String(rd.result).split(',')[1], fileName: f.name });
+        rd.onerror = () => { toast('Không đọc được file đã chọn', true); resolve(null); };
         rd.readAsDataURL(f);
       });
-      document.body.append(inp); inp.click(); setTimeout(() => inp.remove(), 60000);
+      document.body.append(inp); inp.click();
     });
   }
 

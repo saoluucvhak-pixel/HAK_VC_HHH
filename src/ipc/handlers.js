@@ -163,9 +163,11 @@ function createHandlers(app, env = {}) {
     'catalog.remove': ({ table, id }) => app.catalog.remove(table, id),
 
     // ---------------- import phiếu cân
-    'import.open': ({ filePath, base64, fileName }) => app.imports.open(base64 ? { buffer: Buffer.from(base64, 'base64'), fileName } : { filePath }),
+    'import.templates.update': (options) => app.imports.updateTemplate(options),
+    'import.open': ({ filePath, base64, fileName, sample }) => app.imports.open({ filePath, buffer: base64 ? Buffer.from(base64, 'base64') : null, fileName, sample }),
+    'import.batchRead': ({ batchId, filePath, base64, fileName }) => app.imports.readBatch(batchId, { filePath, buffer: base64 ? Buffer.from(base64, 'base64') : null, fileName }),
     'import.check': ({ token, ...o }) => app.imports.check(token, o),
-    'import.sheetInfo': ({ token, sheetName, headerRow }) => app.imports.sheetInfo(token, sheetName, headerRow),
+    'import.sheetInfo': ({ token, sheetName, headerRow, ...options }) => app.imports.sheetInfo(token, sheetName, headerRow, options),
     'import.preview': ({ token, ...o }) => app.imports.preview(token, o),
     'import.previewRows': ({ token, ...o }) => app.imports.previewRows(token, o),
     'import.commit': ({ token, ...o }) => {

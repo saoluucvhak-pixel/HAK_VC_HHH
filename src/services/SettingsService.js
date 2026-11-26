@@ -1,4 +1,5 @@
 'use strict';
+const { validateTemplate } = require('../excel/importTemplate');
 const { ValidationError } = require('./CatalogService');
 
 const isObj = (v) => v !== null && typeof v === 'object' && !Array.isArray(v);
@@ -11,6 +12,17 @@ const need = (cond, msg) => { if (!cond) throw new ValidationError(msg); };
  * (Trước đây nhận mọi khóa/giá trị: vd số bản sao lưu giữ lại = "abc" làm xóa sạch bản sao lưu tự động, làm tròn NaN → bỏ làm tròn âm thầm.)
  */
 const VALIDATORS = {
+  excel_import_templates(value) {
+    need(isObj(value) && Array.isArray(value.templates), 'Danh sách mẫu nhập không hợp lệ');
+    for (const item of value.templates) {
+      need(isObj(item) && typeof item.id === 'string' && /^[0-9a-f-]{36}$/.test(item.id), 'Mã mẫu nhập không hợp lệ');
+      validateTemplate(item);
+      need(Object.keys(item).length === 6, 'Mẫu nhập chỉ lưu cấu hình đọc Excel');
+    }
+    const ids = new Set(value.templates.map((item) => item.id));
+    need(ids.size === value.templates.length && (value.defaultId === null || ids.has(value.defaultId)), 'Mẫu mặc định không hợp lệ');
+    need(Object.keys(value).length === 2, 'Danh sách mẫu có dữ liệu thừa');
+  },
   duyet_phieu(v) {
     need(isObj(v) && typeof v.bat === 'boolean', 'Duyệt phiếu: bat phải là true/false');
     need(v.cho_tu_duyet === undefined || typeof v.cho_tu_duyet === 'boolean', 'Duyệt phiếu: cho_tu_duyet phải là true/false');

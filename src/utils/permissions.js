@@ -16,11 +16,11 @@ const BY_PERM = {
     'export.statementPdf', 'export.report', 'export.reportPdf', 'export.timeline', 'export.priceSheet', 'export.priceSheetPdf', 'export.tauSummary', 'export.tauSummaryPdf', 'export.detail',
     'export.detailPdf', 'forms.preview', 'export.recon', 'backup.list', 'backup.exportStatus', 'system.integrity', 'auth.me', 'auth.logout', 'auth.changePassword'],
   nhap: ['cost.recalc', 'alerts.setStatus', 'catalog.create', 'catalog.update', 'catalog.remove', 'import.open', 'import.check', 'import.sheetInfo', 'import.preview', 'import.previewRows',
-    'import.commit', 'import.issuesXlsx', 'import.cancel', 'vehicles.importPreview', 'vehicles.importCommit', 'tickets.update', 'tickets.remove', 'recon.open', 'recon.sheetInfo', 'recon.run',
+    'import.batchRead', 'import.commit', 'import.issuesXlsx', 'import.cancel', 'vehicles.importPreview', 'vehicles.importCommit', 'tickets.update', 'tickets.remove', 'recon.open', 'recon.sheetInfo', 'recon.run',
     'price.previewFuel', 'price.createFuelPeriod', 'backup.now'],
   duyet: ['tickets.approve', 'import.resolve', 'import.resolveMany', 'import.undo', 'lock.create', 'lock.unlock', 'recon.resolve', 'recon.weight', 'price.approveFuel', 'price.removeFuelPeriod', 'price.remove',
     'price.createVersion', 'price.applySheet', 'fuel.importPreview', 'fuel.importCommit'],
-  admin: ['backup.export', 'settings.set', 'seed.loadSample', 'initial.load', 'backup.restore', 'auth.disable', 'auth.users', 'auth.createUser', 'auth.updateUser', 'auth.resetPassword'],
+  admin: ['backup.export', 'settings.set', 'import.templates.update', 'seed.loadSample', 'initial.load', 'backup.restore', 'auth.disable', 'auth.users', 'auth.createUser', 'auth.updateUser', 'auth.resetPassword'],
 };
 const CHANNEL_PERM = new Map();
 for (const [perm, list] of Object.entries(BY_PERM)) for (const c of list) CHANNEL_PERM.set(c, perm);

@@ -8,6 +8,7 @@ const { assertOpenForTickets } = require('./ChotKyService');
 const crypto = require('crypto');
 const { readWorkbook } = require('../excel/workbookReader');
 const { detectHeader, fold } = require('../excel/columnMapping');
+const { FIELDS, requiredFields, headersAt, resolveColumns, suggestColumns, validateTemplate } = require('../excel/importTemplate');
 const { parseTickets } = require('../excel/ticketParser');
 const { limitsFrom, weightProblem } = require('../utils/weight');
 const { duyetBat } = require('../utils/duyet');
@@ -40,31 +41,113 @@ class TicketImportService {
     for (const [k, v] of this.previews) if (now - (v.createdAt || 0) > this.previewTtlMs) this.previews.delete(k);
   }
 
-  /** Bước 1: đọc file, liệt kê sheet, gợi ý sheet có header tốt nhất. */
-  async open({ filePath, buffer, fileName }) {
+  templates() { return this.settings.get('excel_import_templates', { defaultId: null, templates: [] }); }
+
+  updateTemplate({ action, id, template }) {
+    return this.db.tx(() => {
+      const current = this.templates();
+      const index = current.templates.findIndex((item) => item.id === id);
+      if ((action === 'delete' || id != null) && index < 0) throw new ValidationError('Mẫu không còn tồn tại');
+      if (action === 'save') {
+        const value = validateTemplate(template);
+        if (current.templates.some((item) => item.id !== id && fold(item.name) === fold(value.name))) throw new ValidationError('Tên mẫu đã tồn tại');
+        if (index < 0) current.templates.push({ id: crypto.randomUUID(), ...value });
+        else current.templates[index] = { id, ...value };
+      } else if (action === 'delete') {
+        current.templates.splice(index, 1);
+        if (id === current.defaultId) current.defaultId = null;
+      } else if (action === 'default') current.defaultId = id ?? null;
+      else throw new ValidationError('Thao tác với mẫu không hợp lệ');
+      this.settings.set('excel_import_templates', current);
+      return current;
+    });
+  }
+
+  /** Bước 1: đọc file, liệt kê sheet, gợi ý sheet theo cách đọc mặc định. */
+  async open({ filePath, buffer, fileName, sample = false, templateId }) {
     const wb = await readWorkbook({ filePath, buffer, fileName });
-    const scored = wb.sheets.map((s) => ({ ...s, header: detectHeader(wb.aoa(s.name)) }));
-    const best = scored.reduce((a, b) => (b.header.score > (a ? a.header.score : -1) ? b : a), null);
-    const prev = this.db.get(`SELECT id, import_time FROM import_batch WHERE file_hash=? AND trang_thai='COMMITTED' ORDER BY id DESC LIMIT 1`, [wb.hash]);
+    const config = sample ? { defaultId: null, templates: [] } : this.templates();
+    const template = config.templates.find((item) => item.id === (templateId === undefined ? config.defaultId : templateId));
+    const scored = wb.sheets.map((s) => {
+      const aoa = wb.aoa(s.name);
+      const header = detectHeader(aoa);
+      const fit = template ? resolveColumns(headersAt(aoa, template.headerRow, template.headerRows, (index) => wb.header(s.name, index)), template.columns) : null;
+      return { ...s, header, fit: fit ? Object.keys(fit.mapping).length : header.score };
+    });
+    const best = scored.reduce((a, b) => (!a || b.fit > a.fit ? b : a), null);
+    const prev = !sample && this.db.get(`SELECT id, import_time FROM import_batch WHERE file_hash=? AND trang_thai='COMMITTED' ORDER BY id DESC LIMIT 1`, [wb.hash]);
     const token = crypto.randomUUID();
     this._prune();
-    this.previews.set(token, { wb, stage: 'opened', createdAt: Date.now() });
+    this.previews.set(token, { wb, config, sample, stage: 'opened', createdAt: Date.now() });
     return {
       token, fileName: wb.fileName, hash: wb.hash, size: wb.size,
       sheets: scored.map((s) => ({ name: s.name, rows: s.rows, cols: s.cols, headerRow: s.header.headerRow, score: s.header.score })),
-      suggestedSheet: best ? best.name : null,
+      suggestedSheet: best ? best.name : null, ...config,
       previouslyImported: prev ? { batchId: prev.id, at: prev.import_time } : null,
     };
   }
 
-  /** Bước 2: header + mapping của 1 sheet (để người dùng sửa). */
-  sheetInfo(token, sheetName, headerRow = null) {
+  _template(p, id = p.config.defaultId) {
+    if (id == null) return null;
+    const result = p.config.templates.find((item) => item.id === id);
+    if (!result) throw new ValidationError('Mẫu không có trong phiên nhập, hãy mở lại file');
+    return result;
+  }
+
+  /** Bước 2: tên cột và cách ghép của sheet, hoặc gợi ý để sửa thủ công. */
+  sheetInfo(token, sheetName, headerRow = null, { templateId, headerRows = 1 } = {}) {
     const p = this._p(token);
     const aoa = p.wb.aoa(sheetName);
-    const det = detectHeader(aoa);
-    const hr = headerRow === null || headerRow === undefined ? det.headerRow : Number(headerRow);
-    const mapping = headerRow === null || headerRow === undefined ? det.mapping : detectHeader([aoa[hr] || []]).mapping;
-    return { sheetName, headerRow: hr, headers: (aoa[hr] || []).map((h, i) => ({ index: i, text: h == null ? '' : String(h) })), mapping, sample: aoa.slice(hr + 1, hr + 6) };
+    const template = this._template(p, templateId);
+    const hr = template ? template.headerRow : headerRow ?? detectHeader(aoa).headerRow;
+    const depth = template ? template.headerRows : headerRows;
+    const titles = headersAt(aoa, hr, depth, (index) => p.wb.header(sheetName, index));
+    const { mapping, problems } = template ? resolveColumns(titles, template.columns) : { mapping: suggestColumns(titles), problems: [] };
+    return { sheetName, headerRow: hr, headerRows: depth, headers: titles.map((text, index) => ({ index, text })), mapping, problems, sample: aoa.slice(hr + 1, hr + 6) };
+  }
+
+  _read(p, { sheetName, headerRow, headerRows = 1, mapping, templateId, draft, fallbackUnit = '', strict = false, readAfterTotal = false }) {
+    const template = draft ? validateTemplate(draft) : this._template(p, templateId);
+    if (template) {
+      ({ headerRow, headerRows, fallbackUnit } = template);
+      strict = true;
+    }
+    const aoa = p.wb.aoa(sheetName);
+    const hr = Number(headerRow);
+    const titles = headersAt(aoa, hr, headerRows, (index) => p.wb.header(sheetName, index));
+    const resolved = template ? resolveColumns(titles, template.columns) : { mapping: mapping || {}, problems: [] };
+    const m = { ...resolved.mapping };
+    const problems = [...resolved.problems];
+    const error = (text, field = null) => problems.push({ level: 'error', field, text });
+    if (![1, 2].includes(headerRows) || !Number.isInteger(hr) || hr < headerRows - 1 || hr >= aoa.length) error('Dòng tiêu đề nằm ngoài sheet đã chọn');
+    if (!['', 'kg', 't'].includes(fallbackUnit)) error('Đơn vị dự phòng phải là kg hoặc tấn');
+    for (const field of requiredFields(m, strict)) {
+      if (problems.some((problem) => problem.field === field)) continue;
+      error(field === 'kl_hang_kg' ? 'Cần cột "KL hàng" hoặc ghép cả "Cân lần 1" và "Cân lần 2" để tự tính KL'
+        : `Chưa ghép cột "${FIELDS[field]}" (bắt buộc)`, field);
+    }
+    const byCol = new Map();
+    for (const [field, index] of Object.entries(m)) {
+      if (index == null) continue;
+      if (!Object.hasOwn(FIELDS, field) || !Number.isInteger(Number(index)) || index < 0 || index >= titles.length) {
+        error(`Cột đã ghép của "${FIELDS[field] || field}" không hợp lệ`, field);
+        continue;
+      }
+      if (byCol.has(Number(index))) error(`Cột ${Number(index) + 1} đang được gán cho nhiều trường: ${byCol.get(Number(index))}, ${field}`, field);
+      byCol.set(Number(index), field);
+    }
+    let rows = [];
+    if (!problems.some((problem) => problem.level === 'error')) {
+      rows = parseTickets(aoa, hr, m, { weightLimits: limitsFrom(this.settings), readAfterTotal, strict, fallbackUnit, headers: titles, codeReader: p.wb.codeReader(sheetName) });
+      const unitErrors = rows.filter((row) => row.errors.some((message) => message.startsWith('INVALID_UNIT:')));
+      if (unitErrors.length) error(`${unitErrors.length} dòng có đơn vị không xác định. Dòng Excel ${unitErrors[0].source_row}: ${unitErrors[0].errors.find((message) => message.startsWith('INVALID_UNIT:')).slice(14)}`, 'weight_unit');
+      if (strict && !rows.length) error('Không tìm thấy dòng phiếu cân dưới tiêu đề đã chọn');
+      else if (strict && !unitErrors.length && rows.every((row) => row.errors.length)) error('Chưa có dòng phiếu cân hợp lệ. Kiểm tra lại cách ghép cột và đơn vị');
+    }
+    const readConfig = { version: 1, name: template?.name ?? (strict ? 'Ghép thủ công' : 'Tự nhận diện'), templateId: template?.id ?? null,
+      sheetName, headerRow: hr, headerRows, columns: template?.columns ?? Object.fromEntries([...byCol].map(([index, field]) => [field, titles[index]])),
+      mapping: m, strict, fallbackUnit, readAfterTotal };
+    return { problems, rows, readConfig };
   }
 
   /**
@@ -72,24 +155,14 @@ class TicketImportService {
    * tóm tắt lỗi cả sheet theo lý do, và đọc thử vài dòng đầu (ngày giờ, biển số chuẩn hóa, KL, nơi xuất nhận ra) để người dùng thấy ngay máy hiểu gì.
    * Chỉ đọc — không ghi DB, không đổi trạng thái phiên.
    */
-  check(token, { sheetName, headerRow, mapping, sampleSize = 8, readAfterTotal = false }) {
-    const p = this._p(token);
-    const m = mapping || {};
-    const has = (k) => m[k] !== undefined && m[k] !== null;
-    const problems = [];
-    const need = [['so_phieu', 'Số phiếu'], ['bien_so', 'Biển số'], ['ngay_gio_can_1', 'Ngày giờ cân 1']];
-    for (const [k, label] of need) if (!has(k)) problems.push({ level: 'error', field: k, text: `Chưa ghép cột "${label}" (bắt buộc)` });
-    if (!has('kl_hang_kg') && !(has('can_lan_1') && has('can_lan_2'))) problems.push({ level: 'error', field: 'kl_hang_kg', text: 'Cần cột "KL hàng" — hoặc ghép cả "Cân lần 1" và "Cân lần 2" để tự tính KL' });
-    if (!has('noi_xuat')) problems.push({ level: 'warning', field: 'noi_xuat', text: 'Chưa ghép "Nơi xuất": không xác định được tuyến và đơn giá, phiếu sẽ ở trạng thái chưa tính giá' });
-    if (!has('ngay_gio_can_2')) problems.push({ level: 'warning', field: 'ngay_gio_can_2', text: 'Chưa ghép "Ngày giờ cân 2": không kiểm tra được thời gian cân' });
-    const byCol = new Map();
-    for (const [k, idx] of Object.entries(m)) if (idx !== undefined && idx !== null) { if (!byCol.has(idx)) byCol.set(idx, []); byCol.get(idx).push(k); }
-    for (const [idx, ks] of byCol) if (ks.length > 1) problems.push({ level: 'error', field: ks[0], text: `Cột ${Number(idx) + 1} đang được gán cho nhiều trường: ${ks.join(', ')} — mỗi cột chỉ ghép cho một trường` });
+  check(token, { sampleSize = 8, ...options }) {
+    return this._check(this._p(token), options, sampleSize);
+  }
 
-    let rows = [];
-    if (!problems.some((x) => x.level === 'error')) {
-      try { rows = parseTickets(p.wb.aoa(sheetName), Number(headerRow), m, { weightLimits: limitsFrom(this.settings), readAfterTotal: !!readAfterTotal }); } catch (e) { problems.push({ level: 'error', field: null, text: `Không đọc được dữ liệu: ${e.message}` }); }
-    }
+  _check(p, options, sampleSize) {
+    const { problems, rows, readConfig } = this._read(p, options);
+    if (readConfig.mapping.noi_xuat == null) problems.push({ level: 'warning', field: 'noi_xuat', text: 'Chưa ghép "Nơi xuất": không xác định được tuyến và đơn giá, phiếu sẽ ở trạng thái chưa tính giá' });
+    if (readConfig.mapping.ngay_gio_can_2 == null) problems.push({ level: 'warning', field: 'ngay_gio_can_2', text: 'Chưa ghép "Ngày giờ cân 2": không kiểm tra được thời gian cân' });
     if (rows.ignoredBelowTotal && rows.ignoredBelowTotal.count) problems.push({ level: 'warning', field: null, text: `Còn ${rows.ignoredBelowTotal.count} dòng giống phiếu cân nằm DƯỚI dòng "Tổng cộng" (từ dòng ${rows.ignoredBelowTotal.first_row}) — hệ thống dừng đọc ở dòng Tổng cộng nên các dòng này CHƯA được nhập. File có nhiều khối? Tách/sửa file rồi nhập lại` });
     const reasons = new Map();
     for (const r of rows) for (const e of r.errors) {
@@ -102,9 +175,13 @@ class TicketImportService {
     const sample = rows.slice(0, sampleSize).map((r) => {
       const nx = alias.get(fold(r.noi_xuat)) || null;
       return { source_row: r.source_row, so_phieu: r.so_phieu, ngay_gio_can_1: r.ngay_gio_can_1, ngay_gio_can_2: r.ngay_gio_can_2, bien_so: r.bien_so, bien_so_goc: r.bien_so_goc,
-        kl_hang_kg: r.kl_hang_kg, noi_xuat_goc: r.noi_xuat, noi_xuat_nhan_dang: nx ? locs.get(nx) || null : null, errors: r.errors };
+        kl_hang_kg: r.kl_hang_kg, can_lan_1: r.can_lan_1, can_lan_2: r.can_lan_2, cong_ty_vc_nguon: r.cong_ty_vc_nguon, ghi_chu: r.ghi_chu, noi_xuat_goc: r.noi_xuat, noi_xuat_nhan_dang: nx ? locs.get(nx) || null : null, errors: r.errors };
     });
+    const readKg = Math.round(rows.reduce((sum, row) => sum + (Number(row.kl_hang_kg) || 0), 0) * 1000) / 1000;
+    const fileKg = rows.totalRow?.kl_hang_kg ?? null;
     return {
+      readConfig, readKg, fileKg, totalRow: rows.totalRow?.source_row ?? null,
+      deltaKg: fileKg === null ? null : Math.round((readKg - fileKg) * 1000) / 1000,
       problems, blocking: problems.some((x) => x.level === 'error'),
       summary: { tong_dong: rows.length, dong_loi: rows.filter((r) => r.errors.length).length, ly_do: [...reasons.values()].sort((a, b) => b.so_dong - a.so_dong).slice(0, 8) },
       sample,
@@ -119,14 +196,13 @@ class TicketImportService {
   }
 
   /** Bước 3: preview đầy đủ (parse, validate, phân loại trùng, tính thử). KHÔNG ghi DB. */
-  preview(token, { sheetName, headerRow, mapping, dotId = null, noiDenId = null, readAfterTotal = false }) {
+  preview(token, { dotId = null, noiDenId = null, ...options }) {
     const p = this._p(token);
-    if (!mapping || mapping.so_phieu === undefined || mapping.bien_so === undefined || (mapping.kl_hang_kg === undefined && (mapping.can_lan_1 === undefined || mapping.can_lan_2 === undefined))) {
-      throw new ValidationError('Mapping phải có: Số phiếu, Biển số, và KL hàng (hoặc Cân lần 1 + Cân lần 2)');
-    }
-    if (mapping.ngay_gio_can_1 === undefined) throw new ValidationError('Mapping phải có Ngày giờ cân 1');
-    const aoa = p.wb.aoa(sheetName);
-    const rows = parseTickets(aoa, Number(headerRow), mapping, { weightLimits: limitsFrom(this.settings), readAfterTotal: !!readAfterTotal });
+    if (p.sample || options.draft) throw new ValidationError('File mẫu chỉ dùng để đọc thử');
+    const { rows, problems, readConfig } = this._read(p, options);
+    const errors = problems.filter((problem) => problem.level === 'error');
+    if (errors.length) throw new ValidationError(`Mapping: ${errors.map((problem) => problem.text).join(' · ')}`);
+    const { sheetName, headerRow } = readConfig;
     const nd = noiDenId || this._defaultNoiDen(dotId);
 
     // trùng với DB
@@ -191,7 +267,7 @@ class TicketImportService {
       new_kg: Math.round(news.reduce((a, r) => a + (Number(r.kl_hang_kg) || 0), 0) * 1000) / 1000, new_truoc_vat: news.reduce((a, r) => a + (Number(r.tien_truoc_vat) || 0), 0) };
     totals.ignored_below_total = rows.ignoredBelowTotal ? rows.ignoredBelowTotal.count : 0; totals.ignored_first_row = rows.ignoredBelowTotal ? rows.ignoredBelowTotal.first_row : null;
     totals.lech_kg = totals.file_kg === null ? null : Math.round((totals.read_kg - totals.file_kg) * 1000) / 1000;
-    Object.assign(p, { stage: 'previewed', sheetName, headerRow: Number(headerRow), mapping, dotId, noiDenId: nd, rows: out, counts, totals });
+    Object.assign(p, { stage: 'previewed', sheetName, headerRow, readConfig, dotId, noiDenId: nd, rows: out, counts, totals });
     return { token, counts, totals, sheetName, headerRow: Number(headerRow), noiDenId: nd };
   }
 
@@ -241,11 +317,11 @@ class TicketImportService {
       const c = p.counts;
       const batchId = this.db.run(`INSERT INTO import_batch(loai, file_name, file_hash, sheet_name, header_row, mapping_json, total_rows, dot_van_chuyen_id, user_note)
                                    VALUES ('PHIEU_CAN',?,?,?,?,?,?,?,?)`,
-      [p.wb.fileName, p.wb.hash, p.sheetName, p.headerRow + 1, JSON.stringify(p.mapping), c.total, dot || null, note]).id;
+      [p.wb.fileName, p.wb.hash, p.sheetName, p.headerRow + 1, JSON.stringify(p.readConfig), c.total, dot || null, note]).id;
       let inserted = 0, dup = 0, conflict = 0, err = 0, pendingSkipped = 0;
       for (const r of p.rows) {
         const raw = JSON.stringify({ so_phieu: r.so_phieu, ngay_gio_can_1: r.ngay_gio_can_1, ngay_gio_can_2: r.ngay_gio_can_2, bien_so: r.bien_so_goc,
-          can_lan_1: r.can_lan_1, can_lan_2: r.can_lan_2, kl_hang_kg: r.kl_hang_kg, noi_xuat: r.noi_xuat, noi_den: r.noi_den, cong_ty_vc: r.cong_ty_vc_nguon });
+          can_lan_1: r.can_lan_1, can_lan_2: r.can_lan_2, kl_hang_kg: r.kl_hang_kg, noi_xuat: r.noi_xuat, noi_den: r.noi_den, cong_ty_vc: r.cong_ty_vc_nguon, ghi_chu: r.ghi_chu });
         if (r.phan_loai === 'NEW') {
           const current = this._parseRaw(JSON.parse(raw));
           if (current.errors.length) throw new ValidationError(`Phiếu ${r.so_phieu} không còn hợp lệ (${current.errors[0]}) — hãy xem trước lại`);
@@ -256,10 +332,10 @@ class TicketImportService {
           const sameLoc = r.noi_xuat_id ? this.db.get(`SELECT id FROM phieu_can WHERE trang_thai='ACTIVE' AND so_phieu=? AND noi_xuat_id=?`, [String(r.so_phieu ?? '').trim(), r.noi_xuat_id]) : null;
           if (sameLoc) throw new ValidationError(`Phiếu ${r.so_phieu} đã có (ghi nơi xuất bằng tên gọi khác) — hãy preview lại`);
           const id = this.db.run(`INSERT INTO phieu_can(so_phieu, ngay_gio_can_1, ngay_gio_can_2, bien_so_goc, bien_so, bien_so_chuan, can_lan_1, can_lan_2, kl_hang_kg,
-                                    noi_xuat_goc, noi_xuat_id, noi_den_id, cong_ty_vc_nguon, dot_van_chuyen_id, business_key, strong_key, fingerprint, import_batch_id, source_row, trang_thai_duyet, nhap_boi)
-                                  VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+                                    noi_xuat_goc, noi_xuat_id, noi_den_id, cong_ty_vc_nguon, dot_van_chuyen_id, business_key, strong_key, fingerprint, import_batch_id, source_row, trang_thai_duyet, nhap_boi, ghi_chu)
+                                  VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
           [r.so_phieu, r.ngay_gio_can_1, r.ngay_gio_can_2, r.bien_so_goc, r.bien_so, r.bien_so_chuan, r.can_lan_1, r.can_lan_2, r.kl_hang_kg,
-            r.noi_xuat, r.noi_xuat_id, nd, r.cong_ty_vc_nguon == null ? null : String(r.cong_ty_vc_nguon), dot || null, r.key, strongKey(r), r.fp, batchId, r.source_row, chuaDuyet ? 'NHAP' : 'DA_DUYET', this.audit.actor() || null]).id;
+            r.noi_xuat, r.noi_xuat_id, nd, r.cong_ty_vc_nguon == null ? null : String(r.cong_ty_vc_nguon), dot || null, r.key, strongKey(r), r.fp, batchId, r.source_row, chuaDuyet ? 'NHAP' : 'DA_DUYET', this.audit.actor() || null, r.ghi_chu]).id;
           this._row(batchId, r, 'NEW', 'INSERT', id, raw);
           inserted++;
         } else if (r.phan_loai === 'EXACT_DUPLICATE' || r.phan_loai === 'IN_FILE_DUPLICATE') {
@@ -327,6 +403,7 @@ class TicketImportService {
   }
 
   _p(token) {
+    this._prune();
     const p = this.previews.get(token);
     if (!p) throw new ValidationError('Phiên import đã hết hạn — hãy chọn lại file');
     return p;
@@ -421,12 +498,33 @@ class TicketImportService {
   // ------------------------------------------------------------- LỊCH SỬ & HOÀN TÁC
   listBatches() { return this.db.all(`SELECT * FROM import_batch ORDER BY id DESC`); }
 
+  batchConfig(batchId) {
+    const batch = this.db.get(`SELECT * FROM import_batch WHERE id=? AND loai='PHIEU_CAN'`, [batchId]);
+    if (!batch) throw new ValidationError('Lô phiếu cân không tồn tại');
+    const saved = JSON.parse(batch.mapping_json || 'null');
+    const readConfig = saved?.version === 1 ? saved : {
+      name: 'Cách ghép của lô cũ', sheetName: batch.sheet_name, headerRow: batch.header_row - 1,
+      headerRows: 1, mapping: saved, strict: false, fallbackUnit: '', readAfterTotal: false,
+    };
+    return { batch, readConfig };
+  }
+
+  async readBatch(batchId, file) {
+    const { batch, readConfig } = this.batchConfig(batchId);
+    if (!readConfig.mapping) throw new ValidationError('Lô này chưa có cấu hình đọc file');
+    const wb = await readWorkbook(file);
+    if (wb.hash !== batch.file_hash) throw new ValidationError('File đã chọn khác file nguồn của lô này');
+    return this._check({ wb, config: { defaultId: null, templates: [] } }, { ...readConfig, templateId: null }, 8);
+  }
+
   batchRows(batchId, { hanh_dong = null, offset = 0, limit = 500 } = {}) {
     const w = ['r.batch_id = ?']; const p = [batchId];
     if (hanh_dong) { w.push('r.hanh_dong = ?'); p.push(hanh_dong); }
     return {
       total: this.db.get(`SELECT COUNT(*) n FROM import_batch_row r WHERE ${w.join(' AND ')}`, p).n,
-      rows: this.db.all(`SELECT r.*, pc.so_phieu, pc.bien_so, pc.trang_thai AS trang_thai_phieu FROM import_batch_row r LEFT JOIN phieu_can pc ON pc.id=r.phieu_can_id
+      rows: this.db.all(`SELECT r.*, COALESCE(json_extract(r.raw_json, '$.so_phieu'), pc.so_phieu) so_phieu,
+                         COALESCE(json_extract(r.raw_json, '$.bien_so'), pc.bien_so) bien_so,
+                         pc.trang_thai AS trang_thai_phieu FROM import_batch_row r LEFT JOIN phieu_can pc ON pc.id=r.phieu_can_id
                          WHERE ${w.join(' AND ')} ORDER BY r.id LIMIT ${Number(limit)} OFFSET ${Number(offset)}`, p),
     };
   }
