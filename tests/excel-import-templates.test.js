@@ -157,3 +157,36 @@ test('tiêu đề gộp ngang gợi ý cả hai cột cân và nhận kg/tấn t
   assert.equal(result.readKg, 12500);
   app.db.close();
 });
+
+test('ngày và giờ riêng ghép từ ô Excel thật, lưu theo ngày của mỗi lần cân và chặn giờ thiếu', async () => {
+  const app = createApp({ dbFile: ':memory:', driver: 'node:sqlite' });
+  try {
+    const wb = new ExcelJS.Workbook();
+    const sheet = wb.addWorksheet('Phiếu cân');
+    const split = {
+      so_phieu: 'Số phiếu', bien_so: 'Biển số', ngay_gio_can_1: 'Ngày cân 1', gio_can_1: 'Giờ cân 1',
+      ngay_gio_can_2: 'Ngày cân 2', gio_can_2: 'Giờ cân 2', kl_hang_kg: 'KL hàng (kg)',
+    };
+    sheet.addRow(Object.values(split));
+    sheet.addRow(['P01', '92H-00903', new Date('2026-10-05T00:00:00Z'), 23.5 / 24,
+      '06/10/2026', '00:15:05', 15000]);
+    sheet.getCell('D2').numFmt = 'hh:mm';
+    sheet.addRow(['P02', '92H-00903', '06/10/2026', '07:30', '06/10/2026', null, 15000]);
+    const file = { fileName: 'split.xlsx', buffer: Buffer.from(await wb.xlsx.writeBuffer()) };
+    const open = await app.imports.open(file);
+    const info = app.imports.sheetInfo(open.token, 'Phiếu cân');
+    assert.equal(info.mapping.gio_can_1, 3);
+    assert.equal(info.mapping.gio_can_2, 5);
+    const templateId = saveDefault(app, { name: 'Ngày và giờ riêng', headerRow: 0, headerRows: 1, columns: split, fallbackUnit: 'kg' });
+    const args = { sheetName: 'Phiếu cân', draft: { name: 'Ngày và giờ riêng', headerRow: 0, headerRows: 1, columns: split, fallbackUnit: 'kg' } };
+    const check = app.imports.check(open.token, args);
+    assert.equal(check.sample[0].ngay_gio_can_1, '2026-10-05T23:30:00');
+    assert.match(check.sample[1].errors.join(' '), /ngày và giờ cân 2/);
+    const saved = await app.imports.open(file);
+    assert.equal(app.imports.preview(saved.token, { sheetName: 'Phiếu cân', templateId }).counts.new, 1);
+    app.imports.commit(saved.token);
+    assert.deepEqual(app.db.get("SELECT ngay_gio_can_1, ngay_gio_can_2 FROM phieu_can WHERE so_phieu='P01'"), {
+      ngay_gio_can_1: '2026-10-05T23:30:00', ngay_gio_can_2: '2026-10-06T00:15:05',
+    });
+  } finally { app.close(); }
+});

@@ -3,7 +3,7 @@
   const { h, fmt, table, call } = App;
   const FIELDS = [
     ['so_phieu', 'Số phiếu'], ['bien_so', 'Biển số *'], ['ngay_gio_can_1', 'Ngày giờ cân 1 *'],
-    ['ngay_gio_can_2', 'Ngày giờ cân 2'], ['kl_hang_kg', 'KL hàng'], ['can_lan_1', 'Cân lần 1'],
+    ['gio_can_1', 'Giờ cân 1 (cột riêng)'], ['ngay_gio_can_2', 'Ngày giờ cân 2'], ['gio_can_2', 'Giờ cân 2 (cột riêng)'], ['kl_hang_kg', 'KL hàng'], ['can_lan_1', 'Cân lần 1'],
     ['can_lan_2', 'Cân lần 2'], ['weight_unit', 'Đơn vị khối lượng'], ['noi_xuat', 'Kho / nơi xuất'],
     ['noi_den', 'Nơi đến'], ['cong_ty_vc', 'Đơn vị vận chuyển (nguồn)'], ['ghi_chu', 'Ghi chú'],
   ];
@@ -32,7 +32,7 @@
         `${reason.text} · ${reason.so_dong} dòng, bắt đầu tại dòng Excel ${reason.dong_dau}`))),
       sample.length > 0 && table({ columns: [
         { key: 'source_row', label: 'Dòng Excel', num: true }, { key: 'so_phieu', label: 'Số phiếu', mono: true },
-        { key: 'ngay_gio_can_1', label: 'Ngày giờ cân', fmt: 'dt' }, { key: 'bien_so', label: 'Biển số' },
+        { key: 'ngay_gio_can_1', label: 'Ngày giờ cân 1', fmt: 'dt' }, { key: 'bien_so', label: 'Biển số' },
         { key: 'kl_hang_kg', label: 'KL (kg)', num: true, render: (row) => fmt.kgDecimal(row.kl_hang_kg) },
         ...weights, { key: 'noi_xuat_goc', label: 'Kho' },
         ...(sample.some((row) => row.cong_ty_vc_nguon) ? [{ key: 'cong_ty_vc_nguon', label: 'Đơn vị vận chuyển' }] : []),
@@ -155,6 +155,7 @@
             field('Đơn vị dự phòng', h('select', { onchange: (event) => { draft.fallbackUnit = event.target.value; updateSave(); } }, units(draft.fallbackUnit)))),
           h('h3', {}, 'Ghép cột'),
           h('p', { class: 'muted' }, 'Ghép Biển số, Ngày giờ cân 1, và KL hàng hoặc cả hai cột cân. Nếu bỏ qua cột Số phiếu, ứng dụng sẽ tạo mã từ dữ liệu cân.'),
+          h('p', { class: 'muted' }, 'Nếu ngày và giờ ở hai cột, ghép cột ngày vào Ngày giờ cân và cột giờ vào Giờ cân (cột riêng) của cùng lần cân. Nếu đã gộp trong một ô, chỉ ghép Ngày giờ cân.'),
           h('div', { class: 'form-grid' }, FIELDS.map(([key, label]) => field(label,
             h('select', { 'data-template-map': key, onchange: (event) => {
               if (event.target.value === '') delete mapping[key]; else mapping[key] = Number(event.target.value);
@@ -163,7 +164,8 @@
               .map((col) => option(col.index, `${col.index + 1}. ${col.text}`, mapping[key] === col.index)))))));
         editor.append(btn('Đọc thử', lock(async () => {
           result = await call('import.check', { token: opened.token, sheetName: sheet, draft: { ...draftConfig(), name: draft.name.trim() || 'Mẫu đang sửa' } });
-        }), { 'data-template-check': '1', disabled: busy || !info }), result && trial(result));
+        }), { 'data-template-check': '1', disabled: busy || !info }));
+        if (result) editor.append(trial(result));
       }
       editor.append(h('div', { class: 'row end' }, btn('Đóng', lock(async () => { draft = null; await clearFile(); })), save));
       root.append(editor);
