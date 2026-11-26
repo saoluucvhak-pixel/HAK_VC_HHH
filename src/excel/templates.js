@@ -6,6 +6,8 @@
  * Tiêu đề cột khớp từ đồng nghĩa của bộ nhận dạng cột nên import tự map đúng.
  */
 const ExcelJS = require('exceljs');
+const { FIELDS, validateTemplate } = require('./importTemplate');
+const { headerUnit } = require('./weightUnit');
 
 const BRAND = 'FF0E7C86', BRAND_DARK = 'FF0F2740', LINE = 'FFC9D3DF', ZEBRA = 'FFF4F8FB', REQ = 'FFFDE8E8', OPT = 'FFEAF1F8';
 const F = (o = {}) => ({ name: 'Calibri', size: 11, ...o });
@@ -160,4 +162,75 @@ async function partnerTemplate() {
   return Buffer.from(await wb.xlsx.writeBuffer());
 }
 
-module.exports = { ticketTemplate, vehicleTemplate, partnerTemplate };
+async function configuredTicketTemplate(config) {
+  const { name, headerRow, headerRows, columns, fallbackUnit, layout } = validateTemplate(config);
+  const wb = new ExcelJS.Workbook();
+  wb.creator = 'VC Cost';
+  const header = headerRow + 1;
+  const entries = Object.entries(columns).map(([field, title], index) => ({
+    field, title, col: (layout?.positions[field] ?? index) + 1,
+  }));
+  const data = wb.addWorksheet(layout?.sheetName || 'Phiếu cân', {
+    views: [{ state: 'frozen', ySplit: header, showGridLines: false }],
+    properties: { tabColor: { argb: BRAND } },
+  });
+  const availableSheetName = (label) => data.name.toLowerCase() === label.toLowerCase() ? label + ' (mẫu)' : label;
+  const example = wb.addWorksheet(availableSheetName('Minh họa'));
+  const styleHeader = (cell, title) => {
+    cell.value = title;
+    cell.font = F({ bold: true, color: { argb: 'FFFFFFFF' } });
+    cell.fill = fill(BRAND);
+    cell.border = border;
+    cell.alignment = { vertical: 'middle', wrapText: true };
+  };
+  const weightFields = ['kl_hang_kg', 'can_lan_1', 'can_lan_2'].filter((field) => Object.hasOwn(columns, field));
+  const explicit = weightFields.map((field) => headerUnit(columns[field])).filter(Boolean);
+  const rowUnit = headerUnit(columns.kl_hang_kg) || (new Set(explicit).size <= 1 ? explicit[0] || fallbackUnit || 'kg' : null);
+  const valuesFor = (i) => {
+    const net = 15000 + i * 500;
+    const weights = { kl_hang_kg: net, can_lan_1: 30000, can_lan_2: 30000 - net };
+    const weightCell = (field) => {
+      const unit = headerUnit(columns[field]) || (columns.weight_unit && rowUnit) || fallbackUnit;
+      if (!unit) return `${weights[field]} kg`;
+      return unit === 't' ? weights[field] / 1000 : weights[field];
+    };
+    return {
+      so_phieu: `0000${i + 1}`, bien_so: `92H-9000${i + 1}`, ngay_gio_can_1: `05/10/2026 08:0${i}`,
+      ngay_gio_can_2: `05/10/2026 08:1${i}`, weight_unit: rowUnit === 't' ? 'tấn' : rowUnit,
+      noi_xuat: 'Kho mẫu', noi_den: 'Nơi đến mẫu', cong_ty_vc: 'Đơn vị mẫu', ghi_chu: 'Dữ liệu minh họa',
+      ...Object.fromEntries(weightFields.map((field) => [field, weightCell(field)])),
+    };
+  };
+  const samples = Array.from({ length: 3 }, (_, i) => valuesFor(i));
+  for (const { field, title, col } of entries) {
+    data.getColumn(col).width = Math.max(18, Math.min(40, title.length + 3));
+    example.getColumn(col).width = data.getColumn(col).width;
+    styleHeader(data.getCell(header, col), title);
+    styleHeader(example.getCell(2, col), title);
+    for (let i = 0; i < 3; i++) {
+      const cell = example.getCell(3 + i, col);
+      cell.value = samples[i][field] ?? null;
+      if (field === 'so_phieu') cell.numFmt = '@';
+    }
+    if (field === 'so_phieu') for (let r = header + 1; r <= header + 10; r++) data.getCell(r, col).numFmt = '@';
+  }
+  if (headerRows === 2) data.getRow(header - 1).height = 16;
+  data.getRow(header).height = 28;
+  example.getCell(1, 1).value = 'Ba dòng minh họa để tham khảo khi điền phiếu';
+  const sampleVehicles = wb.addWorksheet(availableSheetName('Danh mục mẫu'));
+  sampleVehicles.getColumn(1).width = 20;
+  sampleVehicles.getColumn(2).width = 25;
+  styleHeader(sampleVehicles.getCell('A1'), 'Biển số minh họa');
+  styleHeader(sampleVehicles.getCell('B1'), 'Tài xế minh họa');
+  samples.forEach((row, i) => sampleVehicles.addRow([row.bien_so, `Tài xế mẫu ${i + 1}`]));
+  const guide = wb.addWorksheet(availableSheetName('Hướng dẫn'));
+  guide.getColumn(1).width = 90;
+  guide.addRow([`Mẫu nhập Excel – ${name}`]);
+  guide.addRow([`Điền phiếu thực tế trong sheet “${data.name}”, từ dòng ${header + 1}. Giữ nguyên tên tiêu đề.`]);
+  guide.addRow([`Dùng sheet “${example.name}” để xem cách điền. Dùng mã nơi xuất và nơi đến có trong danh mục.`]);
+  guide.addRow(['Số phiếu là văn bản. Nhập khối lượng theo đơn vị ở tiêu đề hoặc cột đơn vị.']);
+  for (const { field, title } of entries) guide.addRow([`${FIELDS[field]} → ${title}`]);
+  return wb.xlsx.writeBuffer();
+}
+
+module.exports = { ticketTemplate, vehicleTemplate, partnerTemplate, configuredTicketTemplate };

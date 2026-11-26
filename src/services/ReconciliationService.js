@@ -11,6 +11,7 @@ const { normalizePlate, displayPlate } = require('../utils/plate');
 const { parseDateTime, datePart } = require('../utils/datetime');
 const { toDb, fromDb } = require('../utils/dbMoney');
 const { ValidationError } = require('./CatalogService');
+const { unitFrom, headerUnit, parseWeightNumber, splitWeightValue } = require('../excel/weightUnit');
 
 const B_SYN = {
   don_gia: ['don gia', 'don gia (dong/tan)', 'don gia (d/tan)', 'gia', 'gia cuoc'],
@@ -19,7 +20,7 @@ const B_SYN = {
   tong_tien: ['tong cong', 'tong tien', 'tong thanh toan', 'cong tien thanh toan', 'tong cong tien thanh toan'],
   ngay: ['ngay', 'ngay van chuyen', 'ngay can', 'ngay xuat'],
 };
-const B_FIELDS = ['so_phieu', 'bien_so', 'ngay', 'kl_hang_kg', 'don_gia', 'tien_truoc_vat', 'tien_vat', 'tong_tien'];
+const B_FIELDS = ['so_phieu', 'bien_so', 'ngay', 'weight_unit', 'kl_hang_kg', 'don_gia', 'tien_truoc_vat', 'tien_vat', 'tong_tien'];
 
 function detectB(aoa) {
   let best = { headerRow: 0, mapping: {}, score: 0 };
@@ -46,20 +47,38 @@ const num = (v) => {
   return Number.isFinite(n) ? n : null;
 };
 
-function parseB(aoa, headerRow, mapping) {
+function parseB(aoa, headerRow, mapping, codeReader = (_r, _c, value) => value) {
   const out = [];
+  const unitInHeader = headerUnit(aoa[headerRow]?.[mapping.kl_hang_kg]);
   for (let r = headerRow + 1; r < aoa.length; r++) {
     const row = aoa[r] || [];
     if (row.every((c) => c === null || c === undefined || c === '')) continue;
     const first = fold(row.find((c) => c !== null && c !== undefined && c !== '') ?? '');
     if (first.startsWith('tong cong') || first === 'cong') continue;
     const g = (f) => (mapping[f] === undefined ? null : row[mapping[f]]);
-    const sp = g('so_phieu'); const bs = g('bien_so');
+    const sp = codeReader(r, mapping.so_phieu, g('so_phieu')); const bs = g('bien_so');
     if ((sp === null || sp === '') && (bs === null || bs === '')) continue;
+    const malformed = [];
+    const check = (field, value) => {
+      const raw = g(field);
+      if (raw != null && String(raw).trim() && (value == null || Number.isNaN(value))) malformed.push({ cot: field, doi_tac: String(raw), chenh: null });
+      return Number.isNaN(value) ? null : value;
+    };
+    const rawUnit = g('weight_unit');
+    const unit = unitFrom(rawUnit);
+    const hasUnit = rawUnit != null && String(rawUnit).trim();
+    const cell = splitWeightValue(g('kl_hang_kg'));
+    const declared = [unitInHeader, unit, cell.unit].filter(Boolean);
+    const badUnit = unitInHeader === 'invalid' || (hasUnit && !unit) || cell.invalidUnit || new Set(declared).size > 1;
+    if (badUnit) malformed.push({ cot: 'Đơn vị khối lượng', doi_tac: String(rawUnit ?? g('kl_hang_kg')), chenh: null });
+    const weight = badUnit ? null : check('kl_hang_kg', parseWeightNumber(cell.value, declared[0] || 'kg'));
     out.push({
+      malformed,
       source_row: r + 1, so_phieu: sp === null || sp === '' ? null : String(sp).trim(), bien_so_goc: bs == null ? null : String(bs),
-      bien_so_chuan: bs ? normalizePlate(bs) : null, ngay: g('ngay') ? datePart(parseDateTime(g('ngay'))) : null,
-      kl_hang_kg: num(g('kl_hang_kg')), don_gia: num(g('don_gia')), tien_truoc_vat: num(g('tien_truoc_vat')), tien_vat: num(g('tien_vat')), tong_tien: num(g('tong_tien')),
+      bien_so_chuan: bs ? normalizePlate(bs) : null, ngay: check('ngay', g('ngay') ? datePart(parseDateTime(g('ngay'))) : null),
+      kl_hang_kg: weight, don_gia: check('don_gia', num(g('don_gia'))),
+      tien_truoc_vat: check('tien_truoc_vat', num(g('tien_truoc_vat'))),
+      tien_vat: check('tien_vat', num(g('tien_vat'))), tong_tien: check('tong_tien', num(g('tong_tien'))),
     });
   }
   return out;
@@ -69,6 +88,13 @@ const SEVERITY = ['LECH_KHOI_LUONG', 'LECH_DON_GIA', 'LECH_TIEN', 'LECH_VAT'];
 
 /** So sánh 1 cặp. Chỉ so cột mà B có giá trị. */
 function compare(a, b, { tolKg = 0, tolMoney = 1 }) {
+  const issues = [...(b.malformed || [])];
+  for (const [field, left, right] of [
+    ['Biển số', a.bien_so_chuan, b.bien_so_chuan], ['Ngày cân', a.ngay_can, b.ngay],
+  ]) {
+    if (left && right && left !== right) issues.push({ cot: field, he_thong: left, doi_tac: right, chenh: null });
+  }
+  if (issues.length) return { ket_qua: 'CAN_KIEM_TRA', diffs: issues };
   const diffs = [];
   const chk = (col, tol, kind) => {
     if (b[col] === null || b[col] === undefined || a[col] === null || a[col] === undefined) return;
@@ -103,15 +129,27 @@ function matchRows(A, B, opt = {}) {
       if (cands.length > 1 && b.bien_so_chuan) cands = cands.filter((a) => a.bien_so_chuan === b.bien_so_chuan);
       if (cands.length === 1) { const a = cands[0]; usedA.add(a.id); out.push({ a, b, khoa_khop: 'SO_PHIEU', ...compare(a, b, opt) }); continue; }
       if (cands.length > 1) { out.push({ a: null, b, khoa_khop: 'SO_PHIEU', ket_qua: 'CAN_KIEM_TRA', diffs: [{ cot: 'so_phieu', he_thong: cands.length, doi_tac: b.so_phieu, chenh: null }] }); continue; }
-      if (!b.bien_so_chuan || !b.ngay) { out.push({ a: null, b, khoa_khop: null, ket_qua: 'THIEU_BEN_A', diffs: [] }); continue; }
+      if (!b.bien_so_chuan || !b.ngay) {
+        const diffs = b.malformed || [];
+        out.push({ a: null, b, khoa_khop: null, ket_qua: diffs.length ? 'CAN_KIEM_TRA' : 'THIEU_BEN_A', diffs });
+        continue;
+      }
     }
     pending.push(b);
   }
   // B không có số phiếu (hoặc số phiếu không thấy bên A): khớp biển số + ngày + KL
+  const byPlateDay = new Map();
+  for (const a of A) {
+    if (!a.bien_so_chuan || !a.ngay_can || usedA.has(a.id)) continue;
+    const key = `${a.bien_so_chuan}|${a.ngay_can}`;
+    if (!byPlateDay.has(key)) byPlateDay.set(key, []);
+    byPlateDay.get(key).push(a);
+  }
   for (const b of pending) {
-    const cands = A.filter((a) => !usedA.has(a.id) && a.bien_so_chuan === b.bien_so_chuan && a.ngay_can === b.ngay
+    const cands = (byPlateDay.get(`${b.bien_so_chuan}|${b.ngay}`) || []).filter((a) => !usedA.has(a.id)
       && (b.kl_hang_kg == null || Math.abs(a.kl_hang_kg - b.kl_hang_kg) <= (opt.tolKg || 0)));
-    if (cands.length === 1) { const a = cands[0]; usedA.add(a.id); out.push({ a, b, khoa_khop: 'BIEN_SO_NGAY_KL', ...compare(a, b, opt) }); }
+    if (b.malformed?.length && cands.length !== 1) out.push({ a: null, b, khoa_khop: 'BIEN_SO_NGAY_KL', ket_qua: 'CAN_KIEM_TRA', diffs: b.malformed });
+    else if (cands.length === 1) { const a = cands[0]; usedA.add(a.id); out.push({ a, b, khoa_khop: 'BIEN_SO_NGAY_KL', ...compare(a, b, opt) }); }
     else if (cands.length > 1) out.push({ a: null, b, khoa_khop: 'BIEN_SO_NGAY_KL', ket_qua: 'CAN_KIEM_TRA', diffs: [{ cot: 'ung_vien', he_thong: cands.length, doi_tac: 1, chenh: null }] });
     else out.push({ a: null, b, khoa_khop: null, ket_qua: 'THIEU_BEN_A', diffs: [] });
   }
@@ -152,7 +190,8 @@ class ReconciliationService {
     if (!ten) throw new ValidationError('Cần đặt tên lô đối chiếu');
     if (mapping.so_phieu === undefined && mapping.bien_so === undefined) throw new ValidationError('File đối tác cần có cột Số phiếu hoặc Biển số');
     if (mapping.so_phieu === undefined && (mapping.ngay === undefined)) throw new ValidationError('Không có Số phiếu thì cần cột Ngày để khớp theo biển số + ngày + KL');
-    const B = parseB(p.wb.aoa(sheetName), Number(headerRow), mapping).map((b, idx) => ({ ...b, idx }));
+    if (![tolKg, tolMoney].every((x) => Number.isFinite(Number(x)) && Number(x) >= 0)) throw new ValidationError('Dung sai phải là số không âm');
+    const B = parseB(p.wb.aoa(sheetName), Number(headerRow), mapping, p.wb.codeReader(sheetName)).map((b, idx) => ({ ...b, idx }));
     if (!B.length) throw new ValidationError('Không đọc được dòng dữ liệu nào của đối tác');
     const A = this._loadA({ don_vi_id, dot_id, tu_ngay, den_ngay });
     // phiếu Nháp chưa duyệt không tham gia đối chiếu: báo số lượng để người dùng không hiểu nhầm là "thiếu bên mình"

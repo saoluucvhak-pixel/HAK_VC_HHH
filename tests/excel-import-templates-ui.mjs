@@ -63,6 +63,13 @@ try {
   await card.locator('[data-template-default]').getByText('Phiếu cân nhà cung cấp A').waitFor();
   await page.getByText('Đã lưu mẫu nhập Excel', { exact: true }).waitFor({ state: 'hidden' });
   await card.screenshot({ path: path.join(screenshots, 'excel-import-template.png') });
+  await card.getByRole('button', { name: 'Tải file mẫu' }).click();
+  await page.getByText(/Đã xuất: .*MAU_Phieu_can_Tuy_chinh.xlsx/).waitFor();
+  const exported = new ExcelJS.Workbook();
+  await exported.xlsx.readFile(path.join(dataDir, 'exports', 'MAU_Phieu_can_Tuy_chinh.xlsx'));
+  assert.equal(exported.getWorksheet('Phiếu cân').getCell('D3').value, 'Khối lượng hàng');
+  assert.equal(exported.getWorksheet('Phiếu cân').getCell('A4').value, null);
+  assert.equal(exported.getWorksheet('Minh họa').getCell('A3').value, '00001');
 
   await page.reload();
   await page.locator('[data-nav=settings]').click();

@@ -16,6 +16,8 @@ async function loadInitialData(app, seedDir) {
   const excel = path.join(seedDir, EXCEL_NAME);
   if (!fs.existsSync(excel)) throw new Error(`Thiếu file dữ liệu ban đầu: ${EXCEL_NAME}`);
   const seed = JSON.parse(fs.readFileSync(path.join(seedDir, 'sample-v47.json'), 'utf8'));
+  // Ghi dấu trước bước có thể nạp một phần. Những bước tiếp theo đều hỗ trợ chạy lại.
+  if (isFreshDb(app)) app.settings.set('initial_data', { state: 'IN_PROGRESS', source: EXCEL_NAME });
   const out = { seed: app.seed.load(seed) };
 
   const pv = await app.vehicleImport.preview({ filePath: excel, fileName: EXCEL_NAME });
@@ -38,7 +40,9 @@ async function loadInitialData(app, seedDir) {
 /** DB hoàn toàn trống và chưa từng nạp → chạy lần đầu. */
 function isFreshDb(app) {
   const n = (t) => app.db.get(`SELECT COUNT(*) n FROM ${t}`).n;
-  return !app.settings.get('initial_data') && n('phieu_can') === 0 && n('xe') === 0 && n('don_vi_van_chuyen') === 0 && n('tuyen_van_chuyen') === 0;
+  const status = app.settings.get('initial_data');
+  if (status?.state === 'IN_PROGRESS' && status.source === EXCEL_NAME) return true;
+  return !status && n('phieu_can') === 0 && n('xe') === 0 && n('don_vi_van_chuyen') === 0 && n('tuyen_van_chuyen') === 0;
 }
 
 module.exports = { loadInitialData, isFreshDb, EXCEL_NAME };

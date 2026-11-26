@@ -1,4 +1,15 @@
-# VC Cost 0.8.7 — schema SQLite 9
+# VC Cost 0.8.8 — schema SQLite 9
+
+- Đối chiếu phiếu cân quy đổi tấn sang kg. Dữ liệu đối tác không đọc được hoặc mâu thuẫn biển số, ngày cân được đưa vào **Cần kiểm tra**.
+- Nhập phiếu theo **Nơi đến** trên từng dòng. Ô trống dùng mặc định, còn nơi đến lạ được báo lỗi trước khi ghi.
+- Đọc thử cảnh báo đơn vị mâu thuẫn và đối chiếu cả tổng công bố ở đầu bảng. Dùng **Cài đặt → Mẫu nhập Excel → Tải file mẫu** để xuất file với tiêu đề đã lưu, hướng dẫn và ba dòng minh họa riêng.
+- Nếu nạp dữ liệu ban đầu bị gián đoạn trên bản này, lần mở tiếp theo sẽ thử lại.
+
+## Cài đặt và nâng cấp
+
+Xuất bản sao lưu ra ổ khác rồi đóng VC Cost trước khi chạy Setup. Schema vẫn là 9. Setup và Portable chưa ký số. Đối chiếu tệp tải về với `SHA256SUMS.txt`.
+
+## VC Cost 0.8.7 — schema SQLite 9
 
 - Trong **Cài đặt → Mẫu nhập Excel**, quản trị viên có thể chọn sheet, ghép cột từ tiêu đề một hoặc hai dòng, đọc thử, rồi lưu và đặt mẫu mặc định.
 - Ứng dụng ghép theo tên tiêu đề khi cột đổi vị trí, quy đổi kg/tấn, giữ số 0 đầu của mã phiếu và đối chiếu tổng công bố khi đọc được.

@@ -80,7 +80,8 @@
     function draftConfig() {
       const columns = {};
       for (const [key, index] of Object.entries(mapping)) columns[key] = info.headers[index].text;
-      return { name: draft.name.trim(), headerRow: draft.headerRow, headerRows: draft.headerRows, fallbackUnit: draft.fallbackUnit, columns };
+      return { name: draft.name.trim(), headerRow: draft.headerRow, headerRows: draft.headerRows, fallbackUnit: draft.fallbackUnit, columns,
+        layout: { sheetName: sheet, positions: { ...mapping } } };
     }
     const lock = (fn) => async () => {
       if (busy) return;
@@ -98,6 +99,7 @@
           { key: 'id', label: 'Trạng thái', render: (item) => item.id === config.defaultId ? h('span', { class: 'tag green' }, 'Mặc định') : '' },
           { key: 'actions', label: 'Thao tác', render: (item) => h('div', { class: 'row gap-s' },
             btn('Sửa', lock(() => edit(item))), btn('Sao chép', lock(() => edit(item, true))),
+            btn('Tải file mẫu', () => App.exportXlsx('template.configuredTickets', { id: item.id }), { 'data-template-export': '1' }),
             btn('Xóa', lock(async () => {
               if (await App.confirmBox('Xóa mẫu nhập', `Xóa mẫu “${item.name}”?`, 'Xóa')) {
                 if (await act({ action: 'delete', id: item.id }) && draft?.id === item.id) { draft = null; await clearFile(); }
