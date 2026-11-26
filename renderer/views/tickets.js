@@ -42,9 +42,20 @@
       const st = { offset: 0, limit: 100, sort: 'ngay_gio_can_1', dir: 'asc' };
       const body = h('div', {}); const sel = new Set(); const vers = {};
       let currentRows = [];
+      const selectPage = h('input', { type: 'checkbox', title: 'Chọn cả trang', 'aria-label': 'Chọn cả trang',
+        onclick: (e) => e.stopPropagation(),
+        onchange: (e) => {
+          currentRows.forEach((r) => (e.target.checked ? sel.add(r.id) : sel.delete(r.id)));
+          updateSelection();
+          load();
+        } });
       const ALL_COLS = [
-        { key: '_sel', sticky: 'left', fixed: true, label: h('input', { type: 'checkbox', title: 'Chọn cả trang', onclick: (e) => e.stopPropagation(), onchange: (e) => { currentRows.forEach((r) => (e.target.checked ? sel.add(r.id) : sel.delete(r.id))); load(); } }),
-          render: (r) => h('input', { type: 'checkbox', checked: sel.has(r.id), onclick: (e) => e.stopPropagation(), onchange: (e) => { e.target.checked ? sel.add(r.id) : sel.delete(r.id); selBtn.textContent = `🗑 Xóa phiếu đã chọn (${sel.size})`; selBtn.disabled = !sel.size; } }) },
+        { key: '_sel', sticky: 'left', fixed: true, label: selectPage,
+          render: (r) => h('input', { type: 'checkbox', checked: sel.has(r.id), 'aria-label': `Chọn phiếu ${r.so_phieu}`, onclick: (e) => e.stopPropagation(),
+            onchange: (e) => {
+              e.target.checked ? sel.add(r.id) : sel.delete(r.id);
+              updateSelection();
+            } }) },
         { key: 'so_phieu', sticky: 'left-2', fixed: true, label: 'Số phiếu', mono: true, sort: true },
         { key: 'ngay_gio_can_1', label: 'Cân 1', fmt: 'dt', mono: true, sort: true },
         { key: 'bien_so', label: 'Biển số', mono: true, sort: true },
@@ -55,7 +66,7 @@
         { key: 'tien_truoc_vat', label: 'Trước VAT', fmt: 'money', sort: true },
         { key: 'tong_tien', label: 'Tổng', fmt: 'money', sort: true },
         { key: 'dot', label: 'Đợt' },
-        { key: 'trang_thai_tinh_gia', sticky: 'right', fixed: true, label: 'Trạng thái', render: (r) => h('span', {}, r.trang_thai_duyet === 'NHAP' ? h('span', { class: 'tag warn', title: 'Phiếu Nháp — chưa vào Dashboard/Bảng kê/báo cáo/chốt kỳ cho tới khi được duyệt' }, 'Nháp') : null, r.trang_thai_duyet === 'NHAP' ? ' ' : '', tag(r.trang_thai_tinh_gia), r.tu_duyet ? ' ' : '', r.tu_duyet ? h('span', { class: 'tag gray', 'data-tu-duyet': '1', title: 'Người nhập/sửa phiếu cũng là người duyệt (đã bật "Cho phép tự duyệt")' }, 'Tự duyệt') : null, r.xe_tra_ve ? ' ' : '', r.xe_tra_ve ? tag('KHAC', 'Trả về') : null) },
+        { key: 'trang_thai_tinh_gia', fixed: true, label: 'Trạng thái', render: (r) => h('span', {}, r.trang_thai_duyet === 'NHAP' ? h('span', { class: 'tag warn', title: 'Phiếu Nháp — chưa vào Dashboard/Bảng kê/báo cáo/chốt kỳ cho tới khi được duyệt' }, 'Nháp') : null, r.trang_thai_duyet === 'NHAP' ? ' ' : '', tag(r.trang_thai_tinh_gia), r.tu_duyet ? ' ' : '', r.tu_duyet ? h('span', { class: 'tag gray', 'data-tu-duyet': '1', title: 'Người nhập/sửa phiếu cũng là người duyệt (đã bật "Cho phép tự duyệt")' }, 'Tự duyệt') : null, r.xe_tra_ve ? ' ' : '', r.xe_tra_ve ? tag('KHAC', 'Trả về') : null) },
       ];
       const getVisibleCols = () => {
         try {
@@ -96,22 +107,32 @@
       const load = App.latestRender(body, async (body) => {
         const d = await api('tickets.list', { filter: flt(), offset: st.offset, limit: st.limit, sort: st.sort, dir: st.dir });
         currentRows = d.rows;
+        updateSelection();
         d.rows.forEach((r) => { vers[r.id] = r.ver; });
         const pages = Math.max(1, Math.ceil(d.total / st.limit)); const page = Math.floor(st.offset / st.limit) + 1;
         const activeCols = ALL_COLS.filter((c) => c.fixed || visibleCols.has(c.key));
-        App.clear(body).append(h('div', { class: 'card' },
+        App.clear(body).append(h('div', { class: 'card tickets-table-card' },
           table({
             columns: activeCols, rows: d.rows, sort: { key: st.sort, dir: st.dir }, onSort: (k) => { st.dir = st.sort === k && st.dir === 'asc' ? 'desc' : 'asc'; st.sort = k; st.offset = 0; load(); },
-            totals: { so_phieu: null, kl_hang_kg: d.totals.tong_kg, tien_truoc_vat: d.totals.tien_truoc_vat, tong_tien: d.totals.tong_tien }, onRow: (r) => explain(r.id),
-            rowClass: (r) => (['OK', 'LOCKED'].includes(r.trang_thai_tinh_gia) ? '' : 'err'), wrapClass: 'tall',
+            totalLabelColumn: 'so_phieu', totals: { kl_hang_kg: d.totals.tong_kg, tien_truoc_vat: d.totals.tien_truoc_vat, tong_tien: d.totals.tong_tien }, onRow: (r) => explain(r.id),
+            rowClass: (r) => (['OK', 'LOCKED'].includes(r.trang_thai_tinh_gia) ? '' : 'err'), wrapClass: 'tickets-table',
           }),
           h('div', { class: 'pager' }, `${fmt.int(d.total)} phiếu`, h('button', { class: 'btn ghost sm', disabled: page <= 1, onclick: () => { st.offset -= st.limit; load(); } }, '‹'), `Trang ${page}/${pages}`,
             h('button', { class: 'btn ghost sm', disabled: page >= pages, onclick: () => { st.offset += st.limit; load(); } }, '›'))));
       });
-      const reset = () => { st.offset = 0; sel.clear(); selBtn.textContent = '🗑 Xóa phiếu đã chọn (0)'; selBtn.disabled = true; load(); };
+      function updateSelection() {
+        const selectedOnPage = currentRows.filter((row) => sel.has(row.id)).length;
+        selectPage.checked = selectedOnPage > 0 && selectedOnPage === currentRows.length;
+        selectPage.indeterminate = selectedOnPage > 0 && !selectPage.checked;
+        selectPage.disabled = !currentRows.length;
+        selBtn.textContent = sel.size ? `Xóa đã chọn (${fmt.int(sel.size)})` : 'Xóa đã chọn';
+        selBtn.disabled = !sel.size;
+        apvSel.disabled = !sel.size;
+      }
+      const reset = () => { st.offset = 0; sel.clear(); updateSelection(); load(); };
       const done = () => { App.refreshInfo(); App.reload(); };
-      const selBtn = h('button', { class: 'btn danger', disabled: true, 'data-act': 'del-selected', onclick: () => delTickets([...sel], done) }, '🗑 Xóa phiếu đã chọn (0)');
-      const allBtn = h('button', { class: 'btn ghost', 'data-act': 'del-filtered', title: 'Xóa mọi phiếu khớp bộ lọc hiện tại (kể cả các trang khác)', onclick: async () => { const ids = await api('tickets.ids', { filter: flt() }); delTickets(ids, done); } }, '🗑 Xóa tất cả phiếu đang lọc');
+      const selBtn = h('button', { class: 'btn danger', disabled: true, 'data-act': 'del-selected', onclick: () => delTickets([...sel], done) }, 'Xóa đã chọn');
+      const allBtn = h('button', { class: 'btn ghost', 'data-act': 'del-filtered', title: 'Xóa mọi phiếu khớp bộ lọc hiện tại (kể cả các trang khác)', onclick: async () => { const ids = await api('tickets.ids', { filter: flt() }); delTickets(ids, done); } }, 'Xóa theo bộ lọc');
       const approve = async (ids, expectedVersions = vers) => {
         if (!ids.length) return App.toast('Không có phiếu Nháp nào để duyệt');
         if (!(await App.confirmBox('Duyệt phiếu Nháp', `Duyệt ${ids.length} phiếu Nháp? Phiếu được duyệt sẽ vào Dashboard, Bảng kê, báo cáo và chốt kỳ.`, 'Duyệt'))) return;
@@ -120,12 +141,17 @@
         sel.clear(); await App.refreshInfo(); await App.reload();
       };
       const duyetOn = () => App.info && App.info.duyetBat && App.can('duyet');
-      const apvSel = h('button', { class: 'btn', 'data-act': 'approve-selected', onclick: () => approve([...sel]) }, '✔ Duyệt phiếu đã chọn');
-      const apvAll = h('button', { class: 'btn ghost', 'data-act': 'approve-filtered', title: 'Duyệt mọi phiếu Nháp khớp bộ lọc hiện tại', onclick: async () => { const data = await api('tickets.list', { filter: { ...flt(), trang_thai_duyet: 'NHAP' }, limit: 10_000_000 }); await approve(data.rows.map((r) => r.id), Object.fromEntries(data.rows.map((r) => [r.id, r.ver]))); } }, '✔ Duyệt tất cả Nháp theo lọc');
-      v.append(App.pageHead('Phiếu cân', 'Bấm một dòng để xem vì sao phiếu có đơn giá đó',
-        h('span', { class: 'row gap-s' }, duyetOn() ? apvSel : null, duyetOn() ? apvAll : null, selBtn, allBtn, h('button', { class: 'btn ghost', 'data-act': 'col-settings', onclick: openColConfig, title: 'Tùy chọn cột hiển thị' }, '⚙ Cột'), h('button', { class: 'btn ghost', onclick: () => App.exportXlsx('export.tickets', { filter: flt() }) }, '⬇ Xuất Excel'))),
-      await App.filterBar(reset),
-      body);
+      const apvSel = h('button', { class: 'btn', disabled: true, 'data-act': 'approve-selected', onclick: () => approve([...sel]) }, 'Duyệt đã chọn');
+      const apvAll = h('button', { class: 'btn ghost', 'data-act': 'approve-filtered', title: 'Duyệt mọi phiếu Nháp khớp bộ lọc hiện tại', onclick: async () => { const data = await api('tickets.list', { filter: { ...flt(), trang_thai_duyet: 'NHAP' }, limit: 10_000_000 }); await approve(data.rows.map((r) => r.id), Object.fromEntries(data.rows.map((r) => [r.id, r.ver]))); } }, 'Duyệt phiếu Nháp theo lọc');
+      const heading = h('header', { class: 'tickets-heading' },
+        h('div', {}, h('h1', {}, 'Phiếu cân'), h('p', { class: 'sub' }, 'Chọn một dòng để xem cách tính giá.')),
+        h('div', { class: 'tickets-actions' },
+          h('button', { class: 'btn ghost', 'data-act': 'col-settings', onclick: openColConfig }, 'Cột hiển thị'),
+          h('button', { class: 'btn', onclick: () => App.exportXlsx('export.tickets', { filter: flt() }) }, '↓ Xuất Excel')));
+      const toolbar = h('div', { class: 'tickets-toolbar', role: 'group', 'aria-label': 'Thao tác với phiếu cân' },
+        h('div', { class: 'tickets-actions' }, duyetOn() ? [apvSel, apvAll] : null),
+        h('div', { class: 'tickets-actions tickets-remove' }, selBtn, allBtn));
+      v.append(h('div', { class: 'tickets-page' }, heading, await App.filterBar(reset), toolbar, body));
       await load();
     },
   });

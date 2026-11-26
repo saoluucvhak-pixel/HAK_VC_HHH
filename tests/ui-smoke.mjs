@@ -17,7 +17,17 @@ await page.goto('http://127.0.0.1:5191/');
 await page.waitForSelector('#sidebar .nav-item');
 await shot('00-dashboard-empty');
 // seed
-await nav('settings'); page.once('dialog', () => {});
+await nav('settings');
+const settingsTabs = page.getByRole('tablist', { name: 'Nhóm cài đặt' });
+const excelTab = settingsTabs.getByRole('tab', { name: 'Mẫu nhập Excel' });
+if (await settingsTabs.getByRole('tab').count() !== 6) errors.push('Cài đặt: thiếu tab nhóm chức năng');
+await excelTab.press('ArrowRight');
+if (await settingsTabs.getByRole('tab', { name: 'Phiếu cân & duyệt' }).getAttribute('aria-selected') !== 'true' ||
+    await page.getByRole('tabpanel').count() !== 1 ||
+    await page.getByRole('tabpanel').getAttribute('id') !== 'settings-tickets') {
+  errors.push('Cài đặt: phím mũi tên phải đổi sang đúng nhóm và chỉ hiện một nội dung');
+}
+await page.click('[data-settings-tab=system]'); page.once('dialog', () => {});
 await page.click('[data-act=seed]'); await page.click('.modal .btn:not(.ghost)'); await page.waitForTimeout(800);
 // import vehicles + tickets
 const fx = path.resolve('tests/fixtures/sample-v47.xlsx');
@@ -156,8 +166,23 @@ await nav('statements'); await page.click('[data-sf-adv]'); await page.waitForSe
 check((await page.locator('[data-sf-presets] option', { hasText: 'Chỉ đã tính giá' }).count()) === 0, 'bộ lọc đã lưu không lẫn sang màn khác');
 await page.click('.sfd-foot .btn:has-text("Hủy")');
 await nav('tickets'); await page.click('[data-sf-reset]'); await sumNums();
-// xóa phiếu: chọn 2 dòng → hộp xóa (không bấm xóa)
+// Cửa sổ hẹp: tiêu đề giữ một dòng và cột cuối có thể cuộn vào vùng nhìn thấy.
 await nav('tickets');
+await page.setViewportSize({ width: 1100, height: 900 });
+const ticketLayout = await page.locator('.tickets-table').evaluate((wrap) => {
+  const title = document.querySelector('.tickets-heading h1');
+  const range = document.createRange();
+  range.selectNodeContents(title);
+  const main = document.querySelector('#main');
+  wrap.scrollLeft = wrap.scrollWidth;
+  const status = wrap.querySelector('th:last-child').getBoundingClientRect();
+  const frame = wrap.getBoundingClientRect();
+  return range.getClientRects().length === 1 && main.scrollWidth <= main.clientWidth + 1 &&
+    status.left >= frame.left && status.right <= frame.right + 1;
+});
+if (!ticketLayout) errors.push('Phiếu cân: tiêu đề hoặc cột Trạng thái bị cắt ở cửa sổ 1100px');
+await page.setViewportSize({ width: 1440, height: 900 });
+// xóa phiếu: chọn 2 dòng → hộp xóa (không bấm xóa)
 await page.click('table.t tbody tr:nth-child(1) input[type=checkbox]'); await page.click('table.t tbody tr:nth-child(2) input[type=checkbox]');
 await page.click('[data-act=del-selected]'); await page.waitForSelector('.modal'); await shot('23-delete-tickets');
 await page.click('.modal .btn.ghost');
@@ -254,7 +279,7 @@ console.log('app.info', JSON.stringify(info.data.counts));
 // ---- Ngưỡng KL cấu hình được + tùy chọn đọc nhiều khối
 {
   const ck = (ok, msg) => { if (!ok) errors.push('tùy chọn nhập liệu: ' + msg); };
-  await page.evaluate(() => App.go('settings')); await page.waitForSelector('[data-act=save-kl]');
+  await page.evaluate(() => App.go('settings')); await page.click('[data-settings-tab=tickets]'); await page.waitForSelector('[data-act=save-kl]');
   await page.fill('[data-f=kl-min]', '50'); await page.click('[data-act=save-kl]'); await page.waitForTimeout(600);
   const set1 = await page.evaluate(async () => (await App.api('settings.all')).kl_hop_ly);
   ck(set1 && set1.min_kg === 50 && set1.max_kg === 100000, 'lưu ngưỡng KL: ' + JSON.stringify(set1));
@@ -412,7 +437,7 @@ await page.unroute('**/api/reports.dashboard');
 {
   const ck = (ok, msg) => { if (!ok) errors.push('tự duyệt: ' + msg); };
   await page.evaluate(() => document.querySelectorAll('.modal-bg, .modal-overlay, .overlay, .modal').forEach((m) => (m.closest('.modal-bg, .modal-overlay, .overlay') || m).remove()));
-  await nav('settings'); await page.waitForSelector('[data-f=duyet-tu]');
+  await nav('settings'); await page.click('[data-settings-tab=tickets]'); await page.waitForSelector('[data-f=duyet-tu]');
   ck((await page.locator('[data-f=duyet-tu]').count()) === 1, 'phải có ô Cho phép tự duyệt');
   const st = await page.evaluate(() => App.api('settings.all'));
   ck(!st.duyet_phieu || !st.duyet_phieu.cho_tu_duyet, 'mặc định không cho tự duyệt');

@@ -296,3 +296,36 @@ table.t td.mono, table.t td.ctr { white-space: nowrap; }
 
 .view-host { display: contents; }
 .btn.busy { opacity: .6; cursor: progress; }
+
+/* Phiếu cân */
+.tickets-heading{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;margin-bottom:16px}
+.tickets-heading h1,.settings-page h1{font-size:1.55rem;line-height:1.25}
+.tickets-heading .sub{margin:0;font-size:13px}
+.tickets-actions{display:flex;flex-wrap:wrap;align-items:center;gap:8px}
+.tickets-actions .btn{white-space:nowrap}
+.tickets-toolbar{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin:0 0 10px}
+.tickets-toolbar:has(button:not([hidden])) .tickets-actions:empty{display:none}
+.tickets-toolbar:not(:has(button:not([hidden]))){display:none}
+.tickets-remove{margin-inline-start:auto}
+.tickets-remove .btn.ghost{color:var(--red);border-color:var(--ctl)}
+.tickets-remove .btn.ghost:hover{background:var(--redBg)}
+.tickets-page{container-type:inline-size}
+.tickets-page .sf{margin-bottom:12px}
+.tickets-page .sf .i.search{flex:1 1 225px;min-width:min(190px,100%);max-width:none;min-height:36px}
+@container (min-width:780px){
+  .tickets-page .sf-bar::after{content:"";flex:0 0 100%;order:1;height:0;margin-block:-4px}
+  .tickets-page .sf-bar>.sf-q,.tickets-page .sf-bar>.sf-adv,.tickets-page .sf-bar>[data-sf-reset]{order:2}
+  .tickets-page .sf-bar>.sf-adv{margin-inline-start:auto}
+}
+.tickets-table-card{padding:10px}
+.tickets-table{max-height:clamp(18rem,calc(100vh - 366px),60rem)}
+.tickets-table table.t th,.tickets-table table.t td{white-space:nowrap;padding-inline:8px;vertical-align:middle}
+.tickets-table table.t .col-sticky-left-1{width:36px;min-width:36px;max-width:36px;text-align:center;padding-inline:0}
+.tickets-table table.t .col-sticky-left-2{left:36px}
+.tickets-table input[type=checkbox]{margin:0;vertical-align:middle}
+
+/* Nhóm cài đặt */
+.settings-tabs{display:flex;flex-wrap:wrap;gap:4px;border-bottom:1px solid var(--line);margin-bottom:16px}
+.settings-tab{font:600 13px var(--sans);color:var(--text-mute);background:transparent;border:0;border-bottom:2px solid transparent;border-radius:8px 8px 0 0;padding:10px 12px;cursor:pointer;white-space:nowrap}
+.settings-tab:hover{background:var(--brand-soft);color:var(--brand)}
+.settings-tab[aria-selected="true"]{background:var(--brand-soft);border-bottom-color:var(--brand);color:var(--brand)}
