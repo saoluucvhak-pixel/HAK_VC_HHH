@@ -329,3 +329,17 @@ table.t td.mono, table.t td.ctr { white-space: nowrap; }
 .settings-tab{font:600 13px var(--sans);color:var(--text-mute);background:transparent;border:0;border-bottom:2px solid transparent;border-radius:8px 8px 0 0;padding:10px 12px;cursor:pointer;white-space:nowrap}
 .settings-tab:hover{background:var(--brand-soft);color:var(--brand)}
 .settings-tab[aria-selected="true"]{background:var(--brand-soft);border-bottom-color:var(--brand);color:var(--brand)}
+
+/* Trình tạo mẫu nhập Excel */
+.excel-template-editor{display:grid;gap:14px;margin-top:18px}
+.excel-template-editor>h3{margin:0;color:var(--text);font-size:.95rem;text-transform:none;letter-spacing:0}
+.excel-template-step{min-width:0;padding:14px;border:1px solid var(--ctl);border-radius:12px}
+.excel-template-step h4{margin:0 0 10px;color:var(--brand);font-size:.9rem}
+.excel-template-step p{margin:8px 0;overflow-wrap:anywhere}
+.excel-template-source{display:flex;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:10px}
+.excel-template-source span{overflow-wrap:anywhere}
+.excel-template-table{overflow-x:auto}
+.excel-template-table table.t{table-layout:fixed;width:100%}
+.excel-template-table table.t th,.excel-template-table table.t td{overflow-wrap:anywhere;white-space:normal}
+.excel-template-table table.t td select{width:100%;text-overflow:ellipsis}
+.excel-template-step [data-template-trial]{margin-top:12px}

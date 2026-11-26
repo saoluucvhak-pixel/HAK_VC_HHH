@@ -1,4 +1,12 @@
-# VC Cost 0.8.8 — schema SQLite 9
+# VC Cost 0.8.9 — schema SQLite 9
+
+- **Cài đặt → Mẫu nhập Excel → Tạo mẫu** trình bày thành ba bước. Bảng ghép cột hiển thị trường phiếu cân, cột nguồn và tiêu đề lưu theo mẫu.
+- Phiếu cân và xem trước import dùng tiêu đề **Ngày giờ cân 1/2**. Tệp có ngày và giờ ở hai cột có thể ghép thành một giá trị datetime cho mỗi lần cân.
+- Bao gồm bố cục Phiếu cân và các tab Cài đặt từ PR #38.
+
+Xuất bản sao lưu ra ổ khác rồi đóng VC Cost trước khi chạy Setup. Schema vẫn là 9. Bộ cài chưa ký số. Kiểm tra SHA-256 trước khi chạy.
+
+## VC Cost 0.8.8 — schema SQLite 9
 
 - Đối chiếu phiếu cân quy đổi tấn sang kg. Dữ liệu đối tác không đọc được hoặc mâu thuẫn biển số, ngày cân được đưa vào **Cần kiểm tra**.
 - Nhập phiếu theo **Nơi đến** trên từng dòng. Ô trống dùng mặc định, còn nơi đến lạ được báo lỗi trước khi ghi.

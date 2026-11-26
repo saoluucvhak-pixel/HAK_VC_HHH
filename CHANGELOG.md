@@ -1,5 +1,9 @@
 # CHANGELOG
 
+## 0.8.9 — giao diện tạo mẫu Excel và ghép ngày giờ cân (schema 9)
+- Chia trình tạo mẫu thành chọn tệp và tiêu đề, bảng ghép cột, đọc thử và đối chiếu.
+- Đồng bộ tiêu đề ngày giờ cân và hỗ trợ tệp có ngày, giờ ở hai cột riêng.
+
 ## 0.8.8 — kiểm tra nhập và đối chiếu phiếu cân (schema 9)
 - Chuẩn hóa kg/tấn khi đối chiếu. Dòng có dữ liệu lỗi hoặc mâu thuẫn biển số, ngày cân được đưa vào Cần kiểm tra.
 - Dùng nơi đến trên từng dòng khi nhập. Nơi đến lạ được báo lỗi, ô trống dùng mặc định.

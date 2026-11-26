@@ -6,8 +6,10 @@
 
 const SYNONYMS = {
   so_phieu: ['so phieu', 'phieu', 'so chung tu', 'so ct', 'ma phieu', 'ticket', 'so phieu can'],
-  ngay_gio_can_1: ['ngay gio can 1', 'ngay can 1', 'thoi gian can 1', 'gio can 1', 'gio vao', 'ngay gio vao', 'ngay can'],
-  ngay_gio_can_2: ['ngay gio can 2', 'ngay can 2', 'thoi gian can 2', 'gio can 2', 'gio ra', 'ngay gio ra'],
+  ngay_gio_can_1: ['ngay gio can 1', 'ngay can 1', 'can 1 ngay', 'thoi gian can 1', 'ngay gio vao', 'ngay can'],
+  ngay_gio_can_2: ['ngay gio can 2', 'ngay can 2', 'can 2 ngay', 'thoi gian can 2', 'ngay gio ra'],
+  gio_can_1: ['gio can 1', 'gio vao', 'can 1 gio'],
+  gio_can_2: ['gio can 2', 'gio ra', 'can 2 gio'],
   bien_so: ['bien so', 'bien so 1', 'bien so xe', 'so xe', 'bks', 'xe'],
   can_lan_1: ['can lan 1', 'can 1', 'trong luong lan 1', 'trong luong can 1', 'kl lan 1', 'tl lan 1', 'tl can 1'],
   can_lan_2: ['can lan 2', 'can 2', 'trong luong lan 2', 'trong luong can 2', 'kl lan 2', 'tl lan 2', 'tl can 2'],
@@ -29,7 +31,7 @@ function fold(s) {
     .toLowerCase().replace(/\s+/g, ' ').trim();
 }
 
-function matchField(header) {
+function matchField(header, { splitTimes = false } = {}) {
   const h = fold(header);
   if (!h) return null;
   let best = null;
@@ -39,7 +41,28 @@ function matchField(header) {
       if (score && (!best || score > best.score || (score === best.score && s.length > best.len))) best = { field, score, len: s.length };
     }
   }
-  return best ? best.field : null;
+  const field = best?.field ?? null;
+  return !splitTimes && (field === 'gio_can_1' || field === 'gio_can_2') ? `ngay_${field}` : field;
+}
+
+function mapHeaders(headers) {
+  const mapping = {};
+  headers.forEach((cell, index) => {
+    const field = matchField(cell, { splitTimes: true });
+    if (field && mapping[field] === undefined) mapping[field] = index;
+  });
+  for (const n of [1, 2]) {
+    const day = `ngay_gio_can_${n}`, hour = `gio_can_${n}`;
+    if (mapping[hour] === undefined) continue;
+    if (mapping[day] === undefined) {
+      // File cũ có thể dùng tiêu đề “Giờ cân” cho ô chứa cả ngày giờ.
+      mapping[day] = mapping[hour];
+      delete mapping[hour];
+    } else if (/ngay gio|thoi gian/.test(fold(headers[mapping[day]]))) {
+      delete mapping[hour];
+    }
+  }
+  return mapping;
 }
 
 /**
@@ -51,15 +74,11 @@ function detectHeader(aoa, scanRows = 30) {
   let best = { headerRow: -1, mapping: {}, score: 0 };
   const REQUIRED = ['so_phieu', 'bien_so', 'kl_hang_kg'];
   for (let r = 0; r < Math.min(scanRows, aoa.length); r++) {
-    const mapping = {};
-    (aoa[r] || []).forEach((cell, c) => {
-      const f = matchField(cell);
-      if (f && mapping[f] === undefined) mapping[f] = c;
-    });
+    const mapping = mapHeaders(aoa[r] || []);
     const score = Object.keys(mapping).length + REQUIRED.filter((f) => mapping[f] !== undefined).length * 2;
     if (score > best.score) best = { headerRow: r, mapping, score };
   }
   return best;
 }
 
-module.exports = { SYNONYMS, fold, matchField, detectHeader };
+module.exports = { SYNONYMS, fold, matchField, mapHeaders, detectHeader };

@@ -10,6 +10,18 @@ const { unitFrom, headerUnit, parseWeightNumber, splitWeightValue } = require('.
 const { fold } = require('./columnMapping');
 const { weightProblem, DEFAULT_LIMITS } = require('../utils/weight');
 
+function parseClock(value) {
+  if (typeof value === 'number' && value >= 0 && value < 1) {
+    const seconds = Math.round(value * 86400);
+    if (seconds >= 86400) return null;
+    return [Math.floor(seconds / 3600), Math.floor(seconds / 60) % 60, seconds % 60]
+      .map((part) => String(part).padStart(2, '0')).join(':');
+  }
+  const match = String(value ?? '').trim().match(/^(\d{1,2}):(\d{2})(?::(\d{2}))?$/);
+  if (!match) return null;
+  return parseDateTime(`01/01/2000 ${match[0]}`)?.slice(11) ?? null;
+}
+
 /**
  * readAfterTotal: false (mặc định) → dừng ở dòng "Tổng cộng" đầu tiên (đúng IMPORT_SPEC) và cảnh báo dữ liệu bị bỏ lại;
  *                true → coi mỗi dòng "Tổng cộng" là ngăn cách khối và đọc tiếp các khối sau (chỉ nhận dòng trông như phiếu cân; tổng đối chiếu = tổng các dòng Tổng cộng).
@@ -20,6 +32,14 @@ function parseTickets(aoa, headerRow, mapping, {
 } = {}) {
   const get = (row, f) => (mapping[f] === undefined ? undefined : row[mapping[f]]);
   const has = (value) => value != null && String(value).trim() !== '';
+  const weighTime = (row, n) => {
+    const date = get(row, `ngay_gio_can_${n}`);
+    const parsed = typeof date === 'number' && date < 1 ? null : parseDateTime(date);
+    if (mapping[`gio_can_${n}`] == null || !parsed) return parsed;
+    const clock = parseClock(get(row, `gio_can_${n}`));
+    if (!clock || (parsed.slice(11) !== '00:00:00' && parsed.slice(11) !== clock)) return null;
+    return `${parsed.slice(0, 10)}T${clock}`;
+  };
   const weightFields = ['kl_hang_kg', 'can_lan_1', 'can_lan_2'];
   const unitsByField = Object.fromEntries(weightFields.map((field) => [field, headerUnit(headers[mapping[field]])]));
   const readWeight = (row, field, errors, total = false) => {
@@ -67,7 +87,7 @@ function parseTickets(aoa, headerRow, mapping, {
       afterTotal = true;
       continue;
     }
-    if (afterTotal) { const bs0 = get(row, 'bien_so'), t10 = get(row, 'ngay_gio_can_1'); if (!(bs0 && isValidPlate(bs0) && parseDateTime(t10))) continue; }   // dưới dòng tổng chỉ nhận dòng trông như phiếu cân (bỏ bảng tóm tắt)
+    if (afterTotal) { const bs0 = get(row, 'bien_so'); if (!(bs0 && isValidPlate(bs0) && weighTime(row, 1))) continue; }   // dưới dòng tổng chỉ nhận dòng trông như phiếu cân (bỏ bảng tóm tắt)
     if (strict && !isValidPlate(get(row, 'bien_so'))) {
       const isSignature = row.some((cell) => /^(?:ngay ky|nguoi lap(?: bieu)?|nguoi ky|ke toan|ky ten|ngay \d{1,2} thang \d{1,2} nam)\b/.test(fold(cell)));
       if (isSignature || (r > lastTicket && has(get(row, 'ngay_gio_can_1')))) continue;
@@ -82,14 +102,17 @@ function parseTickets(aoa, headerRow, mapping, {
     }
     blank = 0;
     const errors = [];
-    const t1 = parseDateTime(get(row, 'ngay_gio_can_1'));
-    const t2 = parseDateTime(get(row, 'ngay_gio_can_2'));
+    const t1 = weighTime(row, 1);
+    const t2 = weighTime(row, 2);
     const c1 = readWeight(row, 'can_lan_1', errors);
     const c2 = readWeight(row, 'can_lan_2', errors);
     let kg = readWeight(row, 'kl_hang_kg', errors);
     const bsGoc = get(row, 'bien_so');
     if (noSoPhieu && (!strict || mapping.so_phieu !== undefined)) errors.push('Thiếu số phiếu');
     if (!t1) errors.push('INVALID_TIME: ngày giờ cân 1 không đọc được');
+    if (!t2 && mapping.gio_can_2 != null && (has(get(row, 'ngay_gio_can_2')) || has(get(row, 'gio_can_2')))) {
+      errors.push('INVALID_TIME: ngày và giờ cân 2 phải đầy đủ và khớp nhau');
+    }
     if (t1 && t2 && t2 < t1) errors.push('INVALID_TIME: cân 2 trước cân 1');
     if (!bsGoc) errors.push('Thiếu biển số');
     else if (!isValidPlate(bsGoc)) errors.push('Biển số không đúng định dạng');
@@ -142,8 +165,8 @@ function parseTickets(aoa, headerRow, mapping, {
   if (totalAt >= 0) {
     for (let r = totalAt + 1; r < aoa.length; r++) {
       const row = aoa[r] || [];
-      const bs = get(row, 'bien_so'), t1 = get(row, 'ngay_gio_can_1');
-      if (bs && isValidPlate(bs) && parseDateTime(t1)) { out.ignoredBelowTotal.count++; if (out.ignoredBelowTotal.first_row === null) out.ignoredBelowTotal.first_row = r + 1; }
+      const bs = get(row, 'bien_so'), t1 = weighTime(row, 1);
+      if (bs && isValidPlate(bs) && t1) { out.ignoredBelowTotal.count++; if (out.ignoredBelowTotal.first_row === null) out.ignoredBelowTotal.first_row = r + 1; }
     }
   }
   return out;

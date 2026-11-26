@@ -1,9 +1,10 @@
 'use strict';
-const { fold, matchField } = require('./columnMapping');
+const { fold, mapHeaders } = require('./columnMapping');
 const { ValidationError } = require('../services/CatalogService');
 
 const FIELDS = {
   so_phieu: 'Số phiếu', ngay_gio_can_1: 'Ngày giờ cân 1', ngay_gio_can_2: 'Ngày giờ cân 2',
+  gio_can_1: 'Giờ cân 1 (cột riêng)', gio_can_2: 'Giờ cân 2 (cột riêng)',
   bien_so: 'Biển số', can_lan_1: 'Cân lần 1', can_lan_2: 'Cân lần 2', kl_hang_kg: 'KL hàng',
   weight_unit: 'Đơn vị khối lượng', cong_ty_vc: 'Đơn vị vận chuyển (nguồn)',
   noi_xuat: 'Kho / nơi xuất', noi_den: 'Nơi đến', ghi_chu: 'Ghi chú',
@@ -12,6 +13,7 @@ const FIELDS = {
 function requiredFields(mapping, optionalTicket = false) {
   const fields = optionalTicket ? ['bien_so', 'ngay_gio_can_1'] : ['so_phieu', 'bien_so', 'ngay_gio_can_1'];
   const missing = fields.filter((field) => mapping[field] == null);
+  if (mapping.gio_can_2 != null && mapping.ngay_gio_can_2 == null) missing.push('ngay_gio_can_2');
   if (mapping.kl_hang_kg == null && (mapping.can_lan_1 == null || mapping.can_lan_2 == null)) missing.push('kl_hang_kg');
   return missing;
 }
@@ -42,12 +44,7 @@ function resolveColumns(headers, columns) {
 }
 
 function suggestColumns(headers) {
-  const mapping = {};
-  headers.forEach((title, index) => {
-    const field = matchField(title);
-    if (Object.hasOwn(FIELDS, field) && mapping[field] === undefined) mapping[field] = index;
-  });
-  return mapping;
+  return Object.fromEntries(Object.entries(mapHeaders(headers)).filter(([field]) => Object.hasOwn(FIELDS, field)));
 }
 
 function validateTemplate(template) {
@@ -63,7 +60,7 @@ function validateTemplate(template) {
       Object.entries(columns).some(([field, title]) => !Object.hasOwn(FIELDS, field) || typeof title !== 'string' || !title.trim() || title.length > 500)) {
     throw new ValidationError('Cách ghép cột không hợp lệ');
   }
-  if (requiredFields(columns, true).length) throw new ValidationError('Cần ghép Biển số, Ngày giờ cân 1, và KL hàng hoặc cả hai cột cân');
+  if (requiredFields(columns, true).length) throw new ValidationError('Cần ghép Biển số, Ngày giờ cân 1, và KL hàng hoặc cả hai cột cân. Nếu ghép Giờ cân 2 riêng, hãy ghép cả Ngày cân 2');
   const titles = Object.values(columns).map(fold);
   if (new Set(titles).size !== titles.length) throw new ValidationError('Mỗi tiêu đề chỉ được ghép với một trường');
   const { layout } = template;

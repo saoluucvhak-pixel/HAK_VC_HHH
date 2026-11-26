@@ -57,7 +57,7 @@
               updateSelection();
             } }) },
         { key: 'so_phieu', sticky: 'left-2', fixed: true, label: 'Số phiếu', mono: true, sort: true },
-        { key: 'ngay_gio_can_1', label: 'Cân 1', fmt: 'dt', mono: true, sort: true },
+        { key: 'ngay_gio_can_1', label: 'Ngày giờ cân 1', fmt: 'dt', mono: true, sort: true },
         { key: 'bien_so', label: 'Biển số', mono: true, sort: true },
         { key: 'don_vi', label: 'Đơn vị', sort: true },
         { key: 'noi_xuat', label: 'Nơi xuất', sort: true, render: (r) => r.noi_xuat || h('span', { class: 'muted' }, r.noi_xuat_goc || '') },
@@ -171,7 +171,7 @@
           h('div', { class: 'kpi' }, h('small', {}, 'Số chuyến'), h('b', {}, rows.length)), h('div', { class: 'kpi' }, h('small', {}, 'Khối lượng (tấn)'), h('b', {}, fmt.tan(kg / 1000))),
           h('div', { class: 'kpi' }, h('small', {}, 'Trước VAT'), h('b', {}, fmt.money(amt))), h('div', { class: 'kpi' + (rows.some((r) => r.flags.length) ? ' warn' : '') }, h('small', {}, 'Chuyến bất thường'), h('b', {}, rows.filter((r) => r.flags.length).length))),
         h('div', { class: 'card' }, table({
-          columns: [{ key: 'stt', label: '#', num: true }, { key: 'so_phieu', label: 'Số phiếu', mono: true }, { key: 'ngay_gio_can_1', label: 'Cân 1', fmt: 'dt', mono: true }, { key: 'ngay_gio_can_2', label: 'Cân 2', fmt: 'dt', mono: true },
+          columns: [{ key: 'stt', label: '#', num: true }, { key: 'so_phieu', label: 'Số phiếu', mono: true }, { key: 'ngay_gio_can_1', label: 'Ngày giờ cân 1', fmt: 'dt', mono: true }, { key: 'ngay_gio_can_2', label: 'Ngày giờ cân 2', fmt: 'dt', mono: true },
             { key: 'thoi_gian_can_phut', label: 'Thời gian cân', fmt: 'min' }, { key: 'khoang_cach_chuyen_phut', label: 'Cách chuyến trước', fmt: 'min' }, { key: 'noi_xuat', label: 'Nơi xuất' },
             { key: 'kl_hang_kg', label: 'KL (kg)', fmt: 'kg' }, { key: 'don_gia', label: 'Đơn giá', fmt: 'money' }, { key: 'tien_truoc_vat', label: 'Trước VAT', fmt: 'money' },
             { key: 'flags', label: 'Cảnh báo', render: (r) => h('span', {}, r.flags.map((x) => h('span', { class: 'tag amber', style: { marginRight: '3px' } }, FLAG_TXT[x] || x))) }],

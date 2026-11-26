@@ -195,8 +195,8 @@ async function configuredTicketTemplate(config) {
       return unit === 't' ? weights[field] / 1000 : weights[field];
     };
     return {
-      so_phieu: `0000${i + 1}`, bien_so: `92H-9000${i + 1}`, ngay_gio_can_1: `05/10/2026 08:0${i}`,
-      ngay_gio_can_2: `05/10/2026 08:1${i}`, weight_unit: rowUnit === 't' ? 'tấn' : rowUnit,
+      so_phieu: `0000${i + 1}`, bien_so: `92H-9000${i + 1}`, ngay_gio_can_1: columns.gio_can_1 ? '05/10/2026' : `05/10/2026 08:0${i}`, gio_can_1: `08:0${i}`,
+      ngay_gio_can_2: columns.gio_can_2 ? '05/10/2026' : `05/10/2026 08:1${i}`, gio_can_2: `08:1${i}`, weight_unit: rowUnit === 't' ? 'tấn' : rowUnit,
       noi_xuat: 'Kho mẫu', noi_den: 'Nơi đến mẫu', cong_ty_vc: 'Đơn vị mẫu', ghi_chu: 'Dữ liệu minh họa',
       ...Object.fromEntries(weightFields.map((field) => [field, weightCell(field)])),
     };
