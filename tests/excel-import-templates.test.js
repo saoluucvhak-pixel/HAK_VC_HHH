@@ -106,19 +106,23 @@ test('mẫu cân lần 1/2 có đơn vị dự phòng, bỏ qua ngày ký và t�
 
 test('tải lại từ SQLite, sửa/sao chép/xóa mẫu; đọc lại lô với cấu hình đã lưu', async (t) => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'hak-excel-'));
-  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  let app;
+  t.after(() => {
+    app?.db.close();
+    fs.rmSync(dir, { recursive: true, force: true });
+  });
   const dbFile = path.join(dir, 'app.db');
   const create = () => createApp({ dbFile, driver: 'node:sqlite' });
-  let app = create();
+  app = create();
   const id = saveDefault(app);
   const source = await workbook({ includeTotal: false });
   const o = await app.imports.open(source);
   app.imports.preview(o.token, { sheetName: o.suggestedSheet });
   const { batchId } = app.imports.commit(o.token);
   app.db.close();
+  app = null;
 
   app = create();
-  t.after(() => app.db.close());
   assert.equal(app.imports.templates().defaultId, id);
   const config = app.imports.updateTemplate({ action: 'save', template: { ...template, name: 'Bản sao A' } });
   app.imports.updateTemplate({ action: 'save', id, template: { ...template, name: 'Đổi tên A' } });
