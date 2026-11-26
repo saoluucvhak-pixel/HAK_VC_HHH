@@ -66,7 +66,20 @@ function validateTemplate(template) {
   if (requiredFields(columns, true).length) throw new ValidationError('Cần ghép Biển số, Ngày giờ cân 1, và KL hàng hoặc cả hai cột cân');
   const titles = Object.values(columns).map(fold);
   if (new Set(titles).size !== titles.length) throw new ValidationError('Mỗi tiêu đề chỉ được ghép với một trường');
-  return { name: template.name.trim(), headerRow, headerRows, columns, fallbackUnit };
+  const { layout } = template;
+  if (layout !== undefined) {
+    const sheetName = layout?.sheetName;
+    const positions = layout?.positions;
+    if (typeof sheetName !== 'string' || !sheetName.trim() || sheetName.length > 31 ||
+        /[\\/:?*\[\]]|^'|'$/.test(sheetName) || !positions || typeof positions !== 'object' || Array.isArray(positions) ||
+        Object.keys(positions).length !== Object.keys(columns).length ||
+        Object.keys(columns).some((field) => !Object.hasOwn(positions, field) || !Number.isInteger(positions[field]) || positions[field] < 0 || positions[field] >= 256) ||
+        new Set(Object.values(positions)).size !== Object.keys(positions).length) {
+      throw new ValidationError('Bố cục xuất file mẫu không hợp lệ');
+    }
+  }
+  return { name: template.name.trim(), headerRow, headerRows, columns, fallbackUnit,
+    ...(layout ? { layout: { sheetName: layout.sheetName, positions: layout.positions } } : {}) };
 }
 
 module.exports = { FIELDS, requiredFields, headersAt, resolveColumns, suggestColumns, validateTemplate };

@@ -1,5 +1,11 @@
 # CHANGELOG
 
+## 0.8.8 — kiểm tra nhập và đối chiếu phiếu cân (schema 9)
+- Chuẩn hóa kg/tấn khi đối chiếu. Dòng có dữ liệu lỗi hoặc mâu thuẫn biển số, ngày cân được đưa vào Cần kiểm tra.
+- Dùng nơi đến trên từng dòng khi nhập. Nơi đến lạ được báo lỗi, ô trống dùng mặc định.
+- Phát hiện mâu thuẫn đơn vị và đọc tổng công bố phía trên bảng. Xuất Excel theo mẫu đã lưu.
+- Cho phép nạp lại dữ liệu ban đầu sau lỗi giữa chừng mà vẫn chống trùng.
+
 ## 0.8.7 — mẫu nhập Excel cho phiếu cân (schema 9)
 - Quản lý mẫu nhập, ghép cột từ tiêu đề một hoặc hai dòng, đọc thử và đặt mặc định trong Cài đặt.
 - Ghép theo tên tiêu đề khi cột đổi vị trí, đổi kg/tấn, giữ số 0 đầu của mã phiếu và đối chiếu tổng công bố.

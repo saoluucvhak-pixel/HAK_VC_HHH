@@ -6,19 +6,9 @@
 const { parseDateTime } = require('../utils/datetime');
 const { normalizePlate, displayPlate, isValidPlate } = require('../utils/plate');
 const { createHash } = require('node:crypto');
-const { unitFrom, headerUnit } = require('./weightUnit');
+const { unitFrom, headerUnit, parseWeightNumber, splitWeightValue } = require('./weightUnit');
 const { fold } = require('./columnMapping');
 const { weightProblem, DEFAULT_LIMITS } = require('../utils/weight');
-
-const num = (v, unit) => {
-  if (v === null || v === undefined || v === '') return null;
-  if (typeof v === 'number') return v;
-  let s = String(v).replace(/\s/g, '');
-  if (unit !== 't' || !/^[+-]?\d+\.\d+$/.test(s)) s = s.replace(/\.(?=\d{3}(\D|$))/g, '');
-  s = s.replace(',', '.');
-  const n = Number(s);
-  return isFinite(n) ? n : NaN;
-};
 
 /**
  * readAfterTotal: false (mặc định) → dừng ở dòng "Tổng cộng" đầu tiên (đúng IMPORT_SPEC) và cảnh báo dữ liệu bị bỏ lại;
@@ -35,19 +25,24 @@ function parseTickets(aoa, headerRow, mapping, {
   const readWeight = (row, field, errors, total = false) => {
     const value = get(row, field);
     if (!has(value)) return null;
-    const parts = typeof value === 'string' && value.trim().match(/^([+-]?[0-9.,\s]+?)\s*([a-zA-ZÀ-ỹ.]+(?:\s+[a-zA-ZÀ-ỹ.]+)*)$/);
-    const cellUnit = parts ? unitFrom(parts[2]) : null;
+    const cell = splitWeightValue(value);
     const rowUnit = get(row, 'weight_unit');
     const columnUnit = unitsByField[field];
-    const unit = cellUnit || (columnUnit !== 'invalid' && columnUnit) || unitFrom(rowUnit) || fallbackUnit || (!strict && 'kg');
-    const bad = (parts && !cellUnit) || columnUnit === 'invalid' ||
+    const genericUnit = unitFrom(rowUnit);
+    const unit = cell.unit || (columnUnit !== 'invalid' && columnUnit) || genericUnit || fallbackUnit || (!strict && 'kg');
+    const rowUnitApplies = field === 'kl_hang_kg' || mapping.kl_hang_kg == null;
+    const declared = [cell.unit, columnUnit, rowUnitApplies ? genericUnit : null].filter(Boolean);
+    if (!total && new Set(declared).size > 1) {
+      errors.push(`INVALID_UNIT: Đơn vị mâu thuẫn ở cột "${headers[mapping[field]] || field}" (${declared.join(' / ')})`);
+      return null;
+    }
+    const bad = cell.invalidUnit || columnUnit === 'invalid' ||
       (!total && has(rowUnit) && !unitFrom(rowUnit)) || !unit;
     if (bad) {
       if (errors) errors.push(`INVALID_UNIT: Không xác định được đơn vị của ${headers[mapping[field]] || field}${has(rowUnit) ? ` (“${rowUnit}”)` : ''}. Chọn kg/tấn hoặc sửa cột đơn vị`);
       return null;
     }
-    const n = num(parts ? parts[1] : value, unit);
-    return unit === 't' && Number.isFinite(n) ? Math.round(n * 1e6) / 1000 : n;
+    return parseWeightNumber(cell.value, unit);
   };
   const hasTicketData = (row) => ['so_phieu', 'bien_so', ...weightFields].some((field) => has(get(row, field)));
   let lastTicket = aoa.length - 1;
@@ -123,6 +118,23 @@ function parseTickets(aoa, headerRow, mapping, {
       ghi_chu: has(get(row, 'ghi_chu')) ? String(get(row, 'ghi_chu')).trim() : null,
       errors,
     });
+  }
+  if (!totalRow) {
+    const declared = /^(?:tong khoi luong(?: cong bo)?|tong kl(?: cong bo)?|tong cong bo)(?=\s|[:(]|$)/;
+    for (let r = 0; r < headerRow; r++) {
+      const row = aoa[r] || [];
+      const labelIndex = row.findIndex((cell) => declared.test(fold(cell)));
+      if (labelIndex < 0) continue;
+      const label = String(row[labelIndex]);
+      const explicit = headerUnit(label);
+      const inline = label.match(/[:=]\s*(.+)$/)?.[1];
+      const amount = splitWeightValue(inline || row.slice(labelIndex + 1).find(has));
+      const unit = amount.unit || explicit || unitsByField.kl_hang_kg || fallbackUnit || (!strict && 'kg');
+      const valid = !amount.invalidUnit && unit && unit !== 'invalid' && (!explicit || !amount.unit || explicit === amount.unit);
+      const kg = valid ? parseWeightNumber(amount.value, unit) : null;
+      totalRow = { source_row: r + 1, kl_hang_kg: Number.isFinite(kg) ? kg : null };
+      break;
+    }
   }
   out.totalRow = totalRow;
   // Dữ liệu còn lại DƯỚI dòng "Tổng cộng" (file có nhiều khối/nhiều tháng) không được đọc — đếm các dòng trông như phiếu cân để cảnh báo, không im lặng bỏ qua

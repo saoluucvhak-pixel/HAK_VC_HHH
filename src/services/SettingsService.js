@@ -16,8 +16,9 @@ const VALIDATORS = {
     need(isObj(value) && Array.isArray(value.templates), 'Danh sách mẫu nhập không hợp lệ');
     for (const item of value.templates) {
       need(isObj(item) && typeof item.id === 'string' && /^[0-9a-f-]{36}$/.test(item.id), 'Mã mẫu nhập không hợp lệ');
-      validateTemplate(item);
-      need(Object.keys(item).length === 6, 'Mẫu nhập chỉ lưu cấu hình đọc Excel');
+      const validated = validateTemplate(item);
+      need(Object.keys(item).every((key) => key === 'id' || Object.hasOwn(validated, key)) &&
+        (!item.layout || Object.keys(item.layout).length === 2), 'Mẫu nhập chỉ lưu cấu hình đọc Excel');
     }
     const ids = new Set(value.templates.map((item) => item.id));
     need(ids.size === value.templates.length && (value.defaultId === null || ids.has(value.defaultId)), 'Mẫu mặc định không hợp lệ');

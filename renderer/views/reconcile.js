@@ -6,7 +6,7 @@
     LECH_TIEN: ['amber', 'Lệch tiền'], LECH_VAT: ['amber', 'Lệch VAT'], TRUNG_DU_LIEU: ['purple', 'Trùng dữ liệu'], CAN_KIEM_TRA: ['blue', 'Cần kiểm tra'] };
   const XL = { CHUA_XU_LY: 'Chưa xử lý', CHAP_NHAN_A: 'Chấp nhận hệ thống', CHAP_NHAN_B: 'Chấp nhận đối tác', DIEU_CHINH: 'Điều chỉnh', BO_QUA: 'Bỏ qua' };
   const kq = (k) => h('span', { class: `tag ${KQ[k][0]}` }, KQ[k][1]);
-  const FIELDS = [['so_phieu', 'Số phiếu'], ['bien_so', 'Biển số'], ['ngay', 'Ngày'], ['kl_hang_kg', 'KL (kg)'], ['don_gia', 'Đơn giá'], ['tien_truoc_vat', 'Thành tiền (trước VAT)'], ['tien_vat', 'VAT'], ['tong_tien', 'Tổng tiền']];
+  const FIELDS = [['so_phieu', 'Số phiếu'], ['bien_so', 'Biển số'], ['ngay', 'Ngày'], ['kl_hang_kg', 'Khối lượng'], ['weight_unit', 'Đơn vị khối lượng'], ['don_gia', 'Đơn giá'], ['tien_truoc_vat', 'Thành tiền (trước VAT)'], ['tien_vat', 'VAT'], ['tong_tien', 'Tổng tiền']];
 
   async function results(v, batch) {
     const st = { ket_qua: '' };
@@ -18,7 +18,7 @@
       const resolve = (r) => App.modal({ title: 'Xử lý dòng lệch', actions: [{ label: 'Đóng', primary: false }, ...['CHAP_NHAN_A', 'CHAP_NHAN_B', 'DIEU_CHINH', 'BO_QUA'].map((x) => ({ label: XL[x], cls: x === 'BO_QUA' ? 'ghost' : '', onClick: async () => {
         const ok = await call('recon.resolve', { id: r.id, xu_ly: x, note: note.value }, 'Đã ghi nhận'); if (!ok) return false; load();
       } }))], body: h('div', {}, h('p', {}, kq(r.ket_qua), ' ', h('b', {}, r.a_so_phieu || r.b_so_phieu || ''), ' — hiện: ', XL[r.xu_ly]),
-        r.diffs.length ? table({ columns: [{ key: 'cot', label: 'Cột' }, { key: 'he_thong', label: 'Hệ thống', num: true, fmt: (x) => fmt.money2(x) }, { key: 'doi_tac', label: 'Đối tác', num: true, fmt: (x) => fmt.money2(x) }, { key: 'chenh', label: 'Chênh', num: true, fmt: (x) => (x === null ? '' : fmt.money2(x)) }], rows: r.diffs }) : null,
+        r.diffs.length ? table({ columns: [{ key: 'cot', label: 'Cột' }, { key: 'he_thong', label: 'Hệ thống', num: true, fmt: (x) => typeof x === 'number' ? fmt.money2(x) : x }, { key: 'doi_tac', label: 'Đối tác', num: true, fmt: (x) => typeof x === 'number' ? fmt.money2(x) : x }, { key: 'chenh', label: 'Chênh', num: true, fmt: (x) => (x === null ? '' : fmt.money2(x)) }], rows: r.diffs }) : null,
         h('p', { class: 'muted' }, 'Đối chiếu không sửa phiếu cân. Muốn sửa dữ liệu hãy sửa phiếu/bảng giá (có log) rồi đối chiếu lại.'), note = h('textarea', { placeholder: 'Ghi chú xử lý' })) });
       let note;
       App.clear(body).append(

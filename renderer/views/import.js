@@ -214,7 +214,7 @@
           `Đọc ${fmt.int(T.so_dong)} dòng, tổng KL ${kgf(T.read_kg || 0)}. `,
           T.ignored_below_total > 0 ? `CÒN ${fmt.int(T.ignored_below_total)} dòng giống phiếu cân dưới dòng "Tổng cộng" (từ dòng ${T.ignored_first_row}) CHƯA được đọc — file có nhiều khối? `
             : '',
-          T.file_kg === null || T.file_kg === undefined ? (T.file_total_row ? `Dòng "Tổng cộng" (dòng ${T.file_total_row}) không có giá trị (công thức chưa tính/lưu) nên không đối chiếu được. ` : 'File không có dòng "Tổng cộng" để đối chiếu. ')
+          T.file_kg === null || T.file_kg === undefined ? (T.file_total_row ? `Tổng công bố (dòng ${T.file_total_row}) không đọc được nên chưa thể đối chiếu. ` : 'File không có dòng "Tổng cộng" để đối chiếu. ')
             : T.lech_kg === 0 ? `Khớp dòng "Tổng cộng" của file (dòng ${T.file_total_row}). ` : `LỆCH ${kgf(Math.abs(T.lech_kg))} so với dòng "Tổng cộng" của file (${kgf(T.file_kg)}) — có thể mất dòng, dòng bị loại hoặc sai đơn vị: kiểm tra trước khi import. `,
           `Phiếu mới: ${kgf(T.new_kg || 0)}, tạm tính trước VAT ${fmt.money(T.new_truoc_vat || 0)} đ.`));
         root.append(h('div', { class: 'grid g6', style: { marginBottom: '12px' } },
@@ -223,7 +223,7 @@
           chip('noPrice', 'Chưa có đơn giá', c.noPrice, c.noPrice ? 'warn' : ''), chip('multiplePrice', 'Xung đột giá', c.multiplePrice, c.multiplePrice ? 'warn' : '')),
         h('div', { class: 'card' }, table({
           columns: [{ key: 'idx', label: 'Dòng', render: (r) => r.source_row || r.idx + 1, num: true }, { key: 'phan_loai', label: 'Phân loại', render: (r) => h('span', { class: `tag ${PHAN_LOAI[r.phan_loai]}` }, App.STATUS_TAG[r.phan_loai][1]) },
-            { key: 'so_phieu', label: 'Số phiếu', mono: true }, { key: 'ngay_gio_can_1', label: 'Cân 1', fmt: 'dt', mono: true }, { key: 'bien_so', label: 'Biển số', mono: true }, { key: 'noi_xuat', label: 'Nơi xuất' },
+            { key: 'so_phieu', label: 'Số phiếu', mono: true }, { key: 'ngay_gio_can_1', label: 'Cân 1', fmt: 'dt', mono: true }, { key: 'bien_so', label: 'Biển số', mono: true }, { key: 'noi_xuat', label: 'Nơi xuất' }, { key: 'noi_den_ten', label: 'Nơi đến' },
             { key: 'kl_hang_kg', label: 'KL (kg)', fmt: 'kg' }, { key: 'don_gia', label: 'Đơn giá', fmt: 'money' }, { key: 'tien_truoc_vat', label: 'Trước VAT', fmt: 'money' },
             { key: 'warnings', label: 'Ghi chú', render: (r) => h('span', {}, (r.errors || []).join('; '), (r.warnings || []).map((w) => h('span', { class: 'tag red', style: { marginRight: '3px' } }, (App.STATUS_TAG[w] || [0, w])[1]))) }],
           rows: d.rows, rowClass: (r) => (r.phan_loai === 'ERROR' ? 'err' : r.phan_loai === 'KEY_CONFLICT' ? 'flag' : r.phan_loai.includes('DUPLICATE') ? 'dup' : ''), wrapClass: 'tall' }),
@@ -303,7 +303,7 @@
     const nOf = {}; rows.forEach((r) => { nOf[r.phieu_can_id] = (nOf[r.phieu_can_id] || 0) + 1; });
     const seq = {};
     rows = [...rows].sort((a, b) => (a.phieu_can_id - b.phieu_can_id) || (a.id - b.id)).map((r) => ({ ...r, _n: nOf[r.phieu_can_id], _k: (seq[r.phieu_can_id] = (seq[r.phieu_can_id] || 0) + 1) }));
-    const FIELD = { ngay_gio_can_1: 'Cân 1', ngay_gio_can_2: 'Cân 2', bien_so: 'Biển số', can_lan_1: 'Cân lần 1', can_lan_2: 'Cân lần 2', kl_hang_kg: 'KL (kg)', noi_xuat: 'Nơi xuất' };
+    const FIELD = { noi_den_id: 'Nơi đến', ngay_gio_can_1: 'Cân 1', ngay_gio_can_2: 'Cân 2', bien_so: 'Biển số', can_lan_1: 'Cân lần 1', can_lan_2: 'Cân lần 2', kl_hang_kg: 'KL (kg)', noi_xuat: 'Nơi xuất' };
     const resolve = async (r, a, note) => call('import.resolve', { id: r.id, action: a, note });
     const act = (r, a, label, cls) => ({ label, cls, onClick: async () => {
       const note = a === 'UPDATE' ? await App.promptBox('Lý do cập nhật', 'Ghi chú') : '';
