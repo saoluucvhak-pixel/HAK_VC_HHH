@@ -1,4 +1,14 @@
-# VC Cost 0.8.6 — schema SQLite 9
+# VC Cost 0.8.7 — schema SQLite 9
+
+- Trong **Cài đặt → Mẫu nhập Excel**, quản trị viên có thể chọn sheet, ghép cột từ tiêu đề một hoặc hai dòng, đọc thử, rồi lưu và đặt mẫu mặc định.
+- Ứng dụng ghép theo tên tiêu đề khi cột đổi vị trí, quy đổi kg/tấn, giữ số 0 đầu của mã phiếu và đối chiếu tổng công bố khi đọc được.
+- Mở **Lịch sử import → Chi tiết** để xem cách đọc của lô và đọc lại đúng file nguồn theo cấu hình đã lưu.
+
+## Cài đặt và nâng cấp
+
+Xuất bản sao lưu ra ổ khác rồi đóng VC Cost trước khi chạy Setup. Schema vẫn là 9. Setup và Portable chưa ký số. Đối chiếu tệp tải về với `SHA256SUMS.txt`.
+
+## VC Cost 0.8.6 — schema SQLite 9
 
 - Bản sao lưu thủ công và tự động mới chứa SQLite và tệp Excel/CSV nguồn trong cùng tệp `.db`. Khôi phục kiểm SHA-256 từng tệp. Bản sao lưu cũ và bản trước import vẫn khôi phục được dữ liệu SQLite.
 - Bảng kê chốt mới giữ thông tin bên ký và hợp đồng. Với kỳ cũ, đối chiếu thông tin này với chứng từ gốc.

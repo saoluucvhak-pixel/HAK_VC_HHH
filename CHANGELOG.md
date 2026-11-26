@@ -1,5 +1,10 @@
 # CHANGELOG
 
+## 0.8.7 — mẫu nhập Excel cho phiếu cân (schema 9)
+- Quản lý mẫu nhập, ghép cột từ tiêu đề một hoặc hai dòng, đọc thử và đặt mặc định trong Cài đặt.
+- Ghép theo tên tiêu đề khi cột đổi vị trí, đổi kg/tấn, giữ số 0 đầu của mã phiếu và đối chiếu tổng công bố.
+- Lưu cấu hình đọc trên từng lô để đọc lại file nguồn theo cách đọc đã áp dụng.
+
 ## 0.8.6 — bảo toàn hồ sơ và Bảng kê đã chốt (schema 9)
 - Bản sao lưu thủ công và tự động lưu cả SQLite lẫn tệp nguồn import.
 - Cố định bên ký và hợp đồng tại thời điểm chốt.
