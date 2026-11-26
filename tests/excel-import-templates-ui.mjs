@@ -86,7 +86,11 @@ try {
   await card.getByRole('button', { name: 'Đặt mặc định' }).click();
   await card.locator('[data-template-default]').getByText('Phiếu cân nhà cung cấp A').waitFor();
   await page.getByText('Đã lưu mẫu nhập Excel', { exact: true }).waitFor({ state: 'hidden' });
+  const viewport = page.viewportSize();
+  await page.setViewportSize({ ...viewport, height: 2400 });
+  await trial.getByText('00007', { exact: true }).waitFor();
   await card.screenshot({ path: path.join(screenshots, 'excel-import-template.png') });
+  await page.setViewportSize(viewport);
   await card.getByRole('button', { name: 'Tải file mẫu' }).click();
   await page.getByLabel(/Số dòng nhập liệu/).fill('525');
   await page.getByRole('button', { name: 'Đồng ý', exact: true }).click();
