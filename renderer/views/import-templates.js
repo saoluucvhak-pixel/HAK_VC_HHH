@@ -12,6 +12,7 @@
   const units = (value) => [
     option('', 'Theo tiêu đề / dữ liệu', !value), option('kg', 'kg', value === 'kg'), option('t', 'tấn', value === 't'),
   ];
+  const titleKey = (value) => HAKCore.sf.fold(value).replace(/\s+/g, ' ');
   const kg = (value) => fmt.kgDecimal(value) + ' kg';
 
   function trial(result) {
@@ -20,7 +21,8 @@
       ['can_lan_1', 'Cân lần 1 (kg)'], ['can_lan_2', 'Cân lần 2 (kg)'],
     ].filter(([key]) => sample.some((row) => row[key] != null))
       .map(([key, label]) => ({ key, label, num: true, render: (row) => fmt.kgDecimal(row[key]) }));
-    const hasCan2 = sample.some((row) => row.ngay_gio_can_2);
+    const hasCan2 = result.readConfig?.mapping?.ngay_gio_can_2 != null;
+    const hasDestination = result.readConfig?.mapping?.noi_den != null;
     return h('div', { 'data-template-trial': '1' },
       h('h3', {}, 'Kết quả đọc thử & Ghép dữ liệu'),
       h('p', { class: 'chk ' + (summary.dong_loi ? 'warn' : 'ok') },
@@ -38,6 +40,7 @@
         { key: 'bien_so', label: 'Biển số' },
         { key: 'kl_hang_kg', label: 'KL (kg)', num: true, render: (row) => fmt.kgDecimal(row.kl_hang_kg) },
         ...weights, { key: 'noi_xuat_goc', label: 'Kho' },
+        ...(hasDestination ? [{ key: 'noi_den_nhan_dang', label: 'Nơi đến', render: (row) => row.noi_den_nhan_dang || row.noi_den_goc }] : []),
         ...(sample.some((row) => row.cong_ty_vc_nguon) ? [{ key: 'cong_ty_vc_nguon', label: 'Đơn vị vận chuyển' }] : []),
         { key: 'ghi_chu', label: 'Ghi chú' },
       ], rows: sample }));
@@ -47,6 +50,7 @@
     let config = initial || { defaultId: null, templates: [] };
     let draft = null, opened = null, info = null, sheet = null, mapping = {}, result = null;
     let busy = false;
+    let overrides = new Map(), columnIssues = new Map();
     const root = h('section', { class: 'card', 'data-excel-templates': '1' });
     const btn = (label, onclick, attrs = {}) => h('button', { class: 'btn ghost sm', onclick, disabled: busy, ...attrs }, label);
     const act = async (options) => {
@@ -64,22 +68,26 @@
       await clearFile();
       draft = item ? { ...item, id: copy ? undefined : item.id, name: copy ? `${item.name} (bản sao)`.slice(0, 120) : item.name }
         : { name: '', headerRow: null, headerRows: 1, fallbackUnit: '', columns: {} };
+      overrides = new Map(Object.entries(draft.columns));
+      columnIssues.clear();
       draw();
       root.querySelector('[data-template-editor]')?.scrollIntoView({ block: 'nearest' });
     }
-    async function loadSheet(useSaved = false) {
-      const response = await call('import.sheetInfo', { token: opened.token, sheetName: sheet,
+    async function loadSheet() {
+      info = await call('import.sheetInfo', { token: opened.token, sheetName: sheet,
         headerRow: draft.headerRow, headerRows: draft.headerRows, templateId: null });
-      info = response;
       mapping = { ...info?.mapping };
-      if (info) draft.headerRow = info.headerRow;
-      if (useSaved && info) {
-        for (const [name, title] of Object.entries(draft.columns)) {
-          const index = info.headers.findIndex((col) => col.text === title);
-          if (index >= 0) mapping[name] = index;
-        }
-      }
+      columnIssues.clear();
       result = null;
+      if (!info) return;
+      draft.headerRow = info.headerRow;
+      for (const [name, title] of overrides) {
+        delete mapping[name];
+        if (title === null) continue;
+        const matches = info.headers.filter((col) => titleKey(col.text) === titleKey(title));
+        if (matches.length === 1) mapping[name] = matches[0].index;
+        else columnIssues.set(name, matches.length ? `Cột “${title}” bị trùng` : `Thiếu cột “${title}”`);
+      }
     }
     function draftConfig() {
       const columns = {};
@@ -100,16 +108,16 @@
         h('div', { class: 'row gap-s', style: { flexWrap: 'wrap', marginBottom: '12px' } },
           btn('➕ Tạo mẫu mới', lock(() => edit(null)), { class: 'btn sm', 'data-template-new': '1' }),
           config.defaultId && btn('Dùng Tự nhận diện', lock(() => act({ action: 'default', id: null }))),
-          btn('⬇ Tải Mẫu Phiếu cân chuẩn', () => App.exportXlsx('template.tickets', {})),
-          btn('⬇ Mẫu Danh sách xe', () => App.exportXlsx('template.vehicles', {})),
-          btn('⬇ Mẫu Bảng kê đối tác', () => App.exportXlsx('template.partner', {})),
-          btn('⬇ Mẫu Giá dầu', () => App.exportXlsx('template.fuel', {}))),
+          btn('⬇ Tải Mẫu Phiếu cân chuẩn', () => App.exportTemplate('template.tickets', {})),
+          btn('⬇ Mẫu Danh sách xe', () => App.exportTemplate('template.vehicles', {})),
+          btn('⬇ Mẫu Bảng kê đối tác', () => App.exportTemplate('template.partner', {})),
+          btn('⬇ Mẫu Giá dầu', () => App.exportTemplate('template.fuel', {}))),
         config.templates.length ? table({ columns: [
           { key: 'name', label: 'Tên mẫu' },
           { key: 'id', label: 'Trạng thái', render: (item) => item.id === config.defaultId ? h('span', { class: 'tag green' }, 'Mặc định') : '' },
           { key: 'actions', label: 'Thao tác', render: (item) => h('div', { class: 'row gap-s' },
             btn('Sửa', lock(() => edit(item))), btn('Sao chép', lock(() => edit(item, true))),
-            btn('Tải file mẫu', () => App.exportXlsx('template.configuredTickets', { id: item.id }), { 'data-template-export': '1' }),
+            btn('Tải file mẫu', () => App.exportTemplate('template.configuredTickets', { id: item.id }), { 'data-template-export': '1' }),
             btn('Xóa', lock(async () => {
               if (await App.confirmBox('Xóa mẫu nhập', `Xóa mẫu “${item.name}”?`, 'Xóa')) {
                 if (await act({ action: 'delete', id: item.id }) && draft?.id === item.id) { draft = null; await clearFile(); }
@@ -123,6 +131,7 @@
         result = null;
         root.querySelector('[data-template-trial]')?.remove();
         root.querySelector('[data-template-save]').disabled = true;
+        root.querySelector('[data-template-check]').disabled = columnIssues.size > 0;
       };
       const name = h('input', { value: draft.name, maxlength: 120, oninput: (event) => {
         draft.name = event.target.value;
@@ -135,9 +144,9 @@
         if (!response) return;
         await clearFile();
         opened = response;
-        sheet = opened.suggestedSheet;
+        sheet = opened.sheets.some((item) => item.name === draft.layout?.sheetName) ? draft.layout.sheetName : opened.suggestedSheet;
         if (draft.headerRow == null) draft.headerRow = Math.max(0, opened.sheets.find((item) => item.name === sheet)?.headerRow ?? 0);
-        await loadSheet(true);
+        await loadSheet();
       }), { 'data-template-file': '1' });
       const save = btn('Lưu mẫu', lock(async () => {
         if (!result || result.blocking || !draft.name.trim()) return;
@@ -153,7 +162,7 @@
       const changeSheet = (update) => lock(async (event) => {
         update(event.target.value);
         for (const control of editor.querySelectorAll('button, input, select')) control.disabled = true;
-        await loadSheet(true);
+        await loadSheet();
       });
       const source = h('div', { class: 'excel-template-source' }, fileButton,
         opened ? h('span', { class: 'muted' }, opened.fileName) : h('span', { class: 'muted' }, 'Chọn tệp .xlsx hoặc .csv có dòng tiêu đề và dữ liệu mẫu.'));
@@ -178,14 +187,23 @@
         const mappingTable = h('div', { class: 'excel-template-table' }, h('table', { class: 't' },
           h('thead', {}, h('tr', {}, ['Trường phiếu cân', 'Cột nguồn trong Excel', 'Tiêu đề lưu theo mẫu', 'Mẫu dòng 1'].map((label) => h('th', { scope: 'col' }, label)))),
           h('tbody', {}, FIELDS.map(([key, label]) => {
-            const chosen = h('td', { 'data-template-heading': key }, headerText(key));
+            const issue = columnIssues.get(key);
+            const chosen = h('td', { 'data-template-heading': key }, issue || headerText(key));
             const sampleCell = h('td', { class: 'muted mono sm' }, sampleValue(key));
             const select = h('select', { 'aria-label': label, 'data-template-map': key, onchange: (event) => {
-              if (event.target.value === '') delete mapping[key]; else mapping[key] = Number(event.target.value);
+              if (event.target.value === '') {
+                delete mapping[key];
+                overrides.set(key, null);
+              } else {
+                mapping[key] = Number(event.target.value);
+                overrides.set(key, headerText(key));
+              }
+              columnIssues.delete(key);
               chosen.textContent = headerText(key);
               sampleCell.textContent = sampleValue(key);
               updateSave();
-            } }, option('', '— bỏ qua —', mapping[key] == null), info.headers.filter((col) => col.text)
+            } }, issue && h('option', { value: 'unresolved', disabled: true, selected: true }, '— cần ghép lại —'),
+              option('', '— bỏ qua —', !issue && mapping[key] == null), info.headers.filter((col) => col.text)
               .map((col) => option(col.index, `${col.index + 1}. ${col.text}`, mapping[key] === col.index)));
             return h('tr', {}, h('th', { scope: 'row' }, label), h('td', {}, select), chosen, sampleCell);
           }))));
@@ -203,7 +221,7 @@
           mappingTable));
         editor.append(section('3. Đọc thử và đối chiếu', btn('Đọc thử', lock(async () => {
           result = await call('import.check', { token: opened.token, sheetName: sheet, draft: { ...draftConfig(), name: draft.name.trim() || 'Mẫu đang sửa' } });
-        }), { 'data-template-check': '1' }), ...(result ? [trial(result)] : [])));
+        }), { 'data-template-check': '1', disabled: busy || columnIssues.size > 0 }), ...(result ? [trial(result)] : [])));
       }
       editor.append(h('div', { class: 'row end' }, btn('Đóng', lock(async () => { draft = null; await clearFile(); })), save));
       root.append(editor);

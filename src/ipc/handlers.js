@@ -164,7 +164,7 @@ function createHandlers(app, env = {}) {
 
     // ---------------- import phiếu cân
     'import.templates.update': (options) => app.imports.updateTemplate(options),
-    'import.open': ({ filePath, base64, fileName, sample }) => app.imports.open({ filePath, buffer: base64 ? Buffer.from(base64, 'base64') : null, fileName, sample }),
+    'import.open': ({ filePath, base64, fileName, sample }) => app.imports.open({ filePath, buffer: base64 ? Buffer.from(base64, 'base64') : null, fileName, sample, background: true }),
     'import.batchRead': ({ batchId, filePath, base64, fileName }) => app.imports.readBatch(batchId, { filePath, buffer: base64 ? Buffer.from(base64, 'base64') : null, fileName }),
     'import.check': ({ token, ...o }) => app.imports.check(token, o),
     'import.sheetInfo': ({ token, sheetName, headerRow, ...options }) => app.imports.sheetInfo(token, sheetName, headerRow, options),
@@ -263,18 +263,21 @@ function createHandlers(app, env = {}) {
     },
 
     // ---------------- xuất Excel
-    'template.configuredTickets': async ({ id }) => {
+    'template.configuredTickets': async ({ id, rows }) => {
       const config = app.imports.templates().templates.find((item) => item.id === id);
       if (!config) throw new ValidationError('Mẫu nhập Excel không còn tồn tại');
-      return writeExport(await require('../excel/templates').configuredTicketTemplate(config), 'MAU_Phieu_can_Tuy_chinh.xlsx');
+      return writeExport(await require('../excel/templates').configuredTicketTemplate(config, { rows }), 'MAU_Phieu_can_Tuy_chinh.xlsx');
     },
-    'template.tickets': async () => writeExport(await require('../excel/templates').ticketTemplate({
+    'template.tickets': async ({ rows } = {}) => writeExport(await require('../excel/templates').ticketTemplate({
+      rows,
       locations: app.db.all(`SELECT ten FROM dia_diem WHERE trang_thai='ACTIVE' ORDER BY ten`).map((x) => x.ten),
       carriers: app.db.all(`SELECT ma FROM don_vi_van_chuyen WHERE trang_thai='ACTIVE' ORDER BY ma`).map((x) => x.ma),
     }), 'MAU_Import_Phieu_can.xlsx'),
-    'template.vehicles': async () => writeExport(await require('../excel/templates').vehicleTemplate({ carriers: app.db.all(`SELECT ma FROM don_vi_van_chuyen WHERE trang_thai='ACTIVE' ORDER BY ma`).map((x) => x.ma) }), 'MAU_Import_Danh_sach_xe.xlsx'),
-    'template.partner': async () => writeExport(await require('../excel/templates').partnerTemplate(), 'MAU_Bang_ke_doi_tac.xlsx'),
-    'template.fuel': async () => writeExport(await require('../excel/templates').fuelTemplate(), 'MAU_Import_Gia_dau.xlsx'),
+    'template.vehicles': async ({ rows } = {}) => writeExport(await require('../excel/templates').vehicleTemplate({ rows, carriers: app.db.all(`SELECT ma FROM don_vi_van_chuyen WHERE trang_thai='ACTIVE' ORDER BY ma`).map((x) => x.ma) }), 'MAU_Import_Danh_sach_xe.xlsx'),
+    'template.partner': async ({ rows } = {}) => writeExport(await require('../excel/templates').partnerTemplate({ rows }), 'MAU_Bang_ke_doi_tac.xlsx'),
+    'template.fuel': async ({ rows } = {}) => writeExport(await require('../excel/templates').fuelTemplate({
+      rows, fuelTypes: app.db.all('SELECT DISTINCT loai_dau FROM gia_dau ORDER BY loai_dau').map((x) => x.loai_dau),
+    }), 'MAU_Import_Gia_dau.xlsx'),
     'export.tickets': async ({ filter }) => {
       const f = filter || {};
       const explicitState = f.trang_thai_duyet === 'NHAP' || f.trang_thai_duyet === 'DA_DUYET';

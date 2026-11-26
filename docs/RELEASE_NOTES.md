@@ -1,4 +1,14 @@
-# VC Cost 0.8.10 — schema SQLite 9
+# VC Cost 0.8.11 — schema SQLite 9
+
+- Kiểm tra giờ cân ngay khi đọc thử và xem trước. Dòng có giờ sai được báo theo số dòng Excel. Hiển thị cả lần cân 2 và nơi đến đã nhận dạng khi người dùng ghép các cột này.
+- Ưu tiên sheet đã lưu nếu đủ tiêu đề. Khi có nhiều sheet cùng khớp, yêu cầu chọn sheet. Giữ cách ghép thủ công theo tên tiêu đề khi đổi sheet và báo rõ tên thiếu hoặc trùng.
+- Đọc CSV có dòng giới thiệu trước tiêu đề và dấu phân cách trong ngoặc kép. Cảnh báo các dòng giống phiếu cân dưới dòng tổng, kể cả khi chúng có lỗi.
+- Mở tệp XLSX lớn bằng luồng nền. Chỉ chuyển toàn bộ sheet đã chọn thành bảng khi cần đọc dữ liệu.
+- Chọn từ 1 đến 5.000 dòng nhập liệu khi tải mẫu. Mẫu giá dầu dùng cùng loại mặc định với kỳ điều chỉnh giá dầu là **DO 0,05S-II**.
+
+Xuất bản sao lưu ra ổ khác rồi đóng VC Cost trước khi chạy Setup. Schema vẫn là 9. Bộ cài chưa ký số. Kiểm tra SHA-256 trước khi chạy.
+
+## VC Cost 0.8.10 — schema SQLite 9
 
 - **Nâng cấp Bộ Biểu Mẫu Doanh Nghiệp (Corporate Grade)**: Đồng bộ cả 4 file mẫu chuẩn (Phiếu cân `BM-01`, Danh sách xe `BM-02`, Bảng kê đối tác `BM-03`, Giá dầu `BM-04`) và mẫu tùy chỉnh theo palette Navy `#1F4E79` & Header Dark `#143452`. Cài đặt Sheet Protection bảo vệ ô công thức và tiêu đề, mở khóa vùng nhập liệu cho người dùng.
 - **Xử lý ngày giờ linh hoạt**: Tự động ghép ngày và giờ khi nằm ở 2 cột riêng, hỗ trợ mọi định dạng văn bản (tiếng Việt `8h30`, `08h30p`, số thập phân ngày `0.5`, `1:30 PM`), kiểm tra chống xung đột thời gian.

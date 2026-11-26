@@ -1,4 +1,5 @@
 'use strict';
+const { DEFAULT_FUEL_TYPE } = require('../utils/fuelType');
 /**
  * Bảng giá & kỳ điều chỉnh giá dầu.
  * - Không sửa bảng giá cũ: tạo phiên bản mới từ ngày X, đóng bảng cũ = X − 1 (BR-PRICE-06).
@@ -117,7 +118,7 @@ class PriceService {
    * @param {{ngay:string, gia_dau?:number, dau_tu?:string, dau_den?:string, loai_dau?:string}} o
    *   gia_dau: giá dầu áp dụng giả định; hoặc dau_tu/dau_den: lấy bình quân bảng giá dầu; bỏ trống = giá dầu áp dụng đang lưu ở bảng giá.
    */
-  priceSheet({ ngay, gia_dau = null, dau_tu = null, dau_den = null, loai_dau = 'DO 0,05S-II' } = {}) {
+  priceSheet({ ngay, gia_dau = null, dau_tu = null, dau_den = null, loai_dau = DEFAULT_FUEL_TYPE } = {}) {
     if (!ngay) throw new ValidationError('Cần ngày hiệu lực');
     let dauSo = null, soNgay = null;
     if (gia_dau !== null && gia_dau !== undefined && gia_dau !== '') dauSo = Number(gia_dau);
@@ -188,7 +189,7 @@ class PriceService {
   }
 
   // ------------------------------------------------------------- KỲ ĐIỀU CHỈNH GIÁ DẦU
-  createFuelPeriod({ ma_ky, loai_dau, tu_ngay_tham_chieu, den_ngay_tham_chieu, ngay_ap_dung, so_cong_van, ghi_chu }) {
+  createFuelPeriod({ ma_ky, loai_dau = DEFAULT_FUEL_TYPE, tu_ngay_tham_chieu, den_ngay_tham_chieu, ngay_ap_dung, so_cong_van, ghi_chu }) {
     const prices = this.db.all('SELECT gia FROM gia_dau WHERE loai_dau=? AND ngay BETWEEN ? AND ? ORDER BY ngay', [loai_dau, tu_ngay_tham_chieu, den_ngay_tham_chieu]);
     if (!prices.length) throw new ValidationError('Không có giá dầu nào trong kỳ tham chiếu');
     const avg = Math.round(prices.reduce((a, p) => a + p.gia, 0) / prices.length); // ×1000 → làm tròn 1/1000 đồng

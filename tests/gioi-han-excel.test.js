@@ -36,3 +36,12 @@ test('zip bomb: kích thước giải nén khai báo vượt trần bị từ ch
   const buf = Buffer.concat([Buffer.from([0x50, 0x4b, 0x03, 0x04]), Buffer.alloc(26), cd, eocd]);
   await rejects(readWorkbook({ buffer: buf, fileName: 'bomb.xlsx' }), /giải nén|quá lớn/);
 });
+
+test('luồng nền đọc V47 giống tiến trình chính và chỉ đọc vùng tiêu đề khi quét sheet', async () => {
+  const filePath = require('node:path').join(__dirname, 'fixtures', 'sample-v47.xlsx');
+  const [foreground, background] = await Promise.all([readWorkbook({ filePath }), readWorkbook({ filePath, background: true })]);
+  assert.deepEqual(background.sheets, foreground.sheets);
+  const main = background.sheets.reduce((largest, next) => next.rows > largest.rows ? next : largest);
+  assert.deepEqual(background.scan(main.name, 0, 10), foreground.aoa(main.name).slice(0, 10));
+  assert.deepEqual(background.aoa(main.name), foreground.aoa(main.name));
+});

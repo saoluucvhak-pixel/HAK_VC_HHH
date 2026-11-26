@@ -56,7 +56,7 @@
       h('div', { class: 'card' }, h('h3', {}, '2. File của đối tác (bên B)'),
         h('div', { class: 'row', style: { marginBottom: '8px' } },
           h('button', { class: 'btn', 'data-act': 'pick', onclick: async () => { const x = await App.pickFile(); if (!x) return; const o = await call('recon.open', x); if (!o) return; S.o = o; S.sheet = o.suggestedSheet; await sheet(); draw(); } }, S.o ? `📂 ${S.o.fileName} — chọn file khác` : '📂 Chọn file…'),
-          h('button', { class: 'btn ghost sm', 'data-act': 'tpl-partner', onclick: () => App.exportXlsx('template.partner') }, '⬇ Tải file excel mẫu')
+          h('button', { class: 'btn ghost sm', 'data-act': 'tpl-partner', onclick: () => App.exportTemplate('template.partner') }, '⬇ Tải file excel mẫu')
         ),
         S.info ? h('div', { style: { marginTop: '12px' } }, h('div', { class: 'form-grid' },
           h('label', { class: 'field' }, 'Sheet', h('select', { onchange: async (e) => { S.sheet = e.target.value; await sheet(); draw(); } }, S.o.sheets.map((s) => h('option', { value: s.name, selected: s.name === S.sheet }, s.name)))),
@@ -78,7 +78,7 @@
       if (params.batchId) return results(v, rows.find((x) => x.id === params.batchId));
       v.append(App.pageHead('Đối chiếu', 'So bảng kê / đề nghị thanh toán của đơn vị vận chuyển với phiếu cân trong hệ thống',
         h('span', { class: 'row gap-s' },
-          h('button', { class: 'btn ghost', 'data-act': 'tpl-partner', onclick: () => App.exportXlsx('template.partner') }, '⬇ Tải file excel mẫu'),
+          h('button', { class: 'btn ghost', 'data-act': 'tpl-partner', onclick: () => App.exportTemplate('template.partner') }, '⬇ Tải file excel mẫu'),
           h('button', { class: 'btn', 'data-act': 'new', onclick: () => { App.clear(v); wizard(v); } }, '+ Đối chiếu mới')
         )),
         h('div', { class: 'card' }, table({ columns: [{ key: 'id', label: '#', num: true }, { key: 'ten', label: 'Tên lô' }, { key: 'don_vi', label: 'Đơn vị' }, { key: 'created_at', label: 'Thời gian', fmt: 'dt' }, { key: 'tong', label: 'Dòng', fmt: 'int' }, { key: 'khop', label: 'Khớp', fmt: 'int' },

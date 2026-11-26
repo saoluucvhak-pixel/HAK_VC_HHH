@@ -190,3 +190,83 @@ test('ngày và giờ riêng ghép từ ô Excel thật, lưu theo ngày của m
     });
   } finally { app.close(); }
 });
+
+test('giờ cân sai có số dòng ở đọc thử và chỉ các phiếu hợp lệ được ghi', async (t) => {
+  const app = createApp();
+  t.after(() => app.close());
+  const book = new ExcelJS.Workbook();
+  const ws = book.addWorksheet('Cân');
+  ws.addRow(['Số phiếu', 'Biển số', 'Ngày cân', 'Giờ cân', 'Ngày cân 2', 'Giờ cân 2', 'KL hàng (kg)']);
+  for (const [index, clock] of ['08h30p', '08:75', '08:30:99', '13:30 PM', '00:15 AM', 800, 0.5].entries()) {
+    ws.addRow([String(index + 1).padStart(4, '0'), '92H-00903', '05/10/2026', '8:00 AM', '05/10/2026', clock, 15000]);
+  }
+  ws.addRow(['0008', '92H-00903', '05/10/2026', '08:70', null, null, 15000]);
+  const opened = await app.imports.open({ fileName: 'gio-can.xlsx', buffer: Buffer.from(await book.xlsx.writeBuffer()) });
+  const info = app.imports.sheetInfo(opened.token, opened.suggestedSheet);
+  assert.equal(info.mapping.gio_can_1, 3);
+  const args = { sheetName: info.sheetName, headerRow: info.headerRow, mapping: info.mapping };
+  const check = app.imports.check(opened.token, args);
+  assert.equal(check.summary.dong_loi, 6);
+  assert.equal(check.sample[0].ngay_gio_can_2, '2026-10-05T08:30:00');
+  assert.match(check.sample[1].errors.join(' '), /08:75/);
+  assert.equal(check.sample[6].ngay_gio_can_2, '2026-10-05T12:00:00');
+  assert.match(check.sample[7].errors.join(' '), /08:70/);
+  assert.equal(app.imports.preview(opened.token, args).counts.error, 6);
+  assert.equal(app.imports.commit(opened.token).inserted, 2);
+});
+
+test('ưu tiên tên sheet đã lưu, nhiều sheet khớp thì yêu cầu chọn khi không có tên đã lưu', async (t) => {
+  const app = createApp();
+  t.after(() => app.close());
+  const book = new ExcelJS.Workbook();
+  for (const name of ['Bản nháp', 'Bản chính']) {
+    book.addWorksheet(name).addRows([['Số phiếu', 'Biển số', 'Ngày cân', 'KL hàng (kg)'],
+      ['0001', '92H-00903', '05/10/2026', 15000]]);
+  }
+  const file = { fileName: 'hai-sheet.xlsx', buffer: Buffer.from(await book.xlsx.writeBuffer()) };
+  const config = { name: 'Có tên sheet', headerRow: 0, headerRows: 1, fallbackUnit: '',
+    columns: { so_phieu: 'Số phiếu', bien_so: 'Biển số', ngay_gio_can_1: 'Ngày cân', kl_hang_kg: 'KL hàng (kg)' } };
+  saveDefault(app, { ...config, layout: { sheetName: 'Bản chính',
+    positions: { so_phieu: 0, bien_so: 1, ngay_gio_can_1: 2, kl_hang_kg: 3 } } });
+  assert.equal((await app.imports.open(file)).suggestedSheet, 'Bản chính');
+  saveDefault(app, { ...config, name: 'Không có tên sheet' });
+  const open = await app.imports.open(file);
+  assert.equal(open.suggestedSheet, null);
+  assert.deepEqual(open.ambiguousSheets, ['Bản nháp', 'Bản chính']);
+  assert.throws(() => app.imports.preview(open.token, { sheetName: open.suggestedSheet }), /tiêu đề/i);
+  assert.equal(app.imports.preview(open.token, { sheetName: 'Bản chính' }).counts.new, 1);
+});
+
+test('CSV có dòng giới thiệu và dấu phân cách bên trong chuỗi vẫn đọc đúng phiếu', async (t) => {
+  const app = createApp();
+  t.after(() => app.close());
+  const buffer = Buffer.from([
+    'Bảng phiếu cân tổng hợp V47', 'Số phiếu;Biển số;Ngày cân;Giờ cân;KL hàng (kg);Ghi chú',
+    '0007;92H-00903;05/10/2026;0,5;15000;"Một, hai, ba; đã cân"',
+  ].join('\r\n'));
+  const open = await app.imports.open({ fileName: 'nguon.csv', buffer });
+  const info = app.imports.sheetInfo(open.token, open.suggestedSheet);
+  const check = app.imports.check(open.token, { sheetName: info.sheetName, headerRow: info.headerRow, mapping: info.mapping });
+  assert.equal(info.headerRow, 1);
+  assert.equal(check.readKg, 15000);
+  assert.equal(check.sample[0].ghi_chu, 'Một, hai, ba; đã cân');
+  assert.equal(check.sample[0].ngay_gio_can_1, '2026-10-05T12:00:00');
+});
+
+test('phiếu lỗi sau Tổng cộng được cảnh báo hoặc được liệt kê theo chế độ đọc', async (t) => {
+  const app = createApp();
+  t.after(() => app.close());
+  const book = new ExcelJS.Workbook();
+  book.addWorksheet('Cân').addRows([['Số phiếu', 'Biển số', 'Ngày cân', 'KL hàng (kg)'],
+    ['0001', '92H-00903', '05/10/2026', 15000], ['Tổng cộng', null, null, 15000],
+    ['0002', '92H-00903', 'Sai ngày', 14000], [null, null, 'Ngày 05 tháng 10 năm 2026']]);
+  const open = await app.imports.open({ fileName: 'tong-cong.xlsx', buffer: Buffer.from(await book.xlsx.writeBuffer()) });
+  const info = app.imports.sheetInfo(open.token, open.suggestedSheet);
+  const options = { sheetName: info.sheetName, headerRow: info.headerRow, mapping: info.mapping };
+  const stopped = app.imports.check(open.token, options);
+  assert.ok(stopped.problems.some((problem) => /1 dòng giống phiếu cân.*từ dòng 4/.test(problem.text)));
+  const continued = app.imports.check(open.token, { ...options, readAfterTotal: true });
+  assert.equal(continued.summary.tong_dong, 2);
+  assert.equal(continued.summary.dong_loi, 1);
+  assert.equal(continued.sample[1].source_row, 4);
+});

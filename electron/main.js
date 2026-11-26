@@ -127,7 +127,11 @@ function runSmoke() {
           if (rt.app.db.get(`SELECT COUNT(*) n FROM audit_log WHERE action='BAN_CU'`).n !== 1) problems.push('nâng cấp: mất dòng audit của bản cũ');
         } else {
           const seed = path.join(__dirname, '..', 'data', 'seed', 'Tong-hop-chi-phi-VC-V47.xlsx');
-          const o = await rt.dispatch('import.open', { filePath: seed }); const si = await rt.dispatch('import.sheetInfo', { token: o.data.token, sheetName: o.data.suggestedSheet });
+          // V47 vượt ngưỡng dùng Worker, kiểm tra ngay trong bản đóng gói ASAR.
+          const o = await rt.dispatch('import.open', { filePath: seed });
+          if (!o.ok) throw new Error('Mở tệp mẫu V47: ' + o.error);
+          const si = await rt.dispatch('import.sheetInfo', { token: o.data.token, sheetName: o.data.suggestedSheet });
+          if (!si.ok) throw new Error('Đọc tiêu đề tệp mẫu V47: ' + si.error);
           const dot = rt.app.db.get('SELECT id FROM dot_van_chuyen LIMIT 1');
           const pv = await rt.dispatch('import.preview', { token: o.data.token, sheetName: si.data.sheetName, headerRow: si.data.headerRow, mapping: si.data.mapping, dotId: dot ? dot.id : null });
           const cm = await rt.dispatch('import.commit', { token: o.data.token });

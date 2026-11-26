@@ -6,7 +6,7 @@ const { assertOpenForTickets } = require('./ChotKyService');
  * KEY_CONFLICT không tự ghi đè → "Cần kiểm tra" (Giữ cũ / Cập nhật mới / Bỏ qua).
  */
 const crypto = require('crypto');
-const { readWorkbook } = require('../excel/workbookReader');
+const { readWorkbook, exceedsSheetLimit } = require('../excel/workbookReader');
 const { detectHeader, fold } = require('../excel/columnMapping');
 const { FIELDS, requiredFields, headersAt, resolveColumns, suggestColumns, validateTemplate } = require('../excel/importTemplate');
 const { parseTickets } = require('../excel/ticketParser');
@@ -28,6 +28,13 @@ const ISSUE_WARN = {
   MULTIPLE_PRICE: ['Nhiều bảng giá cùng hiệu lực', 'Đóng bớt bảng giá chồng lấn ở menu Bảng giá'],
   NO_VAT_RATE: ['Bảng giá chưa có thuế suất VAT', 'Nhập VAT cho bảng giá'],
 };
+
+function workbookHeaders(wb, sheet, row, depth) {
+  if (!Number.isInteger(row) || row < depth - 1) return [];
+  const current = wb.scan(sheet, row, row + 1);
+  if (depth === 1) return headersAt(current, 0, depth);
+  return headersAt([[], current[0]], 1, depth, () => wb.header(sheet, row - 1));
+}
 
 class TicketImportService {
   constructor(db, { audit, alerts, cost, settings, previewTtlMs = 2 * 60 * 60 * 1000 }) {
@@ -64,17 +71,20 @@ class TicketImportService {
   }
 
   /** Bước 1: đọc file, liệt kê sheet, gợi ý sheet theo cách đọc mặc định. */
-  async open({ filePath, buffer, fileName, sample = false, templateId }) {
-    const wb = await readWorkbook({ filePath, buffer, fileName });
+  async open({ filePath, buffer, fileName, sample = false, templateId, background = false }) {
+    const wb = await readWorkbook({ filePath, buffer, fileName, background });
     const config = sample ? { defaultId: null, templates: [] } : this.templates();
     const template = config.templates.find((item) => item.id === (templateId === undefined ? config.defaultId : templateId));
     const scored = wb.sheets.map((s) => {
-      const aoa = wb.aoa(s.name);
-      const header = detectHeader(aoa);
-      const fit = template ? resolveColumns(headersAt(aoa, template.headerRow, template.headerRows, (index) => wb.header(s.name, index)), template.columns) : null;
-      return { ...s, header, fit: fit ? Object.keys(fit.mapping).length : header.score };
+      const oversized = exceedsSheetLimit(s);
+      const header = detectHeader(oversized ? [] : wb.scan(s.name, 0, 30));
+      const fit = template && !oversized ? resolveColumns(workbookHeaders(wb, s.name, template.headerRow, template.headerRows), template.columns) : null;
+      return { ...s, header, fit: fit ? Object.keys(fit.mapping).length : header.score, matches: fit && !fit.problems.length };
     });
-    const best = scored.reduce((a, b) => (!a || b.fit > a.fit ? b : a), null);
+    const complete = scored.filter((sheet) => sheet.matches);
+    const preferred = complete.find((sheet) => sheet.name === template?.layout?.sheetName);
+    const ambiguous = Boolean(template && !preferred && complete.length > 1);
+    const best = preferred ?? scored.reduce((a, b) => (!a || b.fit > a.fit ? b : a), null);
     const prev = !sample && this.db.get(`SELECT id, import_time FROM import_batch WHERE file_hash=? AND trang_thai='COMMITTED' ORDER BY id DESC LIMIT 1`, [wb.hash]);
     const token = crypto.randomUUID();
     this._prune();
@@ -82,7 +92,7 @@ class TicketImportService {
     return {
       token, fileName: wb.fileName, hash: wb.hash, size: wb.size,
       sheets: scored.map((s) => ({ name: s.name, rows: s.rows, cols: s.cols, headerRow: s.header.headerRow, score: s.header.score })),
-      suggestedSheet: best ? best.name : null, ...config,
+      suggestedSheet: ambiguous ? null : best?.name ?? null, ambiguousSheets: ambiguous ? complete.map((sheet) => sheet.name) : [], ...config,
       previouslyImported: prev ? { batchId: prev.id, at: prev.import_time } : null,
     };
   }
@@ -97,13 +107,12 @@ class TicketImportService {
   /** Bước 2: tên cột và cách ghép của sheet, hoặc gợi ý để sửa thủ công. */
   sheetInfo(token, sheetName, headerRow = null, { templateId, headerRows = 1 } = {}) {
     const p = this._p(token);
-    const aoa = p.wb.aoa(sheetName);
     const template = this._template(p, templateId);
-    const hr = template ? template.headerRow : headerRow ?? detectHeader(aoa).headerRow;
+    const hr = template ? template.headerRow : headerRow ?? detectHeader(p.wb.scan(sheetName, 0, 30)).headerRow;
     const depth = template ? template.headerRows : headerRows;
-    const titles = headersAt(aoa, hr, depth, (index) => p.wb.header(sheetName, index));
+    const titles = workbookHeaders(p.wb, sheetName, hr, depth);
     const { mapping, problems } = template ? resolveColumns(titles, template.columns) : { mapping: suggestColumns(titles), problems: [] };
-    return { sheetName, headerRow: hr, headerRows: depth, headers: titles.map((text, index) => ({ index, text })), mapping, problems, sample: aoa.slice(hr + 1, hr + 6) };
+    return { sheetName, headerRow: hr, headerRows: depth, headers: titles.map((text, index) => ({ index, text })), mapping, problems, sample: p.wb.scan(sheetName, hr + 1, hr + 6) };
   }
 
   _read(p, { sheetName, headerRow, headerRows = 1, mapping, templateId, draft, fallbackUnit = '', strict = false, readAfterTotal = false }) {
@@ -112,14 +121,14 @@ class TicketImportService {
       ({ headerRow, headerRows, fallbackUnit } = template);
       strict = true;
     }
-    const aoa = p.wb.aoa(sheetName);
     const hr = Number(headerRow);
-    const titles = headersAt(aoa, hr, headerRows, (index) => p.wb.header(sheetName, index));
+    const selected = p.wb.sheets.find((sheet) => sheet.name === sheetName);
+    const titles = workbookHeaders(p.wb, sheetName, hr, headerRows);
     const resolved = template ? resolveColumns(titles, template.columns) : { mapping: mapping || {}, problems: [] };
     const m = { ...resolved.mapping };
     const problems = [...resolved.problems];
     const error = (text, field = null) => problems.push({ level: 'error', field, text });
-    if (![1, 2].includes(headerRows) || !Number.isInteger(hr) || hr < headerRows - 1 || hr >= aoa.length) error('Dòng tiêu đề nằm ngoài sheet đã chọn');
+    if (![1, 2].includes(headerRows) || !Number.isInteger(hr) || hr < headerRows - 1 || hr >= (selected?.rows ?? 0)) error('Dòng tiêu đề nằm ngoài sheet đã chọn');
     if (!['', 'kg', 't'].includes(fallbackUnit)) error('Đơn vị dự phòng phải là kg hoặc tấn');
     for (const field of requiredFields(m, strict)) {
       if (problems.some((problem) => problem.field === field)) continue;
@@ -138,7 +147,7 @@ class TicketImportService {
     }
     let rows = [];
     if (!problems.some((problem) => problem.level === 'error')) {
-      rows = parseTickets(aoa, hr, m, { weightLimits: limitsFrom(this.settings), readAfterTotal, strict, fallbackUnit, headers: titles, codeReader: p.wb.codeReader(sheetName) });
+      rows = parseTickets(p.wb.aoa(sheetName), hr, m, { weightLimits: limitsFrom(this.settings), readAfterTotal, strict, fallbackUnit, headers: titles, codeReader: p.wb.codeReader(sheetName) });
       const unitErrors = rows.filter((row) => row.errors.some((message) => message.startsWith('INVALID_UNIT:')));
       if (unitErrors.length) error(`${unitErrors.length} dòng có đơn vị không xác định. Dòng Excel ${unitErrors[0].source_row}: ${unitErrors[0].errors.find((message) => message.startsWith('INVALID_UNIT:')).slice(14)}`, 'weight_unit');
       if (strict && !rows.length) error('Không tìm thấy dòng phiếu cân dưới tiêu đề đã chọn');
@@ -177,7 +186,7 @@ class TicketImportService {
     if (readConfig.mapping.ngay_gio_can_2 == null) problems.push({ level: 'warning', field: 'ngay_gio_can_2', text: 'Chưa ghép "Ngày giờ cân 2": không kiểm tra được thời gian cân' });
     if (rows.ignoredBelowTotal && rows.ignoredBelowTotal.count) problems.push({ level: 'warning', field: null, text: `Còn ${rows.ignoredBelowTotal.count} dòng giống phiếu cân nằm DƯỚI dòng "Tổng cộng" (từ dòng ${rows.ignoredBelowTotal.first_row}) — hệ thống dừng đọc ở dòng Tổng cộng nên các dòng này CHƯA được nhập. File có nhiều khối? Tách/sửa file rồi nhập lại` });
     const alias = this.cost.loadContext().alias;
-    this._resolveDestinations(rows, alias);
+    const destinations = this._resolveDestinations(rows, alias);
     const reasons = new Map();
     for (const r of rows) for (const e of r.errors) {
       const key = String(e).replace(/\d+([.,]\d+)?/g, '#').replace(/\s+/g, ' ').slice(0, 120);
@@ -185,10 +194,10 @@ class TicketImportService {
       cur.so_dong++; reasons.set(key, cur);
     }
     const locs = new Map(this.db.all('SELECT id, ten FROM dia_diem').map((d) => [d.id, d.ten]));
-    const sample = rows.slice(0, sampleSize).map((r) => {
+    const sample = rows.slice(0, sampleSize).map((r, index) => {
       const nx = alias.get(fold(r.noi_xuat)) || null;
       return { source_row: r.source_row, so_phieu: r.so_phieu, ngay_gio_can_1: r.ngay_gio_can_1, ngay_gio_can_2: r.ngay_gio_can_2, bien_so: r.bien_so, bien_so_goc: r.bien_so_goc,
-        kl_hang_kg: r.kl_hang_kg, can_lan_1: r.can_lan_1, can_lan_2: r.can_lan_2, cong_ty_vc_nguon: r.cong_ty_vc_nguon, ghi_chu: r.ghi_chu, noi_xuat_goc: r.noi_xuat, noi_xuat_nhan_dang: nx ? locs.get(nx) || null : null, errors: r.errors };
+        kl_hang_kg: r.kl_hang_kg, can_lan_1: r.can_lan_1, can_lan_2: r.can_lan_2, cong_ty_vc_nguon: r.cong_ty_vc_nguon, ghi_chu: r.ghi_chu, noi_xuat_goc: r.noi_xuat, noi_den_goc: r.noi_den, noi_den_nhan_dang: locs.get(destinations[index]) ?? null, noi_xuat_nhan_dang: nx ? locs.get(nx) || null : null, errors: r.errors };
     });
     const readKg = Math.round(rows.reduce((sum, row) => sum + (Number(row.kl_hang_kg) || 0), 0) * 1000) / 1000;
     const fileKg = rows.totalRow?.kl_hang_kg ?? null;
@@ -558,7 +567,7 @@ class TicketImportService {
   async readBatch(batchId, file) {
     const { batch, readConfig } = this.batchConfig(batchId);
     if (!readConfig.mapping) throw new ValidationError('Lô này chưa có cấu hình đọc file');
-    const wb = await readWorkbook(file);
+    const wb = await readWorkbook({ ...file, background: true });
     if (wb.hash !== batch.file_hash) throw new ValidationError('File đã chọn khác file nguồn của lô này');
     return this._check({ wb, config: { defaultId: null, templates: [] } }, { ...readConfig, templateId: null }, 8);
   }

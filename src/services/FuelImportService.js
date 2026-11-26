@@ -1,4 +1,5 @@
 'use strict';
+const { DEFAULT_FUEL_TYPE } = require('../utils/fuelType');
 /**
  * Import giá dầu theo ngày từ Excel/CSV: cột Ngày + Giá (+ Loại dầu, Nguồn tuỳ chọn).
  * Preview → chọn ghi đè giá khác → ghi. Không đụng bảng giá/phiếu (giá dầu chỉ là dữ liệu tham chiếu cho kỳ điều chỉnh).
@@ -20,7 +21,7 @@ const num = (v) => {
 class FuelImportService {
   constructor(db, { audit }) { Object.assign(this, { db, audit }); this.previews = new Map(); }
 
-  async preview({ filePath, buffer, fileName, sheetName = null, loaiDau = 'DO 0,05S-II' }) {
+  async preview({ filePath, buffer, fileName, sheetName = null, loaiDau = DEFAULT_FUEL_TYPE }) {
     const wb = await readWorkbook({ filePath, buffer, fileName });
     let best = null;
     for (const s of wb.sheets) {
@@ -44,7 +45,7 @@ class FuelImportService {
       if ((rawD === null || rawD === undefined || rawD === '') && (rawG === null || rawG === undefined || rawG === '')) continue;
       const d = rawD === null || rawD === undefined || rawD === '' ? null : datePart(parseDateTime(rawD));
       const g = num(rawG);
-      const loai = best.loai >= 0 && row[best.loai] ? String(row[best.loai]).trim() : loaiDau;
+      const loai = String(best.loai >= 0 ? row[best.loai] ?? '' : '').trim() || loaiDau;
       const item = { source_row: r + 1, ngay: d, loai_dau: loai, gia: g, nguon: best.nguon >= 0 && row[best.nguon] ? String(row[best.nguon]).trim() : null };
       if (!d || !/^\d{4}-\d{2}-\d{2}$/.test(d) || g === null || g <= 0) item.status = 'INVALID';
       else if (seen.has(`${d}|${loai}`)) item.status = 'DUP_IN_FILE';
