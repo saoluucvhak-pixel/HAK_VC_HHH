@@ -193,6 +193,14 @@ const App = (() => {
     setTimeout(() => inp.focus(), 30);
   });
 
+  const exportTemplate = async (channel, args = {}) => {
+    const choice = await promptBox('Tải file mẫu Excel', 'Số dòng nhập liệu (1–5000)', '500');
+    if (choice == null) return;
+    const rows = Number(choice);
+    if (!/^\d+$/.test(choice) || rows < 1 || rows > 5000) return toast('Số dòng nhập liệu phải là số nguyên từ 1 đến 5000', true);
+    return exportXlsx(channel, { ...args, rows });
+  };
+
   // ---------------------------------------------------------------- bảng
   /**
    * table({columns:[{key,label,fmt,cls,render,sort}], rows, totals, onRow, rowClass, sort:{key,dir}, onSort})
@@ -406,5 +414,5 @@ const App = (() => {
     }
   });
 
-  return { h, clear, bindNum, fmt, tag, api, call, callConfirm, pickFile, canWrite, applyPerms, actionAllowed, saveExport, exportXlsx, toast, modal, confirmBox, promptBox, table, register, latestRender, viewId: () => current, go, reload, start, refreshInfo, refreshAuth, can, get auth() { return auth; }, logout, state, pageHead, STATUS_TAG, get info() { return info; } };
+  return { h, clear, bindNum, fmt, tag, api, call, callConfirm, pickFile, canWrite, applyPerms, actionAllowed, saveExport, exportXlsx, exportTemplate, toast, modal, confirmBox, promptBox, table, register, latestRender, viewId: () => current, go, reload, start, refreshInfo, refreshAuth, can, get auth() { return auth; }, logout, state, pageHead, STATUS_TAG, get info() { return info; } };
 })();

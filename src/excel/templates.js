@@ -14,6 +14,8 @@
  */
 const ExcelJS = require('exceljs');
 const { FIELDS, validateTemplate } = require('./importTemplate');
+const { ValidationError } = require('../services/CatalogService');
+const { DEFAULT_FUEL_TYPE } = require('../utils/fuelType');
 const { headerUnit } = require('./weightUnit');
 
 const BRAND = 'FF1F4E79', BRAND_DARK = 'FF143452', LINE = 'FFD9D9D9', ZEBRA = 'FFF8FAFC', REQ = 'FFFDE8E8', OPT = 'FFEAF1F8';
@@ -26,8 +28,13 @@ const border = {
 };
 const fill = (argb) => ({ type: 'pattern', pattern: 'solid', fgColor: { argb } });
 
+function validateRowCount(rows) {
+  if (!Number.isInteger(rows) || rows < 1 || rows > 5000) throw new ValidationError('Số dòng nhập liệu phải là số nguyên từ 1 đến 5000');
+}
+
 /** cols: [{key, header, width, req, fmt, align, note, eg, validate, formula, text}] */
 function dataSheet(wb, { name, title, subtitle, cols, rows = 500, extra = null }) {
+  validateRowCount(rows);
   const ws = wb.addWorksheet(name, {
     views: [{ state: 'frozen', ySplit: 5, showGridLines: false }],
     properties: { tabColor: { argb: BRAND } },
@@ -226,7 +233,7 @@ const listValidationCol = (sheet, colLetter, n, msg) => ({
   error: msg,
 });
 
-async function ticketTemplate({ locations = [], carriers = [] } = {}) {
+async function ticketTemplate({ locations = [], carriers = [], rows } = {}) {
   const wb = new ExcelJS.Workbook();
   wb.creator = 'VC Cost';
   wb.created = new Date();
@@ -254,6 +261,7 @@ async function ticketTemplate({ locations = [], carriers = [] } = {}) {
 
   dataSheet(wb, {
     name: 'Phiếu cân',
+    rows,
     title: 'HỆ THỐNG QUẢN LÝ VẬN CHUYỂN & CHI PHÍ — VC COST (BM-01/VCC-2026)',
     subtitle: 'MẪU IMPORT PHIẾU CÂN DOANH NGHIỆP — Điền dữ liệu từ dòng 6 trở xuống. Ô công thức đã được bảo vệ tự động.',
     cols,
@@ -283,7 +291,7 @@ async function ticketTemplate({ locations = [], carriers = [] } = {}) {
   return Buffer.from(await wb.xlsx.writeBuffer());
 }
 
-async function vehicleTemplate({ carriers = [] } = {}) {
+async function vehicleTemplate({ carriers = [], rows } = {}) {
   const wb = new ExcelJS.Workbook();
   wb.creator = 'VC Cost';
   wb.created = new Date();
@@ -297,6 +305,7 @@ async function vehicleTemplate({ carriers = [] } = {}) {
   ];
   dataSheet(wb, {
     name: 'Danh sách xe',
+    rows,
     title: 'HỆ THỐNG QUẢN LÝ VẬN CHUYỂN & CHI PHÍ — VC COST (BM-02/VCC-2026)',
     cols,
     subtitle: 'MẪU IMPORT DANH SÁCH XE — Mỗi dòng gán một xe cho một đơn vị vận chuyển. Điền xong lưu file .xlsx rồi vào VC Cost → Import phiếu cân → "Import danh mục xe".',
@@ -318,7 +327,7 @@ async function vehicleTemplate({ carriers = [] } = {}) {
   return Buffer.from(await wb.xlsx.writeBuffer());
 }
 
-async function partnerTemplate() {
+async function partnerTemplate({ rows } = {}) {
   const wb = new ExcelJS.Workbook();
   wb.creator = 'VC Cost';
   wb.created = new Date();
@@ -337,6 +346,7 @@ async function partnerTemplate() {
   ];
   dataSheet(wb, {
     name: 'Bảng kê đối tác',
+    rows,
     title: 'HỆ THỐNG QUẢN LÝ VẬN CHUYỂN & CHI PHÍ — VC COST (BM-03/VCC-2026)',
     cols,
     subtitle: 'MẪU BẢNG KÊ VẬN CHUYỂN (ĐỐI TÁC GỬI ĐỐI CHIẾU) — Mẫu chuẩn gửi cho các đơn vị vận chuyển / nhà xe điền và gửi lại để đối chiếu chi phí.',
@@ -357,7 +367,8 @@ async function partnerTemplate() {
   return Buffer.from(await wb.xlsx.writeBuffer());
 }
 
-async function fuelTemplate() {
+async function fuelTemplate({ rows, fuelTypes = [] } = {}) {
+  const types = [...new Set([DEFAULT_FUEL_TYPE, ...fuelTypes])];
   const wb = new ExcelJS.Workbook();
   wb.creator = 'VC Cost';
   wb.created = new Date();
@@ -365,13 +376,15 @@ async function fuelTemplate() {
     { header: 'STT', width: 7, align: 'center', fmt: '0', req: false, format: 'Số thứ tự', eg: 'Không bắt buộc.' },
     { header: 'Ngày', width: 16, align: 'center', req: true, fmt: 'dd/mm/yyyy', format: 'dd/mm/yyyy', eg: 'Ví dụ: 01/10/2026 — ngày giá dầu có hiệu lực điều chỉnh.',
       validate: { type: 'date', operator: 'greaterThan', allowBlank: false, formulae: [new Date(2000, 0, 1)], showErrorMessage: true, errorTitle: 'Ngày không hợp lệ', error: 'Nhập ngày dạng dd/mm/yyyy' } },
-    { header: 'Giá dầu (đ/lít)', width: 18, align: 'right', req: true, fmt: '#,##0', format: 'Số (đồng/lít)', eg: 'Ví dụ: 20.500 — đơn giá dầu DO 0.05S theo quy định hợp đồng.' },
-    { header: 'Loại dầu', width: 18, align: 'center', req: false, text: true, format: 'Văn bản', eg: 'Ví dụ: DO 0.05S. Mặc định là DO 0.05S nếu để trống.' },
+    { header: 'Giá dầu (đ/lít)', width: 18, align: 'right', req: true, fmt: '#,##0', format: 'Số (đồng/lít)', eg: 'Ví dụ: 20.500 — đơn giá một lít dầu theo quy định hợp đồng.' },
+    { header: 'Loại dầu', width: 18, align: 'center', req: false, text: true, format: 'Chọn từ danh mục', eg: `Mặc định là ${DEFAULT_FUEL_TYPE} nếu để trống.`,
+      validate: listValidationCol('Danh mục', 'A', types.length, 'Chọn đúng loại dầu áp dụng cho kỳ điều chỉnh.') },
     { header: 'Nguồn điều chỉnh', width: 32, req: false, text: true, format: 'Văn bản', eg: 'Ví dụ: Petrolimex Vùng 1, Quyết định điều chỉnh giá số…' },
     { header: 'Ghi chú', width: 28, req: false, text: true, format: 'Văn bản', eg: 'Ghi chú thêm về đợt điều chỉnh giá dầu.' },
   ];
   dataSheet(wb, {
     name: 'Giá dầu',
+    rows,
     title: 'HỆ THỐNG QUẢN LÝ VẬN CHUYỂN & CHI PHÍ — VC COST (BM-04/VCC-2026)',
     cols,
     subtitle: 'MẪU IMPORT GIÁ DẦU — Mỗi dòng là một mốc ngày thay đổi giá dầu. Điền xong lưu file .xlsx rồi vào VC Cost → Giá dầu → "Import giá dầu".',
@@ -389,10 +402,12 @@ async function fuelTemplate() {
       'Khi import lại ngày đã có trong phần mềm, hệ thống sẽ hỏi để bạn chọn bỏ qua hoặc cập nhật đơn giá mới.',
     ],
   });
+  listSheetMulti(wb, 'Danh mục', [{ header: 'Loại dầu', items: types, colWidth: 30 }]);
   return Buffer.from(await wb.xlsx.writeBuffer());
 }
 
-async function configuredTicketTemplate(config) {
+async function configuredTicketTemplate(config, { rows = 500 } = {}) {
+  validateRowCount(rows);
   const { name, headerRow, headerRows, columns, fallbackUnit, layout } = validateTemplate(config);
   const wb = new ExcelJS.Workbook();
   wb.creator = 'VC Cost';
@@ -449,18 +464,18 @@ async function configuredTicketTemplate(config) {
       cell.font = F();
       if (i % 2) cell.fill = fill(ZEBRA);
       if (field === 'so_phieu') cell.numFmt = '@';
-      else if (field === 'kl_hang_kg' || field === 'can_lan_1' || field === 'can_lan_2') cell.numFmt = '#,##0';
+      else if (field === 'kl_hang_kg' || field === 'can_lan_1' || field === 'can_lan_2') cell.numFmt = '#,##0.###';
     }
 
     // Định dạng các dòng nhập liệu trên sheet dữ liệu
-    for (let r = header + 1; r <= header + 500; r++) {
+    for (let r = header + 1; r <= header + rows; r++) {
       const cell = data.getCell(r, col);
       cell.border = border;
       cell.font = F();
       cell.protection = { locked: false };
       if ((r - header - 1) % 2) cell.fill = fill(ZEBRA);
       if (field === 'so_phieu' || field === 'bien_so') cell.numFmt = '@';
-      else if (field === 'kl_hang_kg' || field === 'can_lan_1' || field === 'can_lan_2') cell.numFmt = '#,##0';
+      else if (field === 'kl_hang_kg' || field === 'can_lan_1' || field === 'can_lan_2') cell.numFmt = '#,##0.###';
     }
   }
 

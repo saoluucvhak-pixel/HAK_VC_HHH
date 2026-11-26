@@ -8,7 +8,7 @@ const SYNONYMS = {
   so_phieu: ['so phieu', 'phieu', 'so chung tu', 'so ct', 'ma phieu', 'ticket', 'so phieu can'],
   ngay_gio_can_1: ['ngay gio can 1', 'ngay can 1', 'can 1 ngay', 'thoi gian can 1', 'ngay gio vao', 'ngay can'],
   ngay_gio_can_2: ['ngay gio can 2', 'ngay can 2', 'can 2 ngay', 'thoi gian can 2', 'ngay gio ra'],
-  gio_can_1: ['gio can 1', 'gio vao', 'can 1 gio'],
+  gio_can_1: ['gio can 1', 'gio can', 'gio vao', 'can 1 gio'],
   gio_can_2: ['gio can 2', 'gio ra', 'can 2 gio'],
   bien_so: ['bien so', 'bien so 1', 'bien so xe', 'so xe', 'bks', 'xe'],
   can_lan_1: ['can lan 1', 'can 1', 'trong luong lan 1', 'trong luong can 1', 'kl lan 1', 'tl lan 1', 'tl can 1'],
@@ -47,9 +47,12 @@ function matchField(header, { splitTimes = false } = {}) {
 
 function mapHeaders(headers) {
   const mapping = {};
+  const fullDate = (text) => /ngay gio|thoi gian/.test(fold(text));
   headers.forEach((cell, index) => {
     const field = matchField(cell, { splitTimes: true });
-    if (field && mapping[field] === undefined) mapping[field] = index;
+    if (!field) return;
+    const current = mapping[field];
+    if (current === undefined || (/^ngay_gio_can_/.test(field) && fullDate(cell) && !fullDate(headers[current]))) mapping[field] = index;
   });
   for (const n of [1, 2]) {
     const day = `ngay_gio_can_${n}`, hour = `gio_can_${n}`;
@@ -58,7 +61,7 @@ function mapHeaders(headers) {
       // File cũ có thể dùng tiêu đề “Giờ cân” cho ô chứa cả ngày giờ.
       mapping[day] = mapping[hour];
       delete mapping[hour];
-    } else if (/ngay gio|thoi gian/.test(fold(headers[mapping[day]]))) {
+    } else if (fullDate(headers[mapping[day]])) {
       delete mapping[hour];
     }
   }

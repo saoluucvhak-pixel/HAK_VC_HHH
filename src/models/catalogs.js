@@ -1,4 +1,5 @@
 'use strict';
+const { DEFAULT_FUEL_TYPE } = require('../utils/fuelType');
 /**
  * CẤU HÌNH KHAI BÁO cho mọi danh mục (theo skill "quản lý bảng mẹ/bảng con").
  * Dùng chung cho: backend (whitelist cột, validate, đổi tiền ×1000) và giao diện (bảng, form, dropdown).
@@ -157,7 +158,7 @@ const CATALOGS = {
     label: 'Giá dầu', icon: '⛽', codeField: null, displayField: 'ngay',
     fields: [
       { key: 'ngay', label: 'Ngày', type: 'date', required: true },
-      { key: 'loai_dau', label: 'Loại dầu', type: 'text', required: true, default: 'DO 0,05S-II' },
+      { key: 'loai_dau', label: 'Loại dầu', type: 'text', required: true, default: DEFAULT_FUEL_TYPE },
       { key: 'gia', label: 'Giá (đ/lít)', type: 'number', money: true, required: true },
       { key: 'nguon', label: 'Nguồn', type: 'text' },
       NOTE,

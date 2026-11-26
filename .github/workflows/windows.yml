@@ -56,8 +56,16 @@ jobs:
           $browserPaths = @('C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe', 'C:\Program Files\Google\Chrome\Application\chrome.exe')
           $env:CHROMIUM_PATH = $browserPaths | Where-Object { Test-Path -LiteralPath $_ } | Select-Object -First 1
           if (-not $env:CHROMIUM_PATH) { throw 'Thiếu trình duyệt cho kiểm thử giao diện' }
+          $env:EXCEL_TEMPLATE_SCREENSHOTS = Join-Path $env:RUNNER_TEMP 'excel-screenshots'
           npm run test:ui
           if ($LASTEXITCODE -ne 0) { throw 'Kiểm thử giao diện thất bại' }
+
+      - name: Đính kèm ảnh nghiệm thu giao diện mẫu Excel
+        uses: actions/upload-artifact@v4
+        with:
+          name: excel-template-screenshot
+          path: ${{ runner.temp }}/excel-screenshots/excel-import-template.png
+          if-no-files-found: error
 
       - name: Khởi động thử bản đóng gói
         shell: pwsh

@@ -1,5 +1,10 @@
 # CHANGELOG
 
+## 0.8.11 — kiểm tra nhập Excel và mở tệp lớn (schema 9)
+- Kiểm tra giờ cho cả hai lần cân, giữ ghép cột theo tiêu đề khi đổi sheet và yêu cầu chọn khi nhiều sheet khớp.
+- Cải thiện nhận diện CSV, cảnh báo phiếu lỗi dưới dòng tổng và chuyển giải mã XLSX lớn sang luồng nền.
+- Chọn số dòng nhập liệu khi tải mẫu và đồng bộ loại dầu mặc định giữa mẫu, nhập và tạo kỳ điều chỉnh.
+
 ## 0.8.10 — biểu mẫu Excel Doanh nghiệp và xử lý ngày giờ linh hoạt (schema 9)
 - **Biểu mẫu Doanh nghiệp chuẩn**: Thiết kế chuẩn Corporate Palette (Navy `#1F4E79`, Header Dark `#143452`), tích hợp mã biểu mẫu ISO (`BM-01` đến `BM-04`), thanh Legend Badge 3 màu trực quan, sheet Hướng dẫn chi tiết và liên kết Dropdown CSDL danh mục ACTIVE.
 - **Bảo vệ bảng tính (Sheet Protection)**: Khóa cứng tiêu đề và ô công thức tự tính (`=ABS(Cân1-Cân2)`, `=ROUND(KL*Đơn giá/1000, 0)`), mở khóa toàn bộ vùng nhập liệu cho người dùng.

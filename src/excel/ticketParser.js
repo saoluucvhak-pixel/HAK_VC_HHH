@@ -1,7 +1,7 @@
 'use strict';
 /**
  * Chuyển các dòng của sheet (sau header) thành phiếu cân đã chuẩn hóa + lỗi validate từng dòng.
- * KHÔNG ghi DB. Dừng đọc ở dòng "Tổng cộng" hoặc khi gặp N dòng trống liên tiếp.
+ * KHÔNG ghi DB. Bỏ qua dòng trống và mặc định dừng ở dòng "Tổng cộng".
  */
 const { parseDateTime } = require('../utils/datetime');
 const { normalizePlate, displayPlate, isValidPlate } = require('../utils/plate');
@@ -11,28 +11,27 @@ const { fold } = require('./columnMapping');
 const { weightProblem, DEFAULT_LIMITS } = require('../utils/weight');
 
 function parseClock(value) {
-  if (value === null || value === undefined || value === '') return null;
-  if (typeof value === 'number' && value >= 0) {
-    const fraction = value < 1 ? value : (value - Math.floor(value));
-    const seconds = Math.round(fraction * 86400);
-    if (seconds >= 86400) return '00:00:00';
+  if (typeof value === 'number') {
+    if (!(value >= 0 && value < 1)) return null;
+    const seconds = Math.round(value * 86400);
+    if (seconds >= 86400) return null;
     return [Math.floor(seconds / 3600), Math.floor(seconds / 60) % 60, seconds % 60]
       .map((part) => String(part).padStart(2, '0')).join(':');
   }
-  let s = String(value).trim();
-  if (!s) return null;
-  // Hỗ trợ định dạng thời gian Việt Nam: 8h30, 08h30p, 8g30
-  s = s.replace(/^(\d{1,2})[hHgGpP](\d{1,2})(?:[mMpPsS](\d{1,2}))?$/, (_, h, m, sec) => `${h}:${m}${sec ? ':' + sec : ''}`);
-  const match = s.match(/^(\d{1,2}):(\d{2})(?::(\d{2}))?(?:\s*(AM|PM))?$/i);
+  const text = String(value ?? '').trim();
+  if (/^0[.,]\d+$/.test(text)) return parseClock(Number(text.replace(',', '.')));
+  const short = text.match(/^(\d{1,2})[hg](\d{1,2})(?:p|[mps](\d{1,2})s?)?$/i);
+  const standard = text.match(/^(\d{1,2}):(\d{2})(?::(\d{2}))?(?:\s*(AM|PM))?$/i);
+  const match = standard || short;
   if (!match) return null;
-  let h = parseInt(match[1], 10);
-  const m = match[2];
-  const sec = match[3] || '00';
-  const ampm = match[4]?.toUpperCase();
-  if (ampm === 'PM' && h < 12) h += 12;
-  if (ampm === 'AM' && h === 12) h = 0;
-  if (h > 23) return null;
-  return `${String(h).padStart(2, '0')}:${m}:${sec}`;
+  const [, hour, minute, second = '0', suffix] = match;
+  let h = Number(hour);
+  if (suffix) {
+    if (h < 1 || h > 12) return null;
+    h = (h % 12) + (suffix.toUpperCase() === 'PM' ? 12 : 0);
+  }
+  if (h > 23 || Number(minute) > 59 || Number(second) > 59) return null;
+  return [h, Number(minute), Number(second)].map((part) => String(part).padStart(2, '0')).join(':');
 }
 
 /**
@@ -40,7 +39,7 @@ function parseClock(value) {
  *                true → coi mỗi dòng "Tổng cộng" là ngăn cách khối và đọc tiếp các khối sau (chỉ nhận dòng trông như phiếu cân; tổng đối chiếu = tổng các dòng Tổng cộng).
  */
 function parseTickets(aoa, headerRow, mapping, {
-  maxBlankRun = 50, weightLimits = DEFAULT_LIMITS, readAfterTotal = false,
+  weightLimits = DEFAULT_LIMITS, readAfterTotal = false,
   headers = aoa[headerRow] || [], fallbackUnit = '', strict = false, codeReader = (r, c, value) => value,
 } = {}) {
   const get = (row, f) => (mapping[f] === undefined ? undefined : row[mapping[f]]);
@@ -77,12 +76,17 @@ function parseTickets(aoa, headerRow, mapping, {
     }
     return parseWeightNumber(cell.value, unit);
   };
+  const looksLikeTicket = (row) => {
+    const plate = isValidPlate(get(row, 'bien_so'));
+    const code = has(get(row, 'so_phieu'));
+    const weight = weightFields.some((field) => has(get(row, field)));
+    return (plate && (code || weight || Boolean(weighTime(row, 1)))) || (code && weight && has(get(row, 'ngay_gio_can_1')));
+  };
   const hasTicketData = (row) => ['so_phieu', 'bien_so', ...weightFields].some((field) => has(get(row, field)));
   let lastTicket = aoa.length - 1;
   if (strict) while (lastTicket > headerRow && !hasTicketData(aoa[lastTicket] || [])) lastTicket--;
   const out = [];
   let totalRow = null, totalAt = -1, afterTotal = false;
-  let blank = 0;
   for (let r = headerRow + 1; r < aoa.length; r++) {
     const row = aoa[r] || [];
     const first = fold(row.find((c) => c !== null && c !== undefined && c !== '') ?? '');
@@ -100,7 +104,7 @@ function parseTickets(aoa, headerRow, mapping, {
       afterTotal = true;
       continue;
     }
-    if (afterTotal) { const bs0 = get(row, 'bien_so'); if (!(bs0 && isValidPlate(bs0) && weighTime(row, 1))) continue; }   // dưới dòng tổng chỉ nhận dòng trông như phiếu cân (bỏ bảng tóm tắt)
+    if (afterTotal && !looksLikeTicket(row)) continue;
     if (strict && !isValidPlate(get(row, 'bien_so'))) {
       const isSignature = row.some((cell) => /^(?:ngay ky|nguoi lap(?: bieu)?|nguoi ky|ke toan|ky ten|ngay \d{1,2} thang \d{1,2} nam)\b/.test(fold(cell)));
       if (isSignature || (r > lastTicket && has(get(row, 'ngay_gio_can_1')))) continue;
@@ -109,11 +113,7 @@ function parseTickets(aoa, headerRow, mapping, {
     const soPhieu = codeReader(r, mapping.so_phieu, originalCode);
     const hasData = ['bien_so', 'kl_hang_kg', 'ngay_gio_can_1', 'can_lan_1', 'can_lan_2'].some((f) => { const v = get(row, f); return v !== null && v !== undefined && v !== ''; });
     const noSoPhieu = !has(soPhieu);
-    if (noSoPhieu && !hasData) {
-      if (row.every((c) => c === null || c === undefined || c === '')) { if (++blank >= maxBlankRun) break; }
-      continue;
-    }
-    blank = 0;
+    if (noSoPhieu && !hasData) continue;
     const errors = [];
     const t1 = weighTime(row, 1);
     const t2 = weighTime(row, 2);
@@ -122,9 +122,14 @@ function parseTickets(aoa, headerRow, mapping, {
     let kg = readWeight(row, 'kl_hang_kg', errors);
     const bsGoc = get(row, 'bien_so');
     if (noSoPhieu && (!strict || mapping.so_phieu !== undefined)) errors.push('Thiếu số phiếu');
-    if (!t1) errors.push('INVALID_TIME: ngày giờ cân 1 không đọc được');
-    if (!t2 && mapping.gio_can_2 != null && (has(get(row, 'ngay_gio_can_2')) || has(get(row, 'gio_can_2')))) {
-      errors.push('INVALID_TIME: ngày và giờ cân 2 phải đầy đủ và khớp nhau');
+    if (!t1) {
+      const hour = get(row, 'gio_can_1');
+      errors.push(mapping.gio_can_1 == null ? 'INVALID_TIME: ngày giờ cân 1 không đọc được'
+        : `INVALID_TIME: ngày và giờ cân 1 không hợp lệ (giờ: ${hour ?? 'trống'})`);
+    }
+    if (!t2 && (has(get(row, 'ngay_gio_can_2')) || has(get(row, 'gio_can_2')))) {
+      const raw = get(row, 'gio_can_2') ?? get(row, 'ngay_gio_can_2');
+      errors.push(`INVALID_TIME: ngày và giờ cân 2 phải đầy đủ và khớp nhau (giá trị: ${raw ?? 'trống'})`);
     }
     if (t1 && t2 && t2 < t1) errors.push('INVALID_TIME: cân 2 trước cân 1');
     if (!bsGoc) errors.push('Thiếu biển số');
@@ -178,8 +183,7 @@ function parseTickets(aoa, headerRow, mapping, {
   if (totalAt >= 0) {
     for (let r = totalAt + 1; r < aoa.length; r++) {
       const row = aoa[r] || [];
-      const bs = get(row, 'bien_so'), t1 = weighTime(row, 1);
-      if (bs && isValidPlate(bs) && t1) { out.ignoredBelowTotal.count++; if (out.ignoredBelowTotal.first_row === null) out.ignoredBelowTotal.first_row = r + 1; }
+      if (looksLikeTicket(row)) { out.ignoredBelowTotal.count++; if (out.ignoredBelowTotal.first_row === null) out.ignoredBelowTotal.first_row = r + 1; }
     }
   }
   return out;

@@ -54,11 +54,11 @@
           } }, '📂 Chọn file…'), h('button', { class: 'btn ghost', onclick: () => importVehicles() }, '🚛 Import danh mục xe (sheet "Số xe")…')),
           h('div', { class: 'row', style: { marginTop: '12px', paddingTop: '12px', borderTop: '1px dashed var(--line)', flexWrap: 'wrap', gap: '8px', alignItems: 'center' } },
             h('span', { class: 'muted', style: { fontWeight: '600' } }, '📥 Tải file mẫu chuẩn doanh nghiệp:'),
-            h('button', { class: 'btn ghost sm', 'data-act': 'tpl-tickets', onclick: () => App.exportXlsx('template.tickets', {}) }, '⬇ Mẫu Phiếu cân (chuẩn)'),
-            h('button', { class: 'btn ghost sm', 'data-act': 'tpl-vehicles', onclick: () => App.exportXlsx('template.vehicles', {}) }, '⬇ Mẫu Danh sách xe'),
-            h('button', { class: 'btn ghost sm', 'data-act': 'tpl-partner', onclick: () => App.exportXlsx('template.partner', {}) }, '⬇ Mẫu Bảng kê đối tác'),
-            h('button', { class: 'btn ghost sm', 'data-act': 'tpl-fuel', onclick: () => App.exportXlsx('template.fuel', {}) }, '⬇ Mẫu Giá dầu'),
-            h('button', { class: 'btn ghost sm', onclick: () => App.navigate('settings') }, '⚙ Quản lý mẫu Excel…'))));
+            h('button', { class: 'btn ghost sm', 'data-act': 'tpl-tickets', onclick: () => App.exportTemplate('template.tickets', {}) }, '⬇ Mẫu Phiếu cân (chuẩn)'),
+            h('button', { class: 'btn ghost sm', 'data-act': 'tpl-vehicles', onclick: () => App.exportTemplate('template.vehicles', {}) }, '⬇ Mẫu Danh sách xe'),
+            h('button', { class: 'btn ghost sm', 'data-act': 'tpl-partner', onclick: () => App.exportTemplate('template.partner', {}) }, '⬇ Mẫu Bảng kê đối tác'),
+            h('button', { class: 'btn ghost sm', 'data-act': 'tpl-fuel', onclick: () => App.exportTemplate('template.fuel', {}) }, '⬇ Mẫu Giá dầu'),
+            h('button', { class: 'btn ghost sm', onclick: () => { App.state.settingsTab = 'excel'; App.go('settings'); } }, '⚙ Quản lý mẫu Excel…'))));
       }
       const selectedTemplate = () => S.open?.templates.find((item) => item.id === S.templateId);
       const activeName = () => selectedTemplate()?.name || (S.strict ? 'Ghép thủ công' : 'Tự nhận diện');
@@ -68,6 +68,12 @@
       });
       const previewOptions = () => ({ ...readOptions(), dotId: S.dotId || null, noiDenId: S.noiDenId || null });
       async function loadSheet(headerRow = null) {
+        if (!S.sheet) {
+          S.info = { headers: [], sample: [] };
+          S.mapping = {};
+          S.headerRow = 0;
+          return;
+        }
         const info = await api('import.sheetInfo', { token: S.open.token, sheetName: S.sheet, headerRow,
           templateId: S.templateId, headerRows: S.headerRows });
         S.info = info;
@@ -146,6 +152,13 @@
           clearTimeout(tm);
           previewBtn.disabled = true;
           const version = ++revision;
+          if (!S.sheet) {
+            const choices = S.open.ambiguousSheets || [];
+            App.clear(checkBox).append(h('p', { class: 'chk warn' }, choices.length
+              ? `Nhiều sheet khớp mẫu: ${choices.join(', ')}. Hãy chọn sheet cần nhập.`
+              : 'Hãy chọn sheet cần nhập.'));
+            return;
+          }
           tm = setTimeout(async () => {
             if (!checkBox.isConnected) return;
             const r = await call('import.check', readOptions());
@@ -167,7 +180,7 @@
             o.previouslyImported ? h('p', { class: 'tag amber' }, `File này đã import ở lô #${o.previouslyImported.batchId} (${fmt.dt(o.previouslyImported.at)}) — dòng trùng sẽ được bỏ qua`) : null,
             h('div', { class: 'form-grid' },
               h('label', { class: 'field' }, 'Mẫu nhập', mode),
-              h('label', { class: 'field' }, 'Sheet', h('select', { 'data-f': 'sheet', onchange: async (e) => { S.sheet = e.target.value; await loadSheet(S.strict ? S.headerRow : null); draw(); } }, o.sheets.map((s) => h('option', { value: s.name, selected: s.name === S.sheet }, `${s.name} (${s.rows} dòng)`)))),
+              h('label', { class: 'field' }, 'Sheet', h('select', { 'data-f': 'sheet', onchange: async (e) => { S.sheet = e.target.value; await loadSheet(S.strict ? S.headerRow : null); draw(); } }, !S.sheet && h('option', { value: '', disabled: true, selected: true }, '— Chọn sheet —'), o.sheets.map((s) => h('option', { value: s.name, selected: s.name === S.sheet }, `${s.name} (${s.rows} dòng)`)))),
               h('label', { class: 'field' }, 'Dòng cuối của tiêu đề (từ 1)', h('input', { type: 'number', min: S.headerRows, disabled: !!tpl, value: S.headerRow + 1,
                 onchange: async (e) => { await loadSheet(Number(e.target.value) - 1); draw(); } })),
               h('label', { class: 'field' }, 'Số dòng tiêu đề', h('select', { disabled: !!tpl, onchange: async (event) => {

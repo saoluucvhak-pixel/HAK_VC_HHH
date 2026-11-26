@@ -17,13 +17,13 @@ try {
   const page = await browser.newPage({ viewport: { width: 1440, height: 1380 } });
   const errors = [];
   page.on('pageerror', (error) => errors.push(error.message));
-  async function fixture(order, unit = 'tấn') {
+  async function fixture(order, unit = 'tấn', alternatives = false) {
     const book = new ExcelJS.Workbook();
     book.addWorksheet('Bìa').addRow(['Bảng tổng hợp']);
     const sheet = book.addWorksheet('Phiếu cân');
     sheet.addRow(['PHIẾU CÂN TỔNG HỢP']);
     const rows = [
-      ['Mã phiếu', 'Biển số', 'Ngày', 'Khối lượng', 'ĐVT', 'Kho', 'Ghi chú'],
+      ['Mã phiếu', 'Biển số', 'Ngày', 'Khối lượng', 'ĐVT', 'Kho', 'Nội dung'],
       [null, null, 'cân', 'hàng', null, null, null],
       [7, '92H-00903', '05/10/2026 08:00', 12.5, unit, 'Kho QS', 'Giao buổi sáng'],
       ['00008', '92H-00903', '05/10/2026 09:00', 15000, 'kg', 'Kho QS', 'Đã đối chiếu'],
@@ -32,6 +32,12 @@ try {
     ];
     for (const row of rows) sheet.addRow(order.map((i) => row[i]));
     sheet.getRow(4).getCell(order.indexOf(0) + 1).numFmt = '00000';
+    if (alternatives) {
+      const alternate = book.addWorksheet('Cột đổi vị trí');
+      for (const row of rows) alternate.addRow([6, 5, 4, 3, 2, 1, 0].map((index) => row[index]));
+      const missing = book.addWorksheet('Thiếu tiêu đề');
+      rows.forEach((row, i) => missing.addRow(i === 1 ? [...row.slice(0, 6), 'Cột khác'] : row));
+    }
     return { name: 'phieu-can-tong-hop.xlsx', mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', buffer: Buffer.from(await book.xlsx.writeBuffer()) };
   }
   async function pick(locator, file) {
@@ -39,7 +45,7 @@ try {
     await chooser.setFiles(file);
   }
 
-  const sample = await fixture([0, 1, 2, 3, 4, 5, 6]);
+  const sample = await fixture([0, 1, 2, 3, 4, 5, 6], 'tấn', true);
   const moved = await fixture([6, 5, 4, 3, 2, 1, 0]);
   await page.goto(`http://127.0.0.1:${server.server.address().port}/`);
   await page.locator('[data-nav=settings]').click();
@@ -55,6 +61,16 @@ try {
   await editor.getByLabel('Số dòng tiêu đề').selectOption('2');
   await editor.locator('[data-template-map=kl_hang_kg] option').getByText('4. Khối lượng hàng', { exact: true }).waitFor({ state: 'attached' });
   await editor.locator('[data-template-map=kl_hang_kg]').selectOption('3');
+  await editor.locator('[data-template-map=ghi_chu]').selectOption('6');
+  await editor.getByLabel('Sheet mẫu').selectOption('Cột đổi vị trí');
+  await editor.locator('[data-template-map=ghi_chu] option').getByText('1. Nội dung', { exact: true }).waitFor({ state: 'attached' });
+  assert.equal(await editor.locator('[data-template-map=ghi_chu]').inputValue(), '0');
+  await editor.getByLabel('Sheet mẫu').selectOption('Thiếu tiêu đề');
+  await editor.getByText(/Thiếu cột “Nội dung”/).waitFor();
+  assert.equal(await editor.getByRole('button', { name: 'Đọc thử' }).isEnabled(), false);
+  await editor.getByLabel('Sheet mẫu').selectOption('Phiếu cân');
+  await editor.locator('[data-template-map=ghi_chu] option').getByText('7. Nội dung', { exact: true }).waitFor({ state: 'attached' });
+  assert.equal(await editor.locator('[data-template-map=ghi_chu]').inputValue(), '6');
   assert.deepEqual(await editor.getByRole('heading', { level: 4 }).allTextContents(),
     ['1. Chọn tệp và tiêu đề', '2. Ghép cột', '3. Đọc thử và đối chiếu']);
   assert.equal(await editor.locator('[data-template-heading=kl_hang_kg]').textContent(), 'Khối lượng hàng');
@@ -70,11 +86,14 @@ try {
   await page.getByText('Đã lưu mẫu nhập Excel', { exact: true }).waitFor({ state: 'hidden' });
   await card.screenshot({ path: path.join(screenshots, 'excel-import-template.png') });
   await card.getByRole('button', { name: 'Tải file mẫu' }).click();
+  await page.getByLabel(/Số dòng nhập liệu/).fill('525');
+  await page.getByRole('button', { name: 'Đồng ý', exact: true }).click();
   await page.getByText(/Đã xuất: .*MAU_Phieu_can_Tuy_chinh.xlsx/).waitFor();
   const exported = new ExcelJS.Workbook();
   await exported.xlsx.readFile(path.join(dataDir, 'exports', 'MAU_Phieu_can_Tuy_chinh.xlsx'));
   assert.equal(exported.getWorksheet('Phiếu cân').getCell('D3').value, 'Khối lượng hàng');
   assert.equal(exported.getWorksheet('Phiếu cân').getCell('A4').value, null);
+  assert.equal(exported.getWorksheet('Phiếu cân').getCell('A528').protection.locked, false);
   assert.equal(exported.getWorksheet('Minh họa').getCell('A3').value, '00001');
 
   await page.reload();
