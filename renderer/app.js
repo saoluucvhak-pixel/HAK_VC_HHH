@@ -132,12 +132,21 @@ const App = (() => {
       inp.addEventListener('cancel', () => { inp.remove(); resolve(null); });
       inp.addEventListener('change', () => {
         const f = inp.files[0]; inp.remove(); if (!f) return resolve(null);
-        const rd = new FileReader();
-        rd.onload = () => resolve({ base64: String(rd.result).split(',')[1], fileName: f.name });
-        rd.onerror = () => { toast('Không đọc được file đã chọn', true); resolve(null); };
-        rd.readAsDataURL(f);
+        fileToPayload(f).then(resolve);
       });
       document.body.append(inp); inp.click();
+    });
+  }
+
+  /** Đọc file browser/drop thành payload: Electron có f.path → {filePath}; browser → {base64, fileName} */
+  function fileToPayload(f) {
+    return new Promise((resolve) => {
+      if (!f) return resolve(null);
+      if (f.path) return resolve({ filePath: f.path });
+      const rd = new FileReader();
+      rd.onload = () => resolve({ base64: String(rd.result).split(',')[1], fileName: f.name });
+      rd.onerror = () => { toast('Không đọc được file', true); resolve(null); };
+      rd.readAsDataURL(f);
     });
   }
 
@@ -414,5 +423,5 @@ const App = (() => {
     }
   });
 
-  return { h, clear, bindNum, fmt, tag, api, call, callConfirm, pickFile, canWrite, applyPerms, actionAllowed, saveExport, exportXlsx, exportTemplate, toast, modal, confirmBox, promptBox, table, register, latestRender, viewId: () => current, go, reload, start, refreshInfo, refreshAuth, can, get auth() { return auth; }, logout, state, pageHead, STATUS_TAG, get info() { return info; } };
+  return { h, clear, bindNum, fmt, tag, api, call, callConfirm, pickFile, fileToPayload, canWrite, applyPerms, actionAllowed, saveExport, exportXlsx, exportTemplate, toast, modal, confirmBox, promptBox, table, register, latestRender, viewId: () => current, go, reload, start, refreshInfo, refreshAuth, can, get auth() { return auth; }, logout, state, pageHead, STATUS_TAG, get info() { return info; } };
 })();

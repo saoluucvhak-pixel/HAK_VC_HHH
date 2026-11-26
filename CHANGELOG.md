@@ -1,5 +1,11 @@
 # CHANGELOG
 
+## 0.8.12 — Tinh gọn quy trình nhập liệu & Xử lý thông minh (schema 9)
+- **Kéo - Thả file trực tiếp (Drag & Drop) & 1-Click Smart Import**: Vùng thả file trực quan, hỗ trợ kéo thả tệp Excel/CSV từ máy tính; tự động kiểm tra cấu trúc và chuyển thẳng tới Xem trước (Bước 3) khi file hợp lệ.
+- **Phân bổ / gán nhà xe nhanh tại chỗ (Quick Assign)**: Gán đơn vị vận chuyển cho xe lạ ngay tại bảng Xem trước thông qua popup tức thời, tự động lưu lịch sử xe và tính toán lại giá cước mà không cần rời màn hình Import.
+- **Tự động nhận diện Đợt / Tàu vận chuyển**: Phân tích dải ngày của phiếu cân trong file nguồn để tự động gợi ý và gán Đợt vận chuyển đang mở phù hợp nhất.
+- **Xử lý xung đột thông minh theo nhóm (Bulk Conflict Resolution)**: Phân tách và làm nổi bật trực quan các trường thay đổi (Cũ → Mới), cung cấp nút xử lý hàng loạt riêng cho nhóm phiếu lệch khối lượng và nhóm phiếu chỉ lệch giờ cân.
+
 ## 0.8.11 — kiểm tra nhập Excel và mở tệp lớn (schema 9)
 - Kiểm tra giờ cho cả hai lần cân, giữ ghép cột theo tiêu đề khi đổi sheet và yêu cầu chọn khi nhiều sheet khớp.
 - Cải thiện nhận diện CSV, cảnh báo phiếu lỗi dưới dòng tổng và chuyển giải mã XLSX lớn sang luồng nền.

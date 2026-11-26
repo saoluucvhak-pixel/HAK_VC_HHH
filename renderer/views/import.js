@@ -39,19 +39,63 @@
         };
       }
 
+      async function handleFileChosen(f) {
+        if (!f) return;
+        const o = await call('import.open', f); if (!o) return;
+        if (S.open) await call('import.cancel', { token: S.open.token });
+        S.open = o; S.sheet = o.suggestedSheet; S.templateId = o.defaultId;
+        S.strict = false; S.fallbackUnit = ''; S.headerRows = 1; S.readAfterTotal = false;
+        await loadSheet();
+
+        // 1-Click Smart Import: Nếu file hợp lệ và đủ cột chuẩn mà không có lỗi mapping, nhảy thẳng tới Bước 3 (Xem trước)
+        try {
+          const checkRes = await api('import.check', readOptions());
+          if (checkRes && !checkRes.blocking && checkRes.summary.tong_dong > 0) {
+            const prev = await api('import.preview', previewOptions());
+            if (prev) {
+              S.prev = prev;
+              if (prev.suggestedDotId && !S.dotId) S.dotId = prev.suggestedDotId;
+              S.filter = null;
+              S.step = 3;
+              draw();
+              App.toast(`✓ Nhận diện thông minh: đọc thành công ${fmt.int(prev.counts.total)} phiếu từ sheet "${S.sheet}"`);
+              return;
+            }
+          }
+        } catch (e) {
+          // Nếu tự nhận diện không đủ điều kiện thì chuyển sang Bước 2 để người dùng xem/chỉnh
+        }
+
+        S.step = 2; draw();
+      }
+
       function s1() {
+        const dropzone = h('div', { class: 'dropzone', 'data-act': 'dropzone',
+          ondragover: (e) => { e.preventDefault(); dropzone.classList.add('dragover'); },
+          ondragleave: () => dropzone.classList.remove('dragover'),
+          ondrop: async (e) => {
+            e.preventDefault(); dropzone.classList.remove('dragover');
+            const file = e.dataTransfer?.files?.[0];
+            if (file) {
+              const payload = await App.fileToPayload(file);
+              handleFileChosen(payload);
+            }
+          },
+          onclick: async () => {
+            const f = await App.pickFile();
+            handleFileChosen(f);
+          }
+        },
+          h('span', { class: 'dropzone-icon' }, '📂'),
+          h('p', { class: 'dropzone-text' }, h('b', {}, 'Kéo & thả file Excel / CSV vào đây'), ' hoặc bấm để chọn file'),
+          h('p', { class: 'dropzone-sub' }, 'Hỗ trợ .xlsx, .xls, .csv · Tự động nhận diện cấu trúc và đọc thẳng Bước 3 nếu khớp mẫu')
+        );
+
         root.append(h('div', { class: 'card' }, h('h3', {}, 'Chọn file phiếu cân (.xlsx / .csv)'),
           h('p', { class: 'muted' }, 'Mẫu mặc định ', h('strong', {}, defaultName())),
           h('p', { class: 'muted' }, 'File Excel cũ (.xls) cần mở bằng Excel rồi "Lưu thành" .xlsx. Import lại cùng file không tạo phiếu trùng: phiếu giống hệt được bỏ qua, phiếu cùng số phiếu + nơi xuất nhưng khác dữ liệu vào "Cần kiểm tra".'),
-          h('div', { class: 'row' }, h('button', { class: 'btn', 'data-act': 'pick', onclick: async () => {
-            const f = await App.pickFile(); if (!f) return;
-            const o = await call('import.open', f); if (!o) return;
-            if (S.open) await call('import.cancel', { token: S.open.token });
-            S.open = o; S.sheet = o.suggestedSheet; S.templateId = o.defaultId;
-            S.strict = false; S.fallbackUnit = ''; S.headerRows = 1; S.readAfterTotal = false;
-            await loadSheet();
-            S.step = 2; draw();
-          } }, '📂 Chọn file…'), h('button', { class: 'btn ghost', onclick: () => importVehicles() }, '🚛 Import danh mục xe (sheet "Số xe")…')),
+          dropzone,
+          h('div', { class: 'row' }, h('button', { class: 'btn ghost', onclick: () => importVehicles() }, '🚛 Import danh mục xe (sheet "Số xe")…')),
           h('div', { class: 'row', style: { marginTop: '12px', paddingTop: '12px', borderTop: '1px dashed var(--line)', flexWrap: 'wrap', gap: '8px', alignItems: 'center' } },
             h('span', { class: 'muted', style: { fontWeight: '600' } }, '📥 Tải file mẫu chuẩn doanh nghiệp:'),
             h('button', { class: 'btn ghost sm', 'data-act': 'tpl-tickets', onclick: () => App.exportTemplate('template.tickets', {}) }, '⬇ Mẫu Phiếu cân (chuẩn)'),
@@ -208,7 +252,43 @@
 
       async function s3() {
         const c = S.prev.counts;
-        const d = await api('import.previewRows', { token: S.open.token, filter: S.filter, offset: 0, limit: 300 });
+        const [d, carriers] = await Promise.all([
+          api('import.previewRows', { token: S.open.token, filter: S.filter, offset: 0, limit: 300 }),
+          api('catalog.options', { table: 'don_vi_van_chuyen' }),
+        ]);
+
+        const quickAssignVehicle = (bienSo) => {
+          let selCarrier = '';
+          const body = h('div', {},
+            h('p', {}, 'Biển số: ', h('b', { class: 'mono' }, bienSo)),
+            h('p', { class: 'muted' }, 'Xe này chưa có trong danh mục hoặc chưa phân bổ nhà xe. Chọn đơn vị vận chuyển để thêm xe và tính cước ngay:'),
+            h('label', { class: 'field' }, 'Đơn vị vận chuyển *',
+              h('select', { onchange: (e) => (selCarrier = e.target.value) },
+                h('option', { value: '' }, '— Chọn đơn vị —'),
+                carriers.map((cr) => h('option', { value: cr.id }, cr.label))
+              )
+            )
+          );
+          App.modal({
+            title: `Phân bổ nhanh nhà xe: ${bienSo}`,
+            body,
+            actions: [
+              { label: 'Hủy', primary: false },
+              { label: 'Lưu & Tính cước ngay', primary: true, onClick: async () => {
+                if (!selCarrier) { App.toast('Chưa chọn đơn vị vận chuyển', true); return false; }
+                const res = await call('vehicles.quickAssign', { bien_so: bienSo, don_vi_van_chuyen_id: selCarrier });
+                if (res && res.ok) {
+                  App.toast(`Đã gán xe ${bienSo} vào đơn vị vận chuyển!`);
+                  const newPrev = await call('import.preview', previewOptions());
+                  if (newPrev) { S.prev = newPrev; draw(); }
+                  return true;
+                }
+                return false;
+              } }
+            ]
+          });
+        };
+
         const chip = (key, label, n, cls = '') => h('div', { class: 'kpi click' + (cls ? ' ' + cls : ''), style: S.filter === key ? { outline: '2px solid var(--green)' } : null, onclick: () => { S.filter = S.filter === key ? null : key; draw(); } }, h('small', {}, label), h('b', {}, fmt.int(n)));
         // Đối chiếu khối lượng: tổng KL đọc được ↔ dòng "Tổng cộng" của file; tổng tạm tính của phiếu mới
         const T = S.prev.totals || {}; const kgf = (v) => `${fmt.kg(v)} kg (${fmt.tan(v / 1000)} tấn)`;
@@ -241,7 +321,18 @@
           chip('noPrice', 'Chưa có đơn giá', c.noPrice, c.noPrice ? 'warn' : ''), chip('multiplePrice', 'Xung đột giá', c.multiplePrice, c.multiplePrice ? 'warn' : '')),
         h('div', { class: 'card' }, table({
           columns: [{ key: 'idx', label: 'Dòng', render: (r) => r.source_row || r.idx + 1, num: true }, { key: 'phan_loai', label: 'Phân loại', render: (r) => h('span', { class: `tag ${PHAN_LOAI[r.phan_loai]}` }, App.STATUS_TAG[r.phan_loai][1]) },
-            { key: 'so_phieu', label: 'Số phiếu', mono: true }, { key: 'ngay_gio_can_1', label: 'Ngày giờ cân 1', fmt: 'dt', mono: true }, { key: 'bien_so', label: 'Biển số', mono: true }, { key: 'noi_xuat', label: 'Nơi xuất' }, { key: 'noi_den_ten', label: 'Nơi đến' },
+            { key: 'so_phieu', label: 'Số phiếu', mono: true }, { key: 'ngay_gio_can_1', label: 'Ngày giờ cân 1', fmt: 'dt', mono: true },
+            { key: 'bien_so', label: 'Biển số', mono: true, render: (r) => {
+              const hasWarn = (r.warnings || []).some((w) => w === 'UNKNOWN_VEHICLE' || w === 'UNKNOWN_CARRIER');
+              if (hasWarn && r.bien_so) {
+                return h('span', { class: 'row gap-xs', style: { alignItems: 'center' } },
+                  h('span', { class: 'mono' }, r.bien_so),
+                  h('button', { class: 'btn sm ghost brand', style: { padding: '1px 6px', fontSize: '11px' }, title: 'Gán nhanh nhà xe cho biển số này ngay tại đây', onclick: (e) => { e.stopPropagation(); quickAssignVehicle(r.bien_so); } }, '+ Gán nhà xe')
+                );
+              }
+              return h('span', { class: 'mono' }, r.bien_so);
+            } },
+            { key: 'noi_xuat', label: 'Nơi xuất' }, { key: 'noi_den_ten', label: 'Nơi đến' },
             { key: 'kl_hang_kg', label: 'KL (kg)', fmt: 'kg' }, { key: 'don_gia', label: 'Đơn giá', fmt: 'money' }, { key: 'tien_truoc_vat', label: 'Trước VAT', fmt: 'money' },
             { key: 'warnings', label: 'Ghi chú', render: (r) => h('span', {}, (r.errors || []).join('; '), (r.warnings || []).map((w) => h('span', { class: 'tag red', style: { marginRight: '3px' } }, (App.STATUS_TAG[w] || [0, w])[1]))) }],
           rows: d.rows, rowClass: (r) => (r.phan_loai === 'ERROR' ? 'err' : r.phan_loai === 'KEY_CONFLICT' ? 'flag' : r.phan_loai.includes('DUPLICATE') ? 'dup' : ''), wrapClass: 'tall' }),
@@ -334,8 +425,8 @@
           rows: (r.diffs.length ? r.diffs : []).map((d) => ({ f: FIELD[d.field] || d.field, o: String(d.old ?? ''), n: String(d.new ?? '') })), empty: 'Không có chênh lệch chi tiết' })),
       actions: [{ label: 'Đóng', primary: false }, act(r, 'IGNORE', 'Bỏ qua dòng mới', 'ghost'), act(r, 'KEEP_OLD', 'Giữ dữ liệu cũ', ''), ...(r.chot_ky_id ? [] : [act(r, 'UPDATE', 'Cập nhật theo file mới', 'amber')])] });
     // hàng loạt: mỗi dòng một giao dịch ở máy chủ, KHÔNG dừng ở lỗi đầu; hiện kết quả từng phiếu (thành công / lý do lỗi)
-    const bulk = async (a, label) => {
-      const todo = rows;
+    const bulk = async (a, label, subset = null) => {
+      const todo = subset || rows;
       if (!todo.length) return App.toast('Không có dòng nào để xử lý', true);
       let note = '';
       if (a === 'UPDATE') { note = await App.promptBox('Lý do cập nhật hàng loạt', `Cập nhật ${todo.length} phiếu theo file mới — ghi chú`); if (!note) return; }
@@ -348,13 +439,33 @@
         body: table({ columns: [{ key: 'so_phieu', label: 'Số phiếu', mono: true }, { key: 'reason', label: 'Lý do' }], rows: bad }), onClose: onDone });
       else onDone();
     };
+
+    const klConflictRows = rows.filter((r) => (r.diffs || []).some((d) => d.field === 'kl_hang_kg' || d.field === 'can_lan_1' || d.field === 'can_lan_2'));
+    const timeOnlyConflictRows = rows.filter((r) => (r.diffs || []).length > 0 && !(r.diffs || []).some((d) => d.field === 'kl_hang_kg' || d.field === 'can_lan_1' || d.field === 'can_lan_2'));
+
     return h('div', { class: 'card', 'data-review': '1' },
-      rows.length ? h('div', { class: 'row gap-s', style: { marginBottom: '10px' } }, h('b', {}, `${rows.length} phiếu cần kiểm tra`), h('span', { class: 'grow' }),
+      rows.length ? h('div', { class: 'row gap-s', style: { marginBottom: '10px', flexWrap: 'wrap', alignItems: 'center' } },
+        h('b', {}, `${rows.length} phiếu cần kiểm tra`),
+        h('span', { class: 'grow' }),
+        klConflictRows.length && klConflictRows.length !== rows.length ? h('button', { class: 'btn sm ghost amber-t', title: `Chỉ xử lý ${klConflictRows.length} phiếu có chênh lệch khối lượng cân`, onclick: () => bulk('UPDATE', `Chỉ cập nhật ${klConflictRows.length} phiếu lệch khối lượng`, klConflictRows) }, `⚡ Cập nhật ${klConflictRows.length} phiếu lệch KL`) : null,
+        timeOnlyConflictRows.length ? h('button', { class: 'btn sm ghost', title: `Bỏ qua ${timeOnlyConflictRows.length} phiếu chỉ lệch giờ/ngày cân (không đổi khối lượng)`, onclick: () => bulk('IGNORE', `Bỏ qua ${timeOnlyConflictRows.length} phiếu chỉ lệch giờ cân`, timeOnlyConflictRows) }, `Bỏ qua ${timeOnlyConflictRows.length} phiếu chỉ lệch giờ`) : null,
         h('button', { class: 'btn ghost sm', 'data-act': 'bulk-keep', onclick: () => bulk('KEEP_OLD', 'Giữ dữ liệu cũ cho tất cả') }, 'Giữ cũ tất cả'),
         h('button', { class: 'btn ghost sm', 'data-act': 'bulk-ignore', onclick: () => bulk('IGNORE', 'Bỏ qua tất cả dòng mới') }, 'Bỏ qua tất cả'),
         h('button', { class: 'btn amber sm', 'data-act': 'bulk-update', onclick: () => bulk('UPDATE', 'Cập nhật tất cả theo file mới') }, 'Cập nhật tất cả theo file mới')) : null,
       table({ columns: [{ key: 'so_phieu', label: 'Số phiếu', mono: true }, { key: '_n', label: 'Nhóm', render: (r) => (r._n > 1 ? h('span', { class: 'tag amber', 'data-group': String(r.phieu_can_id), title: 'Nhiều dòng file cùng nhắm vào một phiếu — xử lý lần lượt' }, `${r._k}/${r._n} cùng phiếu`) : '') }, { key: 'bien_so', label: 'Biển số đang lưu', mono: true }, { key: 'kl_hang_kg', label: 'KL đang lưu', fmt: 'kg' }, { key: 'file_name', label: 'File nguồn' }, { key: 'source_row', label: 'Dòng', num: true },
-        { key: 'diffs', label: 'Khác biệt', render: (r) => (r.diffs || []).map((d) => FIELD[d.field] || d.field).join(', ') }, { key: 'x', label: '', render: (r) => h('button', { class: 'btn sm', onclick: (e) => { e.stopPropagation(); show(r); } }, 'Xem & xử lý') }],
+        { key: 'diffs', label: 'Khác biệt (Cũ → Mới)', render: (r) => {
+          const diffs = r.diffs || [];
+          if (!diffs.length) return h('span', { class: 'muted' }, '—');
+          return h('div', { style: { display: 'flex', flexDirection: 'column', gap: '2px' } }, diffs.map((d) => {
+            const fieldName = FIELD[d.field] || d.field;
+            const isKL = d.field === 'kl_hang_kg';
+            return h('span', { style: { fontSize: '12px' } },
+              h('b', { style: { color: isKL ? 'var(--amber)' : 'inherit' } }, fieldName), ': ',
+              h('span', { class: 'diff-old' }, String(d.old ?? '—')), ' → ',
+              h('span', { class: 'diff-new' }, String(d.new ?? '—'))
+            );
+          }));
+        } }, { key: 'x', label: '', render: (r) => h('button', { class: 'btn sm', onclick: (e) => { e.stopPropagation(); show(r); } }, 'Xem & xử lý') }],
       rows, empty: '🎉 Không có phiếu nào cần kiểm tra', onRow: show }));
   }
 

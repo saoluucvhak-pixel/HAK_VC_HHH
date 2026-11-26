@@ -201,6 +201,20 @@ function createHandlers(app, env = {}) {
     'import.undo': ({ batchId, reason }) => app.imports.undoBatch(batchId, reason),
 
     // ---------------- import danh mục xe
+    'vehicles.quickAssign': ({ bien_so, don_vi_van_chuyen_id, tu_ngay = null }) => {
+      if (!bien_so || !don_vi_van_chuyen_id) throw new ValidationError('Thiếu biển số hoặc đơn vị vận chuyển');
+      const { normalizePlate, displayPlate } = require('../utils/plate');
+      const chuan = normalizePlate(bien_so);
+      return app.db.tx(() => {
+        let xe = app.db.get('SELECT id FROM xe WHERE bien_so_chuan=?', [chuan]);
+        if (!xe) {
+          xe = app.catalog.create('xe', { bien_so_hien_thi: displayPlate(bien_so) });
+        }
+        app.catalog.create('xe_don_vi_lich_su', { don_vi_van_chuyen_id: Number(don_vi_van_chuyen_id), tu_ngay }, { parentId: xe.id });
+        app.cost.recalc({ xeId: xe.id });
+        return { ok: true, xeId: xe.id };
+      });
+    },
     'vehicles.importPreview': ({ filePath, base64, fileName, sheetName }) => app.vehicleImport.preview(base64 ? { buffer: Buffer.from(base64, 'base64'), fileName, sheetName } : { filePath, sheetName }),
     'vehicles.importCommit': ({ token, ...o }) => app.vehicleImport.commit(token, o),
 

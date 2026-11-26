@@ -299,8 +299,21 @@ class TicketImportService {
       new_kg: Math.round(news.reduce((a, r) => a + (Number(r.kl_hang_kg) || 0), 0) * 1000) / 1000, new_truoc_vat: news.reduce((a, r) => a + (Number(r.tien_truoc_vat) || 0), 0) };
     totals.ignored_below_total = rows.ignoredBelowTotal ? rows.ignoredBelowTotal.count : 0; totals.ignored_first_row = rows.ignoredBelowTotal ? rows.ignoredBelowTotal.first_row : null;
     totals.lech_kg = totals.file_kg === null ? null : Math.round((totals.read_kg - totals.file_kg) * 1000) / 1000;
-    Object.assign(p, { stage: 'previewed', sheetName, headerRow, readConfig, dotId, noiDenId: nd, rows: out, counts, totals });
-    return { token, counts, totals, sheetName, headerRow: Number(headerRow), noiDenId: nd };
+
+    // Gợi ý Đợt vận chuyển tự động dựa trên dải ngày của phiếu trong file (nếu người dùng chưa chọn đợt)
+    let suggestedDotId = dotId || null;
+    if (!suggestedDotId) {
+      const dates = out.map((r) => r.ngay_gio_can_1?.slice(0, 10)).filter(Boolean).sort();
+      if (dates.length) {
+        const minD = dates[0], maxD = dates[dates.length - 1];
+        const matchedDot = this.db.get(`SELECT id FROM dot_van_chuyen WHERE trang_thai='MO' AND tu_ngay <= ? AND (den_ngay IS NULL OR den_ngay >= ?) ORDER BY id DESC LIMIT 1`, [maxD, minD])
+          || this.db.get(`SELECT id FROM dot_van_chuyen WHERE trang_thai='MO' AND (den_ngay IS NULL OR den_ngay >= ?) ORDER BY tu_ngay DESC LIMIT 1`, [minD]);
+        if (matchedDot) suggestedDotId = matchedDot.id;
+      }
+    }
+
+    Object.assign(p, { stage: 'previewed', sheetName, headerRow, readConfig, dotId: suggestedDotId, noiDenId: nd, rows: out, counts, totals });
+    return { token, counts, totals, sheetName, headerRow: Number(headerRow), noiDenId: nd, suggestedDotId };
   }
 
   /** Trang dữ liệu preview (cho bảng ảo hóa). filter: phan_loai hoặc cờ cảnh báo */
