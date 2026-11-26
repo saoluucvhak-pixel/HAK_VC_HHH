@@ -198,7 +198,7 @@ const App = (() => {
    * table({columns:[{key,label,fmt,cls,render,sort}], rows, totals, onRow, rowClass, sort:{key,dir}, onSort})
    * fmt: 'money'|'int'|'kg'|'tan'|'date'|'dt'|'pct'|'min' | function
    */
-  function table({ columns, rows, totals = null, onRow = null, rowClass = null, sort = null, onSort = null, empty = 'Không có dữ liệu', wrapClass = '' }) {
+  function table({ columns, rows, totals = null, totalLabelColumn = columns[0]?.key, onRow = null, rowClass = null, sort = null, onSort = null, empty = 'Không có dữ liệu', wrapClass = '' }) {
     const num = (c) => ['money', 'money2', 'int', 'kg', 'tan', 'min', 'pct'].includes(c.fmt) || c.num;
     const dat = (c) => ['date', 'dt', 'dts'].includes(c.fmt) || c.date;
     const stCls = (c) => c.sticky ? (c.sticky === 'left' ? 'col-sticky-left-1 ' : c.sticky === 'left-2' ? 'col-sticky-left-2 ' : 'col-sticky-right ') : '';
@@ -215,10 +215,10 @@ const App = (() => {
     };
     const tbody = h('tbody', {}, rows.length ? rows.map((r) => h('tr', { class: rowClass ? rowClass(r) : '', onclick: onRow ? () => onRow(r) : null, style: onRow ? { cursor: 'pointer' } : null }, columns.map((c) => cell(c, r))))
       : h('tr', {}, h('td', { colspan: columns.length, class: 'empty' }, empty)));
-    const tfoot = totals ? h('tfoot', {}, h('tr', {}, columns.map((c, i) => {
+    const tfoot = totals ? h('tfoot', {}, h('tr', {}, columns.map((c) => {
       const v = totals[c.key]; let t = '';
       if (v !== undefined && v !== null) t = typeof c.fmt === 'function' ? c.fmt(v, totals) : (c.fmt && fmt[c.fmt] ? fmt[c.fmt](v) : v);
-      return h('td', { class: stCls(c) + (num(c) ? 'num' : dat(c) ? 'ctr' : '') }, i === 0 && (v === undefined || v === null) ? 'Tổng cộng' : t);
+      return h('td', { class: stCls(c) + (num(c) ? 'num' : dat(c) ? 'ctr' : '') }, c.key === totalLabelColumn && (v === undefined || v === null) ? 'Tổng cộng' : t);
     }))) : null;
     return h('div', { class: 'tbl-wrap ' + wrapClass }, h('table', { class: 't' }, thead, tbody, tfoot));
   }

@@ -99,18 +99,17 @@
       const companyCard = h('div', { class: 'card' }, h('h3', {}, 'Thông tin Bên A (in trên Bảng kê / báo cáo)'), h('p', { class: 'muted' }, 'Công ty của bạn — bên thuê/thanh toán vận chuyển. Bên B lấy từ danh mục Đơn vị vận chuyển (tên, MST, địa chỉ).'),
         h('div', { class: 'form-grid' }, cmk('ten', 'Tên công ty'), cmk('ma_so_thue', 'Mã số thuế'), cmk('dia_chi', 'Địa chỉ'), cmk('dai_dien', 'Người đại diện ký'), cmk('chuc_vu', 'Chức danh', 'Giám đốc'), cmk('nguoi_lap', 'Kế toán / người lập biểu'), cmk('xung_ho', 'Xưng hô (Ông/Bà)'), cmk('dien_thoai', 'Điện thoại'), cmk('email', 'Email'), cmk('noi_ky', 'Địa danh ghi trên chứng từ', 'Quảng Ngãi')),
         h('div', { class: 'row end', style: { marginTop: '10px' } }, h('button', { class: 'btn', 'data-act': 'save-company', onclick: async () => { await call('settings.set', { key: 'company', value: Object.fromEntries(Object.entries(cf).map(([k, el]) => [k, el.value.trim()])) }, 'Đã lưu thông tin công ty'); } }, 'Lưu')));
-      v.append(App.pageHead('Cài đặt'), App.excelTemplates.card(s.excel_import_templates), companyCard,
-        h('div', { class: 'card' }, h('h3', {}, 'Làm tròn theo bảng kê'), h('p', { class: 'muted' }, 'Số chữ số thập phân: 0 = đến đồng; −2 = đến trăm đồng.'),
+      const roundingCard = h('div', { class: 'card' }, h('h3', {}, 'Làm tròn theo bảng kê'), h('p', { class: 'muted' }, 'Số chữ số thập phân: 0 = đến đồng; −2 = đến trăm đồng.'),
           h('div', { class: 'form-grid' }, h('label', { class: 'field' }, 'Thành tiền mỗi dòng — số chữ số', f.la), h('label', { class: 'field' }, 'Kiểu', f.lm), h('label', { class: 'field' }, 'VAT — số chữ số', f.va), h('label', { class: 'field' }, 'Kiểu', f.vm)),
-          h('div', { class: 'row end', style: { marginTop: '10px' } }, h('button', { class: 'btn', 'data-act': 'save-rounding', onclick: async () => { await App.callConfirm('settings.set', { key: 'rounding', value: { level: 'STATEMENT', statement: { lineAmount: { digits: Number(f.la.value), mode: f.lm.value }, vat: { digits: Number(f.va.value), mode: f.vm.value } } } }, 'Đã lưu'); } }, 'Lưu'))),
-        h('div', { class: 'card' }, h('h3', {}, 'Duyệt từng phiếu'), h('p', { class: 'muted' }, 'TẮT (mặc định): phiếu có hiệu lực ngay khi nhập. BẬT: phiếu mới nhập hoặc vừa sửa số liệu là "Nháp" — chưa vào Dashboard, Bảng kê, báo cáo, đối chiếu và chốt kỳ cho tới khi người có quyền Duyệt duyệt. Phiếu hiện có tính là Đã duyệt. Khi bật phân quyền, người nhập/sửa không tự duyệt phiếu của mình. Không tắt được khi còn phiếu Nháp.'),
+          h('div', { class: 'row end', style: { marginTop: '10px' } }, h('button', { class: 'btn', 'data-act': 'save-rounding', onclick: async () => { await App.callConfirm('settings.set', { key: 'rounding', value: { level: 'STATEMENT', statement: { lineAmount: { digits: Number(f.la.value), mode: f.lm.value }, vat: { digits: Number(f.va.value), mode: f.vm.value } } } }, 'Đã lưu'); } }, 'Lưu')));
+      const approvalCard = h('div', { class: 'card' }, h('h3', {}, 'Duyệt từng phiếu'), h('p', { class: 'muted' }, 'TẮT (mặc định): phiếu có hiệu lực ngay khi nhập. BẬT: phiếu mới nhập hoặc vừa sửa số liệu là "Nháp" — chưa vào Dashboard, Bảng kê, báo cáo, đối chiếu và chốt kỳ cho tới khi người có quyền Duyệt duyệt. Phiếu hiện có tính là Đã duyệt. Khi bật phân quyền, người nhập/sửa không tự duyệt phiếu của mình. Không tắt được khi còn phiếu Nháp.'),
           (() => { const on = !!(s.duyet_phieu && s.duyet_phieu.bat); const cb = h('input', { type: 'checkbox', checked: on, 'data-f': 'duyet-bat' });
             const tu = h('input', { type: 'checkbox', checked: !!(s.duyet_phieu && s.duyet_phieu.cho_tu_duyet), 'data-f': 'duyet-tu' });
             return h('div', {}, h('div', { class: 'row gap-s' }, h('label', { class: 'row gap-s' }, cb, 'Bật duyệt từng phiếu')),
               h('div', { class: 'row gap-s', style: { marginTop: '6px' } }, h('label', { class: 'row gap-s' }, tu, 'Cho phép tự duyệt (người nhập/sửa được tự duyệt phiếu của mình)')),
               h('p', { class: 'muted small' }, 'Dùng khi chỉ có MỘT người có quyền duyệt (chế độ 1 người dùng có đăng nhập). Phiếu tự duyệt ghi nhật ký APPROVE_TICKET {tu_duyet: true} và hiện nhãn "Tự duyệt". Nhiều người: để tắt để tách nhập và duyệt.'),
-              h('div', { class: 'row end', style: { marginTop: '10px' } }, h('button', { class: 'btn', 'data-act': 'save-duyet', onclick: async () => { await App.callConfirm('settings.set', { key: 'duyet_phieu', value: { bat: cb.checked, cho_tu_duyet: tu.checked } }, 'Đã lưu', 'Bật duyệt phiếu'); App.refreshInfo(); } }, 'Lưu'))); })()),
-        h('div', { class: 'card' }, h('h3', {}, 'Ngày căn cứ tính giá cước'),
+              h('div', { class: 'row end', style: { marginTop: '10px' } }, h('button', { class: 'btn', 'data-act': 'save-duyet', onclick: async () => { await App.callConfirm('settings.set', { key: 'duyet_phieu', value: { bat: cb.checked, cho_tu_duyet: tu.checked } }, 'Đã lưu', 'Bật duyệt phiếu'); App.refreshInfo(); } }, 'Lưu'))); })());
+      const priceCard = h('div', { class: 'card' }, h('h3', {}, 'Ngày căn cứ tính giá cước'),
           h('p', { class: 'muted' }, 'Xác định thời điểm áp dụng bảng giá và nhà xe sở hữu khi chuyến xe cân xuyên đêm qua ngày mới.'),
           (() => {
             const cur = s.ngay_can_cu_gia || 'CAN_1';
@@ -120,23 +119,61 @@
             return h('div', {},
               h('div', { class: 'row gap-s' }, h('label', { class: 'field' }, 'Căn cứ theo', sel)),
               h('div', { class: 'row end', style: { marginTop: '10px' } }, h('button', { class: 'btn', 'data-act': 'save-ngay-can-cu', onclick: async () => { const r = await App.callConfirm('settings.set', { key: 'ngay_can_cu_gia', value: sel.value }, 'Đã lưu cài đặt ngày căn cứ', 'Đổi căn cứ tính giá'); if (r && r.tinh_lai) App.toast(`Đã tính lại ${r.tinh_lai} phiếu xuyên đêm`); App.refreshInfo(); } }, 'Lưu')));
-          })()),
-        h('div', { class: 'card' }, h('h3', {}, 'Khối lượng hợp lý mỗi chuyến (kg)'), h('p', { class: 'muted' }, 'Phiếu có KL ngoài khoảng này bị chặn khi nhập/sửa (phát hiện KL ghi nhầm theo tấn hoặc thừa chữ số). Mặc định 100 – 100.000 kg.'),
+          })());
+      const weightCard = h('div', { class: 'card' }, h('h3', {}, 'Khối lượng hợp lý mỗi chuyến (kg)'), h('p', { class: 'muted' }, 'Phiếu có KL ngoài khoảng này bị chặn khi nhập/sửa (phát hiện KL ghi nhầm theo tấn hoặc thừa chữ số). Mặc định 100 – 100.000 kg.'),
           (() => { const k = s.kl_hop_ly || { min_kg: 100, max_kg: 100000 }; const lo = h('input', { type: 'number', min: 0, value: k.min_kg, 'data-f': 'kl-min' }), hi = h('input', { type: 'number', min: 1, value: k.max_kg, 'data-f': 'kl-max' });
             return h('div', {}, h('div', { class: 'form-grid' }, h('label', { class: 'field' }, 'Tối thiểu (kg)', lo), h('label', { class: 'field' }, 'Tối đa (kg)', hi)),
-              h('div', { class: 'row end', style: { marginTop: '10px' } }, h('button', { class: 'btn', 'data-act': 'save-kl', onclick: async () => { await call('settings.set', { key: 'kl_hop_ly', value: { min_kg: Number(lo.value), max_kg: Number(hi.value) } }, 'Đã lưu ngưỡng khối lượng'); } }, 'Lưu ngưỡng'))); })()),
-        h('div', { class: 'card' }, h('h3', {}, 'Ngưỡng cảnh báo thời gian'), h('div', { class: 'form-grid' }, h('label', { class: 'field' }, 'Hai chuyến liên tiếp cách nhau tối thiểu (phút)', f.gap), h('label', { class: 'field' }, 'Một lần cân kéo dài tối đa (phút)', f.dur)),
-          h('div', { class: 'row end', style: { marginTop: '10px' } }, h('button', { class: 'btn', onclick: async () => { await call('settings.set', { key: 'time_anomaly', value: { ...ta, minGapMinutes: Number(f.gap.value), maxWeighDurationMinutes: Number(f.dur.value) } }, 'Đã lưu & cập nhật cảnh báo'); } }, 'Lưu'))),
-        h('div', { class: 'card' }, h('h3', {}, 'Sao lưu tự động khi mở phần mềm'),
+              h('div', { class: 'row end', style: { marginTop: '10px' } }, h('button', { class: 'btn', 'data-act': 'save-kl', onclick: async () => { await call('settings.set', { key: 'kl_hop_ly', value: { min_kg: Number(lo.value), max_kg: Number(hi.value) } }, 'Đã lưu ngưỡng khối lượng'); } }, 'Lưu ngưỡng'))); })());
+      const timeCard = h('div', { class: 'card' }, h('h3', {}, 'Ngưỡng cảnh báo thời gian'), h('div', { class: 'form-grid' }, h('label', { class: 'field' }, 'Hai chuyến liên tiếp cách nhau tối thiểu (phút)', f.gap), h('label', { class: 'field' }, 'Một lần cân kéo dài tối đa (phút)', f.dur)),
+          h('div', { class: 'row end', style: { marginTop: '10px' } }, h('button', { class: 'btn', onclick: async () => { await call('settings.set', { key: 'time_anomaly', value: { ...ta, minGapMinutes: Number(f.gap.value), maxWeighDurationMinutes: Number(f.dur.value) } }, 'Đã lưu & cập nhật cảnh báo'); } }, 'Lưu')));
+      const backupCard = h('div', { class: 'card' }, h('h3', {}, 'Sao lưu tự động khi mở phần mềm'),
           h('p', { class: 'muted' }, 'Mỗi lần mở phần mềm, nếu bản sao lưu tự động gần nhất đã quá số ngày này thì tự sao lưu lại. Nhập 0 để tắt.'),
           h('div', { class: 'row', style: { alignItems: 'flex-end' } }, h('label', { class: 'field' }, 'Định kỳ sao lưu (ngày / lần)', bk),
             h('label', { class: 'field' }, 'Nhắc xuất ra ổ khác sau (ngày)', rm),
-            h('button', { class: 'btn', 'data-act': 'save-backup', onclick: async () => { const n = Math.max(0, Math.floor(Number(bk.value) || 0)); const rd = Math.min(365, Math.max(1, Math.floor(Number(rm.value) || 7))); await call('settings.set', { key: 'backup', value: { ...bcfg, auto: n ? 'INTERVAL' : 'OFF', intervalDays: n, remindExportDays: rd } }, n ? `Đã lưu: sao lưu mỗi ${n} ngày` : 'Đã tắt sao lưu tự động'); } }, 'Lưu'))),
-        await storageCard(),
-        h('div', { class: 'card' }, h('h3', {}, 'Thông tin hệ thống'), h('div', { class: 'muted' }, `Phiên bản ${info.version} · schema v${info.schema} · ${info.driver}`, h('br'), `Dữ liệu: ${info.dataDir || '(trình duyệt dev)'}`),
+            h('button', { class: 'btn', 'data-act': 'save-backup', onclick: async () => { const n = Math.max(0, Math.floor(Number(bk.value) || 0)); const rd = Math.min(365, Math.max(1, Math.floor(Number(rm.value) || 7))); await call('settings.set', { key: 'backup', value: { ...bcfg, auto: n ? 'INTERVAL' : 'OFF', intervalDays: n, remindExportDays: rd } }, n ? `Đã lưu: sao lưu mỗi ${n} ngày` : 'Đã tắt sao lưu tự động'); } }, 'Lưu')));
+      const systemCard = h('div', { class: 'card' }, h('h3', {}, 'Thông tin hệ thống'), h('div', { class: 'muted' }, `Phiên bản ${info.version} · schema v${info.schema} · ${info.driver}`, h('br'), `Dữ liệu: ${info.dataDir || '(trình duyệt dev)'}`),
           h('div', { class: 'row', style: { marginTop: '10px' } }, h('button', { class: 'btn ghost', 'data-act': 'recalc', onclick: async () => { if (await App.confirmBox('Tính lại', 'Tính lại toàn bộ phiếu chưa chốt theo bảng giá hiện hành?')) { const x = await call('cost.recalc', { all: true }); if (x) App.toast(`Đã tính lại ${x.count ?? ''} phiếu`); } } }, '🔄 Tính lại tất cả phiếu'),
             h('button', { class: 'btn ghost', 'data-act': 'initial', onclick: async () => { if (await App.confirmBox('Nạp dữ liệu ban đầu', 'Nạp danh mục, bảng giá, giá dầu, xe và phiếu cân từ file Excel V.47 đi kèm? Dữ liệu đã có không bị ghi đè, phiếu trùng được bỏ qua.')) { const r = await call('initial.load', {}); if (r) { App.toast(`Đã nạp: ${r.phieu.inserted} phiếu mới, ${r.phieu.duplicate} trùng bỏ qua`); App.reload(); } } } }, '📦 Nạp dữ liệu ban đầu (Excel V.47)'),
-            h('button', { class: 'btn ghost', 'data-act': 'seed', onclick: async () => { if (await App.confirmBox('Nạp dữ liệu mẫu', 'Nạp danh mục, bảng giá, giá dầu của file mẫu V.47?')) { if (await call('seed.loadSample', {}, 'Đã nạp dữ liệu mẫu')) App.reload(); } } }, '🌱 Nạp dữ liệu mẫu V.47'))));
+            h('button', { class: 'btn ghost', 'data-act': 'seed', onclick: async () => { if (await App.confirmBox('Nạp dữ liệu mẫu', 'Nạp danh mục, bảng giá, giá dầu của file mẫu V.47?')) { if (await call('seed.loadSample', {}, 'Đã nạp dữ liệu mẫu')) App.reload(); } } }, '🌱 Nạp dữ liệu mẫu V.47')));
+      const groups = [
+        ['excel', 'Mẫu nhập Excel', [App.excelTemplates.card(s.excel_import_templates)]],
+        ['tickets', 'Phiếu cân & duyệt', [approvalCard, weightCard, timeCard]],
+        ['pricing', 'Tính cước & bảng kê', [priceCard, roundingCard]],
+        ['company', 'Thông tin công ty', [companyCard]],
+        ['storage', 'Dữ liệu & sao lưu', [await storageCard(), backupCard]],
+        ['system', 'Hệ thống', [systemCard]],
+      ];
+      const tabs = h('div', { class: 'settings-tabs', role: 'tablist', 'aria-label': 'Nhóm cài đặt' });
+      const sections = groups.map(([key, label, cards]) => {
+        const id = `settings-${key}`;
+        const button = h('button', { type: 'button', class: 'settings-tab', role: 'tab', id: `${id}-tab`,
+          'aria-controls': id, 'data-settings-tab': key, onclick: () => activate(key) }, label);
+        const panel = h('section', { role: 'tabpanel', id, 'aria-labelledby': button.id }, cards);
+        tabs.append(button);
+        return { key, button, panel };
+      });
+      function activate(key, focus = false) {
+        App.state.settingsTab = key;
+        for (const section of sections) {
+          const current = section.key === key;
+          section.button.setAttribute('aria-selected', String(current));
+          section.button.tabIndex = current ? 0 : -1;
+          section.panel.hidden = !current;
+          if (current && focus) section.button.focus();
+        }
+      }
+      tabs.addEventListener('keydown', (event) => {
+        const index = sections.findIndex((section) => section.button === event.target);
+        if (index < 0) return;
+        const last = sections.length - 1;
+        const next = { ArrowLeft: (index + last) % sections.length, ArrowRight: (index + 1) % sections.length, Home: 0, End: last };
+        if (!Object.hasOwn(next, event.key)) return;
+        event.preventDefault();
+        activate(sections[next[event.key]].key, true);
+      });
+      activate(sections.find((section) => section.key === App.state.settingsTab)?.key ?? sections[0].key);
+      v.append(h('div', { class: 'settings-page' }, App.pageHead('Cài đặt'), tabs, ...sections.map((section) => section.panel)));
+
     },
   });
 })();
