@@ -51,7 +51,9 @@ try {
   await editor.getByLabel('Tên mẫu').fill('Phiếu cân nhà cung cấp A');
   await editor.getByLabel('Dòng cuối của tiêu đề (từ 1)').fill('3');
   await editor.getByLabel('Dòng cuối của tiêu đề (từ 1)').press('Tab');
+  await editor.locator('[data-template-map=kl_hang_kg] option').getByText('4. hàng', { exact: true }).waitFor({ state: 'attached' });
   await editor.getByLabel('Số dòng tiêu đề').selectOption('2');
+  await editor.locator('[data-template-map=kl_hang_kg] option').getByText('4. Khối lượng hàng', { exact: true }).waitFor({ state: 'attached' });
   await editor.locator('[data-template-map=kl_hang_kg]').selectOption('3');
   assert.deepEqual(await editor.getByRole('heading', { level: 4 }).allTextContents(),
     ['1. Chọn tệp và tiêu đề', '2. Ghép cột', '3. Đọc thử và đối chiếu']);

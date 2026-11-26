@@ -84,10 +84,10 @@
       return { name: draft.name.trim(), headerRow: draft.headerRow, headerRows: draft.headerRows, fallbackUnit: draft.fallbackUnit, columns,
         layout: { sheetName: sheet, positions: { ...mapping } } };
     }
-    const lock = (fn) => async () => {
+    const lock = (fn) => async (...args) => {
       if (busy) return;
       busy = true;
-      try { await fn(); } finally { busy = false; draw(); }
+      try { await fn(...args); } finally { busy = false; draw(); }
     };
     function draw() {
       const defaultName = config.templates.find((item) => item.id === config.defaultId)?.name || 'Tự nhận diện';
@@ -141,17 +141,21 @@
       const section = (title, ...contents) => h('section', { class: 'excel-template-step' }, h('h4', {}, title), ...contents);
       const editor = h('div', { class: 'excel-template-editor', 'data-template-editor': '1' },
         h('h3', {}, draft.id ? 'Sửa mẫu nhập Excel' : 'Tạo mẫu nhập Excel'));
+      const changeSheet = (update) => lock(async (event) => {
+        update(event.target.value);
+        for (const control of editor.querySelectorAll('button, input, select')) control.disabled = true;
+        await loadSheet(true);
+      });
       const source = h('div', { class: 'excel-template-source' }, fileButton,
         opened ? h('span', { class: 'muted' }, opened.fileName) : h('span', { class: 'muted' }, 'Chọn tệp .xlsx hoặc .csv có dòng tiêu đề và dữ liệu mẫu.'));
       const sheetFields = opened ? h('div', { class: 'form-grid' },
-        field('Sheet mẫu', h('select', { onchange: lock(async (event) => { sheet = event.target.value; await loadSheet(true); }) },
+        field('Sheet mẫu', h('select', { onchange: changeSheet((value) => { sheet = value; }) },
           opened.sheets.map((item) => option(item.name, item.name, item.name === sheet)))),
         field('Dòng cuối của tiêu đề (từ 1)', h('input', { type: 'number', min: draft.headerRows, value: draft.headerRow + 1,
-          onchange: lock(async (event) => { draft.headerRow = Number(event.target.value) - 1; await loadSheet(true); }) })),
-        field('Số dòng tiêu đề', h('select', { onchange: lock(async (event) => {
-          draft.headerRows = Number(event.target.value);
+          onchange: changeSheet((value) => { draft.headerRow = Number(value) - 1; }) })),
+        field('Số dòng tiêu đề', h('select', { onchange: changeSheet((value) => {
+          draft.headerRows = Number(value);
           draft.headerRow = Math.max(draft.headerRows - 1, draft.headerRow);
-          await loadSheet(true);
         }) }, [1, 2].map((count) => option(count, `${count} dòng`, count === draft.headerRows))))) : null;
       editor.append(section('1. Chọn tệp và tiêu đề', source, ...(sheetFields ? [sheetFields] : [])));
       if (info) {
