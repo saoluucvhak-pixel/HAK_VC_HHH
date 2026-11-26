@@ -62,6 +62,7 @@
       draft = item ? { ...item, id: copy ? undefined : item.id, name: copy ? `${item.name} (bản sao)`.slice(0, 120) : item.name }
         : { name: '', headerRow: null, headerRows: 1, fallbackUnit: '', columns: {} };
       draw();
+      root.querySelector('[data-template-editor]')?.scrollIntoView({ block: 'nearest' });
     }
     async function loadSheet(useSaved = false) {
       const response = await call('import.sheetInfo', { token: opened.token, sheetName: sheet,
@@ -137,35 +138,44 @@
           App.toast('Đã lưu mẫu nhập Excel');
         }
       }), { class: 'btn sm', 'data-template-save': '1', disabled: busy || !result || result.blocking || !draft.name.trim() });
-      const editor = h('div', { class: 'card', 'data-template-editor': '1' },
-        h('h3', {}, draft.id ? 'Sửa mẫu nhập' : 'Tạo mẫu nhập'),
-        h('div', { class: 'row gap-s' }, fileButton, opened?.fileName));
-      if (opened) {
-        editor.append(
-          h('div', { class: 'form-grid' }, field('Tên mẫu', name),
-            field('Sheet mẫu', h('select', { onchange: async (event) => { sheet = event.target.value; await loadSheet(true); draw(); } },
-              opened.sheets.map((item) => option(item.name, item.name, item.name === sheet)))),
-            field('Dòng cuối của tiêu đề (từ 1)', h('input', { type: 'number', min: draft.headerRows, value: draft.headerRow + 1,
-              onchange: async (event) => { draft.headerRow = Number(event.target.value) - 1; await loadSheet(true); draw(); } })),
-            field('Số dòng tiêu đề', h('select', { onchange: async (event) => {
-              draft.headerRows = Number(event.target.value);
-              draft.headerRow = Math.max(draft.headerRows - 1, draft.headerRow);
-              await loadSheet(true); draw();
-            } }, [1, 2].map((count) => option(count, `${count} dòng`, count === draft.headerRows)))),
-            field('Đơn vị dự phòng', h('select', { onchange: (event) => { draft.fallbackUnit = event.target.value; updateSave(); } }, units(draft.fallbackUnit)))),
-          h('h3', {}, 'Ghép cột'),
-          h('p', { class: 'muted' }, 'Ghép Biển số, Ngày giờ cân 1, và KL hàng hoặc cả hai cột cân. Nếu bỏ qua cột Số phiếu, ứng dụng sẽ tạo mã từ dữ liệu cân.'),
-          h('p', { class: 'muted' }, 'Nếu ngày và giờ ở hai cột, ghép cột ngày vào Ngày giờ cân và cột giờ vào Giờ cân (cột riêng) của cùng lần cân. Nếu đã gộp trong một ô, chỉ ghép Ngày giờ cân.'),
-          h('div', { class: 'form-grid' }, FIELDS.map(([key, label]) => field(label,
-            h('select', { 'data-template-map': key, onchange: (event) => {
+      const section = (title, ...contents) => h('section', { class: 'excel-template-step' }, h('h4', {}, title), ...contents);
+      const editor = h('div', { class: 'excel-template-editor', 'data-template-editor': '1' },
+        h('h3', {}, draft.id ? 'Sửa mẫu nhập Excel' : 'Tạo mẫu nhập Excel'));
+      const source = h('div', { class: 'excel-template-source' }, fileButton,
+        opened ? h('span', { class: 'muted' }, opened.fileName) : h('span', { class: 'muted' }, 'Chọn tệp .xlsx hoặc .csv có dòng tiêu đề và dữ liệu mẫu.'));
+      const sheetFields = opened ? h('div', { class: 'form-grid' },
+        field('Sheet mẫu', h('select', { onchange: lock(async (event) => { sheet = event.target.value; await loadSheet(true); }) },
+          opened.sheets.map((item) => option(item.name, item.name, item.name === sheet)))),
+        field('Dòng cuối của tiêu đề (từ 1)', h('input', { type: 'number', min: draft.headerRows, value: draft.headerRow + 1,
+          onchange: lock(async (event) => { draft.headerRow = Number(event.target.value) - 1; await loadSheet(true); }) })),
+        field('Số dòng tiêu đề', h('select', { onchange: lock(async (event) => {
+          draft.headerRows = Number(event.target.value);
+          draft.headerRow = Math.max(draft.headerRows - 1, draft.headerRow);
+          await loadSheet(true);
+        }) }, [1, 2].map((count) => option(count, `${count} dòng`, count === draft.headerRows))))) : null;
+      editor.append(section('1. Chọn tệp và tiêu đề', source, ...(sheetFields ? [sheetFields] : [])));
+      if (info) {
+        const headerText = (key) => info.headers.find((column) => column.index === mapping[key])?.text || '—';
+        const mappingTable = h('div', { class: 'excel-template-table' }, h('table', { class: 't' },
+          h('thead', {}, h('tr', {}, ['Trường phiếu cân', 'Cột nguồn trong Excel', 'Tiêu đề lưu theo mẫu'].map((label) => h('th', { scope: 'col' }, label)))),
+          h('tbody', {}, FIELDS.map(([key, label]) => {
+            const chosen = h('td', { 'data-template-heading': key }, headerText(key));
+            const select = h('select', { 'aria-label': label, 'data-template-map': key, onchange: (event) => {
               if (event.target.value === '') delete mapping[key]; else mapping[key] = Number(event.target.value);
+              chosen.textContent = headerText(key);
               updateSave();
-            } }, option('', '— bỏ qua —', mapping[key] == null), (info?.headers || []).filter((col) => col.text)
-              .map((col) => option(col.index, `${col.index + 1}. ${col.text}`, mapping[key] === col.index)))))));
-        editor.append(btn('Đọc thử', lock(async () => {
+            } }, option('', '— bỏ qua —', mapping[key] == null), info.headers.filter((col) => col.text)
+              .map((col) => option(col.index, `${col.index + 1}. ${col.text}`, mapping[key] === col.index)));
+            return h('tr', {}, h('th', { scope: 'row' }, label), h('td', {}, select), chosen);
+          }))));
+        editor.append(section('2. Ghép cột', h('div', { class: 'form-grid' }, field('Tên mẫu', name),
+          field('Đơn vị dự phòng', h('select', { onchange: (event) => { draft.fallbackUnit = event.target.value; updateSave(); } }, units(draft.fallbackUnit)))),
+          h('p', { class: 'muted' }, 'Ghép biển số, ngày giờ cân 1 và KL hàng hoặc cả hai cột trọng lượng. Bỏ qua số phiếu để ứng dụng tạo mã.'),
+          h('p', { class: 'muted' }, 'Nếu Excel tách ngày và giờ, chọn cột ngày ở Ngày giờ cân và cột giờ ở Giờ cân (cột riêng) của cùng lần cân. Đọc thử sẽ hiển thị một giá trị ngày giờ, ví dụ 05/10/2026 23:30.'),
+          mappingTable));
+        editor.append(section('3. Đọc thử và đối chiếu', btn('Đọc thử', lock(async () => {
           result = await call('import.check', { token: opened.token, sheetName: sheet, draft: { ...draftConfig(), name: draft.name.trim() || 'Mẫu đang sửa' } });
-        }), { 'data-template-check': '1', disabled: busy || !info }));
-        if (result) editor.append(trial(result));
+        }), { 'data-template-check': '1' }), ...(result ? [trial(result)] : [])));
       }
       editor.append(h('div', { class: 'row end' }, btn('Đóng', lock(async () => { draft = null; await clearFile(); })), save));
       root.append(editor);

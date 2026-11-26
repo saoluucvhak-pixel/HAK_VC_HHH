@@ -53,6 +53,10 @@ try {
   await editor.getByLabel('Dòng cuối của tiêu đề (từ 1)').press('Tab');
   await editor.getByLabel('Số dòng tiêu đề').selectOption('2');
   await editor.locator('[data-template-map=kl_hang_kg]').selectOption('3');
+  assert.deepEqual(await editor.getByRole('heading', { level: 4 }).allTextContents(),
+    ['1. Chọn tệp và tiêu đề', '2. Ghép cột', '3. Đọc thử và đối chiếu']);
+  assert.equal(await editor.locator('[data-template-heading=kl_hang_kg]').textContent(), 'Khối lượng hàng');
+  assert.equal(await editor.getByRole('button', { name: 'Lưu mẫu' }).isEnabled(), false);
   await editor.getByRole('button', { name: 'Đọc thử' }).click();
   const trial = card.locator('[data-template-trial]');
   await trial.getByText('00007', { exact: true }).waitFor();
