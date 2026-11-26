@@ -23,9 +23,9 @@ async function loadInitialData(app, seedDir) {
   out.xe = { trongFile: pv.rows.length, ...vr };
 
   const dot = app.db.get('SELECT id FROM dot_van_chuyen WHERE ma_dot=?', [seed.dot_van_chuyen.ma_dot]);
-  const o = await app.imports.open({ filePath: excel });
-  const si = app.imports.sheetInfo(o.token, o.suggestedSheet);
-  const prev = app.imports.preview(o.token, { sheetName: si.sheetName, headerRow: si.headerRow, mapping: si.mapping, dotId: dot ? dot.id : null });
+  const o = await app.imports.open({ filePath: excel, templateId: null });
+  const si = app.imports.sheetInfo(o.token, o.suggestedSheet, null, { templateId: null });
+  const prev = app.imports.preview(o.token, { sheetName: si.sheetName, headerRow: si.headerRow, mapping: si.mapping, templateId: null, dotId: dot ? dot.id : null });
   const cm = app.imports.commit(o.token, { note: 'Dữ liệu ban đầu từ file Excel V.47' });
   delete cm.fileBuffer;
   out.phieu = { sheet: si.sheetName, counts: prev.counts, inserted: cm.inserted, duplicate: cm.duplicate, conflict: cm.conflict, calculated: cm.calculated };

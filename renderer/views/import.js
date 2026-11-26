@@ -2,12 +2,16 @@
 /** Import phiếu cân (4 bước) + Import danh mục xe + Cần kiểm tra + Lịch sử import. */
 (() => {
   const { h, fmt, api, call, table, tag } = App;
-  const FIELDS = [['so_phieu', 'Số phiếu *'], ['ngay_gio_can_1', 'Ngày giờ cân 1 *'], ['ngay_gio_can_2', 'Ngày giờ cân 2'], ['bien_so', 'Biển số *'], ['can_lan_1', 'Cân lần 1'], ['can_lan_2', 'Cân lần 2'], ['kl_hang_kg', 'KL hàng (kg) *'], ['noi_xuat', 'Nơi xuất *'], ['noi_den', 'Nơi đến']];
+  const { FIELDS, units, trial } = App.excelTemplates;
+  const templateName = (config) => config?.name || 'Tự nhận diện';
+  const readingBadge = (name) => h('p', { 'data-import-reading': '1' }, 'Cách đọc đang dùng ', h('strong', { class: 'tag green' }, name));
   const PHAN_LOAI = { NEW: 'green', EXACT_DUPLICATE: 'gray', KEY_CONFLICT: 'amber', IN_FILE_DUPLICATE: 'gray', ERROR: 'red' };
 
   App.register('import', {
     async render(v) {
-      const S = { step: 1, open: null, info: null, mapping: {}, sheet: null, headerRow: 0, dotId: '', noiDenId: '', prev: null, filter: null, result: null, readAfterTotal: false };
+      const config = (await api('settings.all')).excel_import_templates;
+      const defaultName = () => templateName(config?.templates.find((item) => item.id === config.defaultId));
+      const S = { step: 1, open: null, info: null, mapping: {}, sheet: null, headerRow: 0, headerRows: 1, templateId: null, strict: false, fallbackUnit: '', dotId: '', noiDenId: '', prev: null, filter: null, result: null, readAfterTotal: false };
       const root = h('div', {});
       const steps = () => h('div', { class: 'steps' }, ['1. Chọn file', '2. Sheet & cột', '3. Xem trước', '4. Kết quả'].map((t, i) => h('div', { class: 'step ' + (S.step === i + 1 ? 'on' : S.step > i + 1 ? 'done' : '') }, t)));
       const draw = () => { App.clear(root).append(steps()); ({ 1: s1, 2: s2, 3: s3, 4: s4 })[S.step](); };
@@ -37,17 +41,36 @@
 
       function s1() {
         root.append(h('div', { class: 'card' }, h('h3', {}, 'Chọn file phiếu cân (.xlsx / .csv)'),
+          h('p', { class: 'muted' }, 'Mẫu mặc định ', h('strong', {}, defaultName())),
           h('p', { class: 'muted' }, 'File Excel cũ (.xls) cần mở bằng Excel rồi "Lưu thành" .xlsx. Import lại cùng file không tạo phiếu trùng: phiếu giống hệt được bỏ qua, phiếu cùng số phiếu + nơi xuất nhưng khác dữ liệu vào "Cần kiểm tra".'),
           h('div', { class: 'row' }, h('button', { class: 'btn', 'data-act': 'pick', onclick: async () => {
             const f = await App.pickFile(); if (!f) return;
             const o = await call('import.open', f); if (!o) return;
-            S.open = o; S.sheet = o.suggestedSheet; await loadSheet(); S.step = 2; draw();
+            if (S.open) await call('import.cancel', { token: S.open.token });
+            S.open = o; S.sheet = o.suggestedSheet; S.templateId = o.defaultId;
+            S.strict = false; S.fallbackUnit = ''; S.headerRows = 1; S.readAfterTotal = false;
+            await loadSheet();
+            S.step = 2; draw();
           } }, '📂 Chọn file…'), h('button', { class: 'btn ghost', onclick: () => importVehicles() }, '🚛 Import danh mục xe (sheet "Số xe")…')),
           h('div', { class: 'row', style: { marginTop: '10px', paddingTop: '10px', borderTop: '1px dashed var(--line)' } }, h('span', { class: 'muted' }, 'Chưa có file? Tải file mẫu chuẩn rồi điền dữ liệu:'),
             h('button', { class: 'btn ghost sm', 'data-act': 'tpl-tickets', onclick: () => App.exportXlsx('template.tickets', {}) }, '⬇ File mẫu phiếu cân'),
             h('button', { class: 'btn ghost sm', 'data-act': 'tpl-vehicles', onclick: () => App.exportXlsx('template.vehicles', {}) }, '⬇ File mẫu danh sách xe'))));
       }
-      async function loadSheet() { S.info = await api('import.sheetInfo', { token: S.open.token, sheetName: S.sheet, headerRow: null }); S.mapping = { ...S.info.mapping }; S.headerRow = S.info.headerRow; }
+      const selectedTemplate = () => S.open?.templates.find((item) => item.id === S.templateId);
+      const activeName = () => selectedTemplate()?.name || (S.strict ? 'Ghép thủ công' : 'Tự nhận diện');
+      const readOptions = () => ({
+        token: S.open.token, sheetName: S.sheet, headerRow: S.headerRow, headerRows: S.headerRows,
+        mapping: S.mapping, templateId: S.templateId, fallbackUnit: S.fallbackUnit, strict: S.strict, readAfterTotal: S.readAfterTotal,
+      });
+      const previewOptions = () => ({ ...readOptions(), dotId: S.dotId || null, noiDenId: S.noiDenId || null });
+      async function loadSheet(headerRow = null) {
+        const info = await api('import.sheetInfo', { token: S.open.token, sheetName: S.sheet, headerRow,
+          templateId: S.templateId, headerRows: S.headerRows });
+        S.info = info;
+        S.mapping = { ...info.mapping };
+        S.headerRow = info.headerRow;
+        S.headerRows = info.headerRows;
+      }
 
       async function s2() {
         const o = S.open;
@@ -63,13 +86,13 @@
             prog.update(2, 'Bước 2/4: Phân tích cú pháp & chuẩn hóa dữ liệu…');
             await new Promise((res) => setTimeout(res, 50));
             prog.update(3, 'Bước 3/4: Kiểm tra trùng lặp & tính thử chi phí…');
-            const r = await call('import.preview', { token: S.open.token, sheetName: S.sheet, headerRow: S.headerRow, mapping: S.mapping, dotId: S.dotId || null, noiDenId: S.noiDenId || null, readAfterTotal: !!S.readAfterTotal });
+            const r = await call('import.preview', previewOptions());
             if (!r) return;
             prog.update(4, 'Bước 4/4: Hoàn tất xem trước');
             S.prev = r; S.filter = null; S.step = 3; draw();
           } finally {
             prog.remove();
-            previewBtn.disabled = false;
+            if (S.step === 2 && previewBtn.isConnected) runCheck();
           }
         } }, 'Xem trước ›');
         const verdict = h('div', { class: 'chk-verdict', 'data-verdict': '1' }, 'Đang kiểm tra…');   // kết luận 1 dòng ngay cạnh các ô ghép cột
@@ -114,21 +137,49 @@
           }
           App.clear(checkBox).append(...kids);
         };
-        let tm = null;
-        const runCheck = () => { clearTimeout(tm); tm = setTimeout(async () => {
-          const r = await call('import.check', { token: S.open.token, sheetName: S.sheet, headerRow: S.headerRow, mapping: S.mapping, readAfterTotal: !!S.readAfterTotal });
-          if (r && S.step === 2) drawCheck(r);
-        }, 120); };
+        let tm = null, revision = 0;
+        const runCheck = () => {
+          clearTimeout(tm);
+          previewBtn.disabled = true;
+          const version = ++revision;
+          tm = setTimeout(async () => {
+            if (!checkBox.isConnected) return;
+            const r = await call('import.check', readOptions());
+            if (r && version === revision && S.step === 2 && checkBox.isConnected) drawCheck(r);
+          }, 120);
+        };
+        const tpl = selectedTemplate();
+        const mode = h('select', { 'data-import-template': '1', onchange: async (event) => {
+          S.templateId = event.target.value || null;
+          S.strict = false; S.fallbackUnit = ''; S.headerRows = 1;
+          await loadSheet();
+          draw();
+        } }, h('option', { value: '', selected: !tpl && !S.strict }, 'Tự nhận diện'),
+          S.strict && h('option', { value: 'manual', selected: true, disabled: true }, 'Ghép thủ công'),
+          o.templates.map((item) => h('option', { value: item.id, selected: item.id === S.templateId },
+            item.name + (item.id === o.defaultId ? ' (mặc định)' : ''))));
         root.append(
-          h('div', { class: 'card' }, h('h3', {}, `${o.fileName}`), o.previouslyImported ? h('p', { class: 'tag amber' }, `File này đã import ở lô #${o.previouslyImported.batchId} (${fmt.dt(o.previouslyImported.at)}) — dòng trùng sẽ được bỏ qua`) : null,
+          h('div', { class: 'card' }, h('h3', {}, o.fileName), readingBadge(activeName()),
+            o.previouslyImported ? h('p', { class: 'tag amber' }, `File này đã import ở lô #${o.previouslyImported.batchId} (${fmt.dt(o.previouslyImported.at)}) — dòng trùng sẽ được bỏ qua`) : null,
             h('div', { class: 'form-grid' },
-              h('label', { class: 'field' }, 'Sheet', h('select', { 'data-f': 'sheet', onchange: async (e) => { S.sheet = e.target.value; await loadSheet(); draw(); } }, o.sheets.map((s) => h('option', { value: s.name, selected: s.name === S.sheet }, `${s.name} (${s.rows} dòng)`)))),
-              h('label', { class: 'field' }, 'Dòng tiêu đề (bắt đầu từ 1)', h('input', { type: 'number', min: 1, value: S.headerRow + 1, onchange: async (e) => { S.info = await api('import.sheetInfo', { token: o.token, sheetName: S.sheet, headerRow: Number(e.target.value) - 1 }); S.mapping = { ...S.info.mapping }; S.headerRow = S.info.headerRow; draw(); } })),
+              h('label', { class: 'field' }, 'Mẫu nhập', mode),
+              h('label', { class: 'field' }, 'Sheet', h('select', { 'data-f': 'sheet', onchange: async (e) => { S.sheet = e.target.value; await loadSheet(S.strict ? S.headerRow : null); draw(); } }, o.sheets.map((s) => h('option', { value: s.name, selected: s.name === S.sheet }, `${s.name} (${s.rows} dòng)`)))),
+              h('label', { class: 'field' }, 'Dòng cuối của tiêu đề (từ 1)', h('input', { type: 'number', min: S.headerRows, disabled: !!tpl, value: S.headerRow + 1,
+                onchange: async (e) => { await loadSheet(Number(e.target.value) - 1); draw(); } })),
+              h('label', { class: 'field' }, 'Số dòng tiêu đề', h('select', { disabled: !!tpl, onchange: async (event) => {
+                S.headerRows = Number(event.target.value);
+                await loadSheet(Math.max(S.headerRow, S.headerRows - 1)); draw();
+              } }, [1, 2].map((count) => h('option', { value: count, selected: count === S.headerRows }, `${count} dòng`)))),
+              h('label', { class: 'field' }, 'Đơn vị dự phòng', h('select', { disabled: !!tpl, onchange: (e) => { S.fallbackUnit = e.target.value; runCheck(); } },
+                units(tpl?.fallbackUnit ?? S.fallbackUnit))),
               h('label', { class: 'field' }, 'Gán vào đợt / tàu', h('select', { 'data-f': 'dot', onchange: (e) => (S.dotId = e.target.value) }, h('option', { value: '' }, '— không gán —'), dots.map((d) => h('option', { value: d.id, selected: String(S.dotId) === String(d.id) }, d.label)))),
               h('label', { class: 'field' }, 'Nơi đến mặc định (nếu file không có cột)', h('select', { 'data-f': 'noiden', onchange: (e) => (S.noiDenId = e.target.value) }, h('option', { value: '' }, '— không —'), dd.map((d) => h('option', { value: d.id, selected: String(S.noiDenId) === String(d.id) }, d.label)))))),
-          h('div', { class: 'card' }, h('h3', {}, 'Ghép cột (tự nhận dạng — có thể sửa)'), verdict,
-            h('div', { class: 'form-grid' }, FIELDS.map(([k, lbl]) => h('label', { class: 'field' }, lbl, h('select', { 'data-map': k, onchange: (e) => { if (e.target.value === '') delete S.mapping[k]; else S.mapping[k] = Number(e.target.value); runCheck(); } },
-              h('option', { value: '' }, '— bỏ qua —'), S.info.headers.map((c) => h('option', { value: c.index, selected: S.mapping[k] === c.index }, `${c.index + 1}. ${c.text}`)))))),
+          h('div', { class: 'card' }, h('h3', {}, 'Ghép cột'), verdict,
+            tpl && h('button', { class: 'btn ghost sm', 'data-import-edit-mapping': '1', onclick: () => {
+              S.fallbackUnit = tpl.fallbackUnit; S.strict = true; S.templateId = null; draw();
+            } }, 'Sửa cách ghép cho lần nhập này'),
+            h('div', { class: 'form-grid' }, FIELDS.map(([k, lbl]) => h('label', { class: 'field' }, lbl, h('select', { 'data-map': k, disabled: !!tpl, onchange: (e) => { if (e.target.value === '') delete S.mapping[k]; else S.mapping[k] = Number(e.target.value); runCheck(); } },
+              h('option', { value: '', selected: S.mapping[k] == null }, '— bỏ qua —'), S.info.headers.map((c) => h('option', { value: c.index, selected: S.mapping[k] === c.index }, `${c.index + 1}. ${c.text}`)))))),
             h('h3', { style: { marginTop: '14px' } }, 'Dữ liệu mẫu'), table({ columns: S.info.headers.map((c) => ({ key: String(c.index), label: c.text || `Cột ${c.index + 1}` })), rows: S.info.sample.map((r) => Object.fromEntries(r.map((x, i) => [String(i), x == null ? '' : String(x)]))) })),
           h('div', { class: 'card' }, h('label', { class: 'row gap-s', style: { alignItems: 'center' } }, h('input', { type: 'checkbox', 'data-f': 'multi-block', checked: !!S.readAfterTotal, onchange: (e) => { S.readAfterTotal = e.target.checked; runCheck(); } }),
             h('span', {}, h('b', {}, 'File có nhiều khối (mỗi khối một dòng "Tổng cộng"): đọc tất cả các khối'), h('small', { class: 'muted', style: { display: 'block' } }, 'Mặc định chỉ đọc đến dòng "Tổng cộng" đầu tiên (dữ liệu bên dưới được báo là chưa đọc). Bật tùy chọn này để đọc tiếp các khối sau; tổng đối chiếu = tổng các dòng "Tổng cộng".')))),
@@ -153,13 +204,13 @@
               ),
               h('button', { class: 'btn amber sm', 'data-act': 'read-multi-block', onclick: async () => {
                 S.readAfterTotal = true;
-                const r = await call('import.preview', { token: S.open.token, sheetName: S.sheet, headerRow: S.headerRow, mapping: S.mapping, dotId: S.dotId || null, noiDenId: S.noiDenId || null, readAfterTotal: true });
+                const r = await call('import.preview', previewOptions());
                 if (r) { S.prev = r; S.filter = null; draw(); }
               } }, 'Đọc tiếp toàn bộ các khối phía dưới')
             )
           ));
         }
-        root.append(h('div', { class: 'chk-verdict ' + klCls, 'data-kl-check': '1' },
+        root.append(readingBadge(activeName()), h('div', { class: 'chk-verdict ' + klCls, 'data-kl-check': '1' },
           `Đọc ${fmt.int(T.so_dong)} dòng, tổng KL ${kgf(T.read_kg || 0)}. `,
           T.ignored_below_total > 0 ? `CÒN ${fmt.int(T.ignored_below_total)} dòng giống phiếu cân dưới dòng "Tổng cộng" (từ dòng ${T.ignored_first_row}) CHƯA được đọc — file có nhiều khối? `
             : '',
@@ -199,6 +250,7 @@
       }
 
       async function s4() {
+        root.append(readingBadge(activeName()));
         const r = S.result;
         const t = await api('workflow.todo').catch(() => null);
         // trùng khóa của CHÍNH lần import này còn chờ xử lý (đã xử lý xong thì biến mất, danh sách tự cập nhật)
@@ -299,8 +351,27 @@
   App.register('batches', {
     async render(v) {
       const rows = await api('import.batches');
-      const rowsOf = async (b) => { const d = await api('import.batchRows', { batchId: b.id, limit: 300 }); App.modal({ title: `Lô #${b.id} — ${b.file_name}`, wide: true, actions: [{ label: 'Đóng', primary: false }],
-        body: table({ columns: [{ key: 'source_row', label: 'Dòng', num: true }, { key: 'so_phieu', label: 'Số phiếu', mono: true }, { key: 'bien_so', label: 'Biển số', mono: true }, { key: 'hanh_dong', label: 'Hành động' }, { key: 'trang_thai_phieu', label: 'Phiếu', tag: true }], rows: d.rows }) }); };
+      const rowsOf = async (b) => {
+        const d = await api('import.batchRows', { batchId: b.id, limit: 300 });
+        const saved = JSON.parse(b.mapping_json || 'null');
+        const config = saved?.version === 1 ? saved : null;
+        const reading = h('div', {}, readingBadge(config ? templateName(config) : 'Cách ghép của lô cũ'),
+          h('p', { class: 'muted' }, `Sheet ${b.sheet_name || '—'} · Dòng tiêu đề ${b.header_row || '—'}`,
+            config ? ` · ${config.headerRows} dòng · Đơn vị dự phòng ${config.fallbackUnit === 't' ? 'tấn' : config.fallbackUnit || 'theo file'}` : ''),
+          config && h('p', { class: 'muted' }, Object.entries(config.columns).map(([key, title]) => `${FIELDS.find(([field]) => field === key)?.[1] || key} → ${title}`).join(' · ')),
+          saved && App.can('nhap') && h('button', { class: 'btn ghost sm', 'data-batch-read': '1', onclick: async (event) => {
+            const button = event.currentTarget;
+            button.disabled = true;
+            try {
+              const file = await App.pickFile();
+              if (!file) return;
+              const result = await call('import.batchRead', { batchId: b.id, ...file });
+              if (result) App.modal({ title: `Đọc lại file của lô #${b.id}`, wide: true, body: trial(result), actions: [{ label: 'Đóng' }] });
+            } finally { button.disabled = false; }
+          } }, 'Đọc lại file nguồn theo cách đọc của lô…'));
+        App.modal({ title: `Lô #${b.id} — ${b.file_name}`, wide: true, actions: [{ label: 'Đóng', primary: false }],
+          body: h('div', {}, reading, table({ columns: [{ key: 'source_row', label: 'Dòng', num: true }, { key: 'so_phieu', label: 'Số phiếu', mono: true }, { key: 'bien_so', label: 'Biển số', mono: true }, { key: 'hanh_dong', label: 'Hành động' }, { key: 'trang_thai_phieu', label: 'Phiếu', tag: true }], rows: d.rows })) });
+      };
       const undo = async (b) => { const reason = await App.promptBox('Hoàn tác lô import', 'Lý do hoàn tác'); if (!reason) return; const x = await call('import.undo', { batchId: b.id, reason }, 'Đã hoàn tác lô'); if (x) App.reload(); };
       v.append(App.pageHead('Lịch sử import', 'Mỗi lần import là một lô; có thể hoàn tác cả lô nếu chưa chốt kỳ'),
         h('div', { class: 'card' }, table({ columns: [{ key: 'id', label: 'Lô', num: true }, { key: 'import_time', label: 'Thời gian', fmt: 'dt' }, { key: 'file_name', label: 'File' }, { key: 'total_rows', label: 'Dòng', fmt: 'int' }, { key: 'inserted_rows', label: 'Mới', fmt: 'int' },

@@ -82,7 +82,8 @@ async function readWorkbook({ filePath, buffer, fileName }) {
   const name = fileName || (filePath ? path.basename(filePath) : 'file');
   const hash = crypto.createHash('sha256').update(buf).digest('hex');
   const aoaCache = new Map();
-  let sheets, getAoa;
+  let sheets, getAoa, getMergedHeader;
+  const paddedCodes = new Map();
 
   if (/\.csv$/i.test(name)) {
     const rows = parseCsv(buf.toString('utf8'));
@@ -99,16 +100,28 @@ async function readWorkbook({ filePath, buffer, fileName }) {
     try { await wb.xlsx.load(buf); } catch (e) { throw new ValidationError(`Không đọc được file .xlsx: ${e.message}`); }
     const byName = new Map(wb.worksheets.map((w) => [w.name, w]));
     sheets = wb.worksheets.map((w) => ({ name: w.name, rows: w.rowCount || 0, cols: w.columnCount || 0 }));
+    getMergedHeader = (sheet, index) => {
+      const ws = byName.get(sheet);
+      if (!ws || index < 0 || index >= ws.rowCount) return [];
+      const row = ws.getRow(index + 1);
+      return Array.from({ length: ws.columnCount }, (_, col) => norm(row.getCell(col + 1).value));
+    };
     getAoa = (sheet) => {
       const ws = byName.get(sheet);
       if (!ws) return [];
       const R = ws.rowCount || 0, C = ws.columnCount || 0, out = [];
       if (R > MAX_ROWS || C > MAX_COLS || R * C > MAX_CELLS) throw new ValidationError(`Sheet "${sheet}" quá lớn hoặc có dữ liệu bất thường (${R} dòng × ${C} cột, giới hạn ${MAX_ROWS} × ${MAX_COLS}). Xóa các ô thừa ở vùng xa (Ctrl+End trong Excel) hoặc chọn sheet khác.`);
+      const codes = new Map();
+      paddedCodes.set(sheet, codes);
       for (let r = 1; r <= R; r++) {
         const row = ws.getRow(r), line = new Array(C);
         for (let c = 1; c <= C; c++) {
           const cell = row.getCell(c);
           line[c - 1] = cell.type === ExcelJS.ValueType.Merge ? null : norm(cell.value);   // ô gộp không phải ô gốc: bỏ (như SheetJS)
+          const format = (cell.numFmt || '').split(';', 1)[0];
+          if (/^0{2,255}$/.test(format) && Number.isSafeInteger(line[c - 1]) && line[c - 1] >= 0) {
+            codes.set((r - 1) * C + c - 1, String(line[c - 1]).padStart(format.length, '0'));
+          }
         }
         out.push(line);
       }
@@ -119,7 +132,13 @@ async function readWorkbook({ filePath, buffer, fileName }) {
     if (!aoaCache.has(sheet)) aoaCache.set(sheet, getAoa(sheet));
     return aoaCache.get(sheet);
   };
-  return { fileName: name, hash, size: buf.length, sheets, aoa, buffer: buf };
+  const codeReader = (sheet) => {
+    aoa(sheet);
+    const codes = paddedCodes.get(sheet);
+    const cols = sheets.find((item) => item.name === sheet)?.cols;
+    return (row, col, value) => codes?.get(row * cols + col) ?? value;
+  };
+  return { fileName: name, hash, size: buf.length, sheets, aoa, codeReader, header: (sheet, index) => getMergedHeader ? getMergedHeader(sheet, index) : aoa(sheet)[index], buffer: buf };
 }
 
 module.exports = { readWorkbook, parseCsv, normCell: norm };

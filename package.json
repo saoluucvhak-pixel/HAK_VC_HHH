@@ -6,7 +6,7 @@
   "scripts": {
     "test": "node --test tests/*.test.js",
     "validate": "node scripts/validate-sample.js",
-    "test:ui": "node tests/ui-smoke.mjs",
+    "test:ui": "node tests/ui-smoke.mjs && node tests/excel-import-templates-ui.mjs",
     "dev": "node tools/dev-server.js",
     "install:safe": "npm install --ignore-scripts",
     "dist:win": "electron-builder --win --x64 --publish never",
