@@ -13,7 +13,7 @@ const { createRuntime } = require('../src/runtime');
 const ROOT = path.join(__dirname, '..');
 const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.woff2': 'font/woff2', '.json': 'application/json' };
 
-function start({ port = 5180, dataDir = null, driver = null } = {}) {
+function start({ port = 5180, dataDir = null, driver = null, firstRunSetup = false } = {}) {
   const dir = dataDir || fs.mkdtempSync(path.join(os.tmpdir(), 'vccost-dev-'));
   let browser = null;
   const renderPdf = async (html) => {   // chỉ dùng cho kiểm thử/dev: Chromium của Playwright
@@ -22,7 +22,7 @@ function start({ port = 5180, dataDir = null, driver = null } = {}) {
     const page = await browser.newPage();
     try { await page.setContent(html, { waitUntil: 'load' }); return await page.pdf(require('../src/print/pdfOptions').pdfOptions()); } finally { await page.close(); }
   };
-  const rt = createRuntime({ dataDir: dir, version: 'dev', driver, renderPdf });
+  const rt = createRuntime({ dataDir: dir, version: 'dev', driver, firstRunSetup, renderPdf });
   const server = http.createServer((req, res) => {
     const url = decodeURIComponent(req.url.split('?')[0]);
     if (req.method === 'POST' && url.startsWith('/api/')) {

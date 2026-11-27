@@ -485,7 +485,13 @@ const App = (() => {
   const reload = () => go(current);
   const pageHead = (title, subtitle, ...actions) => h('div', { class: 'row', style: { marginBottom: '12px' } }, h('div', { class: 'grow' }, h('h1', {}, title), subtitle ? h('p', { class: 'sub', style: { margin: 0 } }, subtitle) : null), ...actions);
 
-  async function start() { await refreshAuth(); if (auth.enabled && !auth.user) { renderNav(); showLogin(); return; } await refreshInfo(); await go('dashboard'); }
+  async function start() {
+    await refreshAuth();
+    if (auth.setupRequired) { App.firstRunAuth(start); return; }
+    if (auth.enabled && !auth.user) { renderNav(); showLogin(); return; }
+    await refreshInfo();
+    await go('dashboard');
+  }
 
   // ---------------------------------------------------------------- phím tắt toàn cục
   window.addEventListener('keydown', (e) => {
@@ -502,6 +508,7 @@ const App = (() => {
         return;
       }
     }
+    if (auth.setupRequired || loginOpen) return;
     // Ctrl + K hoặc F3: Tìm kiếm nhanh toàn diện
     if (((e.ctrlKey || e.metaKey) && (e.key === 'k' || e.key === 'K')) || e.key === 'F3') {
       e.preventDefault();

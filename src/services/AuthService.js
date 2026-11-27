@@ -30,7 +30,23 @@ const pub = (u) => (u ? { id: u.id, ten_dang_nhap: u.ten_dang_nhap, ho_ten: u.ho
 class AuthService {
   constructor(db, audit, { now = () => Date.now() } = {}) { Object.assign(this, { db, audit, now }); this.fails = new Map(); }
 
-  enabled() { const r = this.db.get(`SELECT value_json FROM settings WHERE key='phan_quyen'`); return !!(r && JSON.parse(r.value_json).enabled); }
+  _mode() {
+    const row = this.db.get("SELECT value_json FROM settings WHERE key='phan_quyen'");
+    return row ? JSON.parse(row.value_json) : {};
+  }
+  enabled() { return this._mode().enabled === true; }
+  setupRequired() {
+    const mode = this._mode();
+    return mode.setupRequired === true && !mode.enabled;
+  }
+  prepareSetup() {
+    this.db.run("INSERT OR IGNORE INTO settings(key, value_json) VALUES ('phan_quyen', ?)",
+      [JSON.stringify({ enabled: false, setupRequired: true })]);
+  }
+  skipSetup() {
+    need(this.setupRequired(), 'Chỉ có thể bỏ qua ở lần thiết lập đầu tiên');
+    this._setEnabled(false);
+  }
   _setEnabled(on) {
     this.db.run(`INSERT INTO settings(key, value_json) VALUES ('phan_quyen', ?) ON CONFLICT(key) DO UPDATE SET value_json=excluded.value_json, updated_at=strftime('%Y-%m-%dT%H:%M:%S','now','localtime')`, [JSON.stringify({ enabled: !!on })]);
   }
@@ -59,16 +75,21 @@ class AuthService {
     });
   }
 
-  disable(actorId, mat_khau) {
+  disable(actorId, ten_dang_nhap, mat_khau) {
     const a = this.user(actorId);
-    need(a && a.vai_tro === 'ADMIN' && verifyPassword(String(mat_khau || ''), a.mat_khau_hash), 'Nhập đúng mật khẩu quản trị để tắt phân quyền');
-    this._setEnabled(false);
-    this.audit.log('AUTH_DISABLE', 'nguoi_dung', a.id, null, null, 'Tắt phân quyền');
+    need(this.enabled() && a?.vai_tro === 'ADMIN' && a.trang_thai === 'ACTIVE'
+      && typeof ten_dang_nhap === 'string' && a.ten_dang_nhap.toLowerCase() === ten_dang_nhap.trim().toLowerCase()
+      && typeof mat_khau === 'string' && mat_khau.length > 0 && mat_khau.length <= 128,
+    'Nhập tên đăng nhập và mật khẩu của quản trị đang dùng');
+    this.login(a.ten_dang_nhap, mat_khau);
+    this.db.tx(() => {
+      this._setEnabled(false);
+      this.audit.log('AUTH_DISABLE', 'nguoi_dung', a.id, null, null, 'Chuyển sang chế độ một người sử dụng');
+    });
   }
-  /** Khôi phục khi mất mật khẩu quản trị (cần quyền truy cập máy: biến môi trường VCCOST_RESET_AUTH=1 lúc khởi động). */
-  forceDisable() { if (this.enabled()) { this._setEnabled(false); this.audit.log('AUTH_RESET', 'nguoi_dung', null, null, null, 'Tắt phân quyền bằng VCCOST_RESET_AUTH'); } }
 
   login(ten, mat_khau) {
+    need(this.enabled(), 'Ứng dụng đang ở chế độ một người sử dụng');
     const key = String(ten || '').toLowerCase(); const f = this.fails.get(key);
     if (f && f.until > this.now()) throw new ValidationError(`Sai quá nhiều lần — thử lại sau ${Math.ceil((f.until - this.now()) / 1000)} giây`);
     const u = this.db.get('SELECT * FROM nguoi_dung WHERE ten_dang_nhap=?', [String(ten || '')]);
