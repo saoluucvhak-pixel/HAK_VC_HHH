@@ -1,4 +1,13 @@
-# VC Cost 0.8.11 — schema SQLite 9
+# VC Cost 0.8.14 — schema SQLite 10
+
+- Nhập phiếu chỉ gợi ý đợt khi có một đợt mở bao phủ các ngày cân hợp lệ. Xác nhận đợt sẽ xem trước lại với nơi đến mặc định; ghi đúng các lựa chọn đã xem trước.
+- Mẫu nhập hỗ trợ tối đa ba dòng tiêu đề. Ghép và lưu tên tài xế, giữ số 0 đầu của mã phiếu, và tách tổng khối lượng đọc được khỏi khối lượng các dòng hợp lệ.
+- Tra cứu nhanh hiển thị tiền theo đồng và mở đúng phiếu. Bìa gói quyết toán hiển thị nhãn “THAM KHẢO” khi phạm vi lọc có phiếu đã chốt.
+- Sao lưu phụ báo trạng thái riêng, kiểm tra SHA-256 và chỉ đưa tệp hoàn chỉnh vào thư mục đích.
+
+Khi nâng cấp, xuất bản sao lưu ra ổ khác và đóng VC Cost trước khi chạy Setup. Bộ cài chưa ký số. Kiểm tra SHA-256 trước khi chạy.
+
+## VC Cost 0.8.11 — schema SQLite 9
 
 - Kiểm tra giờ cân ngay khi đọc thử và xem trước. Dòng có giờ sai được báo theo số dòng Excel. Hiển thị cả lần cân 2 và nơi đến đã nhận dạng khi người dùng ghép các cột này.
 - Ưu tiên sheet đã lưu nếu đủ tiêu đề. Khi có nhiều sheet cùng khớp, yêu cầu chọn sheet. Giữ cách ghép thủ công theo tên tiêu đề khi đổi sheet và báo rõ tên thiếu hoặc trùng.

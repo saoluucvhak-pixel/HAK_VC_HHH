@@ -114,7 +114,7 @@ function createHandlers(app, env = {}) {
       const tickets = app.db.all(`SELECT id, so_phieu, bien_so, ngay_gio_can_1, kl_hang_kg, tong_tien, trang_thai_tinh_gia, trang_thai_duyet
                                   FROM phieu_can
                                   WHERE trang_thai='ACTIVE' AND (so_phieu LIKE ? OR bien_so LIKE ? OR (length(?) >= 3 AND bien_so_chuan LIKE ?))
-                                  ORDER BY id DESC LIMIT 5`, [like, like, norm, `%${norm}%`]);
+                                  ORDER BY id DESC LIMIT 5`, [like, like, norm, `%${norm}%`]).map((ticket) => ({ ...ticket, tong_tien: fromDb(ticket.tong_tien) }));
 
       // 2. Tìm xe (theo biển số)
       const vehicles = app.db.all(`SELECT x.id, x.bien_so_hien_thi AS bien_so, d.ma don_vi, d.ten don_vi_ten

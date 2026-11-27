@@ -49,22 +49,22 @@ Remove-Data $appdataDir
 $old = node --no-warnings scripts/make-old-db.js (Join-Path $appdataDir 'data\app.db') 4
 Write-Host "DB cũ: $old"
 $r = Invoke-Smoke $exe @{ VCCOST_EXPECT_UPGRADE_FROM = '4'; VCCOST_EXPECT_PHIEU = '3' } 'nang-cap-tu-v4'
-Assert-True ($r.schema -eq 9) "Sau nâng cấp schema phải = 9, thực tế $($r.schema)"
+Assert-True ($r.schema -eq 10) "Sau nâng cấp schema phải = 10, thực tế $($r.schema)"
 Assert-True (@(Get-ChildItem (Join-Path $appdataDir 'backups') -Filter '*_PRE_MIGRATION.db').Count -ge 1) 'Thiếu file PRE_MIGRATION trong %APPDATA%\VCCost\backups'
 
-# Nâng DB của bản 0.7.1 (schema 6) lên schema hiện hành (9), giữ dữ liệu cũ.
+# Nâng DB của bản 0.7.1 (schema 6) lên schema hiện hành (10), giữ dữ liệu cũ.
 Remove-Data $appdataDir
 $old = node --no-warnings scripts/make-old-db.js (Join-Path $appdataDir 'data\app.db') 6
 Write-Host "DB schema 6: $old"
 $r = Invoke-Smoke $exe @{ VCCOST_EXPECT_UPGRADE_FROM = '6'; VCCOST_EXPECT_PHIEU = '3' } 'nang-cap-tu-v6'
-Assert-True ($r.schema -eq 9) "Sau nâng cấp từ v6 phải có schema 9, thực tế $($r.schema)"
+Assert-True ($r.schema -eq 10) "Sau nâng cấp từ v6 phải có schema 10, thực tế $($r.schema)"
 
-# Nâng DB của bản 0.8.0/0.8.1 (schema 7: có duyệt phiếu) lên schema 9, giữ dữ liệu và có PRE_MIGRATION.
+# Nâng DB của bản 0.8.0/0.8.1 (schema 7: có duyệt phiếu) lên schema 10, giữ dữ liệu và có PRE_MIGRATION.
 Remove-Data $appdataDir
 $old = node --no-warnings scripts/make-old-db.js (Join-Path $appdataDir 'data\app.db') 7
 Write-Host "DB schema 7: $old"
 $r = Invoke-Smoke $exe @{ VCCOST_EXPECT_UPGRADE_FROM = '7'; VCCOST_EXPECT_PHIEU = '3' } 'nang-cap-tu-v7'
-Assert-True ($r.schema -eq 9) "Sau nâng cấp từ v7 phải có schema 9, thực tế $($r.schema)"
+Assert-True ($r.schema -eq 10) "Sau nâng cấp từ v7 phải có schema 10, thực tế $($r.schema)"
 Assert-True (@(Get-ChildItem (Join-Path $appdataDir 'backups') -Filter '*_PRE_MIGRATION.db').Count -ge 1) 'Nâng từ v7: thiếu file PRE_MIGRATION'
 
 # Nâng cấp trực tiếp từ 0.8.4 (schema 8).
@@ -72,8 +72,16 @@ Remove-Data $appdataDir
 $old = node --no-warnings scripts/make-old-db.js (Join-Path $appdataDir 'data\app.db') 8
 Write-Host "DB schema 8: $old"
 $r = Invoke-Smoke $exe @{ VCCOST_EXPECT_UPGRADE_FROM = '8'; VCCOST_EXPECT_PHIEU = '3' } 'nang-cap-tu-v8'
-Assert-True ($r.schema -eq 9) "Sau nâng cấp từ v8 phải có schema 9, thực tế $($r.schema)"
+Assert-True ($r.schema -eq 10) "Sau nâng cấp từ v8 phải có schema 10, thực tế $($r.schema)"
 Assert-True (@(Get-ChildItem (Join-Path $appdataDir 'backups') -Filter '*_PRE_MIGRATION.db').Count -ge 1) 'Nâng từ v8: thiếu file PRE_MIGRATION'
+
+# Nâng từ schema 9 của bản phát hành v0.8.11.
+Remove-Data $appdataDir
+$old = node --no-warnings scripts/make-old-db.js (Join-Path $appdataDir 'data\app.db') 9
+Write-Host "DB schema 9: $old"
+$r = Invoke-Smoke $exe @{ VCCOST_EXPECT_UPGRADE_FROM = '9'; VCCOST_EXPECT_PHIEU = '3' } 'nang-cap-tu-v9'
+Assert-True ($r.schema -eq 10) "Sau nâng cấp từ v9 phải có schema 10, thực tế $($r.schema)"
+Assert-True (@(Get-ChildItem (Join-Path $appdataDir 'backups') -Filter '*_PRE_MIGRATION.db').Count -ge 1) 'Nâng từ v9: thiếu file PRE_MIGRATION'
 
 # Ca 3: thư mục dữ liệu TÙY CHỈNH (VCCOST_DATA_DIR) — không đụng thư mục mặc định
 Remove-Data $appdataDir

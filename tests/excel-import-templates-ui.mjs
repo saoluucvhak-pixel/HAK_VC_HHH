@@ -113,7 +113,7 @@ try {
   await card.getByText('Phiếu cân nhà cung cấp A (bản sao)', { exact: true }).waitFor();
 
   await page.locator('[data-nav=import]').click();
-  await pick(page.locator('[data-act=pick]'), await fixture([6, 5, 4, 3, 2, 1, 0], 'lb'));
+  await pick(page.getByRole('button', { name: 'Chọn file phiếu cân' }), await fixture([6, 5, 4, 3, 2, 1, 0], 'lb'));
   await page.locator('[data-check]').getByText(/Dòng Excel 4.*lb/).waitFor();
   assert.equal(await page.locator('[data-act=preview]').isEnabled(), false);
   await page.locator('[data-import-edit-mapping]').click();
@@ -121,10 +121,10 @@ try {
   await page.locator('[data-import-template]').selectOption('');
   await page.locator('[data-import-reading]').getByText('Tự nhận diện').waitFor();
   await page.getByRole('button', { name: '‹ Quay lại' }).click();
-  await pick(page.locator('[data-act=pick]'), moved);
+  await pick(page.getByRole('button', { name: 'Chọn file phiếu cân' }), moved);
   await page.locator('[data-import-reading]').getByText('Phiếu cân nhà cung cấp A').waitFor();
-  await page.locator('[data-check]').getByText('00007', { exact: true }).waitFor();
-  await page.locator('[data-act=preview]').click();
+  await page.locator('[data-act=commit]').waitFor();
+  await page.getByText('00007', { exact: true }).waitFor();
   await page.locator('[data-act=commit]').click();
   await page.locator('.modal').getByRole('button', { name: 'Import', exact: true }).click();
   await page.getByText('Import hoàn tất', { exact: false }).first().waitFor();

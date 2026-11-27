@@ -47,3 +47,34 @@ test('workflow streamlining: preview auto-suggests dot_van_chuyen based on date 
 
   assert.equal(prev.suggestedDotId, dot.id);
 });
+
+test('import chỉ gợi ý đợt đúng ngày, xác nhận dùng cùng nơi đến khi xem trước và ghi', async (t) => {
+  const app = createApp();
+  t.after(() => app.close());
+  const place = app.catalog.create('dia_diem', { ma: 'CANG', ten: 'Cảng hàng', loai: 'CANG' });
+  const dot = app.catalog.create('dot_van_chuyen', {
+    ma_dot: 'THANG-11', tu_ngay: '2026-11-01', den_ngay: '2026-11-30', noi_giao_id: place.id, trang_thai: 'MO',
+  });
+  async function open(code, day) {
+    const buffer = Buffer.from(`Số phiếu;Biển số;Ngày cân;KL hàng (kg)\n${code};92H-00903;${day} 08:00;15000`);
+    const o = await app.imports.open({ fileName: 'can.csv', buffer });
+    return [o.token, app.imports.sheetInfo(o.token, o.suggestedSheet)];
+  }
+  const [outside, outsideMap] = await open('001', '01/10/2026');
+  assert.equal(app.imports.preview(outside, outsideMap).suggestedDotId, null);
+  app.imports.commit(outside);
+  assert.equal(app.db.get("SELECT dot_van_chuyen_id FROM phieu_can WHERE so_phieu='001'").dot_van_chuyen_id, null);
+
+  const [within, withinMap] = await open('002', '02/11/2026');
+  assert.equal(app.imports.preview(within, withinMap).suggestedDotId, dot.id);
+  assert.throws(() => app.imports.commit(within, { dotId: dot.id }), /xem trước lại/);
+  assert.equal(app.imports.preview(within, { ...withinMap, dotId: dot.id }).noiDenId, place.id);
+  assert.equal(app.imports.previewRows(within).rows[0].noi_den_id, place.id);
+  app.imports.commit(within);
+  assert.deepEqual({ ...app.db.get("SELECT dot_van_chuyen_id, noi_den_id FROM phieu_can WHERE so_phieu='002'") },
+    { dot_van_chuyen_id: dot.id, noi_den_id: place.id });
+
+  app.catalog.create('dot_van_chuyen', { ma_dot: 'KHAC', tu_ngay: '2026-11-01', trang_thai: 'MO' });
+  const [ambiguous, ambiguousMap] = await open('003', '05/11/2026');
+  assert.equal(app.imports.preview(ambiguous, ambiguousMap).suggestedDotId, null);
+});

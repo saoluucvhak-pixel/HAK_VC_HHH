@@ -36,8 +36,11 @@ const [fc] = await Promise.all([page.waitForEvent('filechooser'), page.click('bu
 await fc.setFiles(fx); await page.waitForSelector('.modal'); await shot('01-import-vehicles');
 await page.click('.modal .btn:has-text("Ghi danh mục xe")'); await page.waitForTimeout(800);
 await nav('import');
-const [fc2] = await Promise.all([page.waitForEvent('filechooser'), page.click('[data-act=pick]')]);
-await fc2.setFiles(fx); await page.waitForSelector('[data-act=preview]');
+const [fc2] = await Promise.all([page.waitForEvent('filechooser'), page.getByRole('button', { name: 'Chọn file phiếu cân' }).press('Enter')]);
+await fc2.setFiles(fx);
+await page.waitForSelector('[data-act=commit]');
+await page.getByRole('button', { name: '‹ Quay lại' }).click();
+await page.waitForSelector('[data-act=preview]');
 {
   // kiểm tra NGAY khi ghép cột
   const ck = (ok, msg) => { if (!ok) errors.push('nhập liệu: ' + msg); };
@@ -61,6 +64,12 @@ await fc2.setFiles(fx); await page.waitForSelector('[data-act=preview]');
 await page.click('[data-act=preview]'); await page.waitForSelector('[data-act=commit]'); await shot('03-import-preview');
 { const t = await page.textContent('[data-kl-check]'); if (!/Khớp dòng "Tổng cộng"/.test(t) || !/38\.563\.700 kg/.test(t)) errors.push('đối chiếu KL preview: ' + t); }
 await page.click('[data-act=commit]'); await page.click('.modal .btn:has-text("Import")'); await page.waitForSelector('text=Import hoàn tất', { timeout: 60000 }); await shot('04-import-done');
+await page.keyboard.press('Control+k');
+await page.getByPlaceholder(/Tìm phiếu cân, biển số xe/).fill('1688');
+await page.locator('.quick-results').getByText('#1688', { exact: true }).first().click();
+await page.getByRole('heading', { name: 'Vì sao phiếu 1688 có giá này?' }).waitFor();
+await page.locator('.modal').getByRole('button', { name: 'Đóng', exact: true }).click();
+
 {
   const ck = (ok, msg) => { if (!ok) errors.push('nhập liệu: ' + msg); };
   const t = await page.textContent('[data-result]');
@@ -216,10 +225,8 @@ console.log('app.info', JSON.stringify(info.data.counts));
   const csvFile = path.join(out, 'xung-dot.csv'); fs.writeFileSync(csvFile, '\uFEFF' + csv);
   const runImport = async () => {
     await nav('import');
-    const [fcx] = await Promise.all([page.waitForEvent('filechooser'), page.click('[data-act=pick]')]);
-    await fcx.setFiles(csvFile); await page.waitForSelector('[data-act=preview]');
-    await page.waitForFunction(() => !document.querySelector('[data-act=preview]').disabled, null, { timeout: 8000 });
-    await page.click('[data-act=preview]'); await page.waitForSelector('[data-act=commit]');
+    const [fcx] = await Promise.all([page.waitForEvent('filechooser'), page.getByRole('button', { name: 'Chọn file phiếu cân' }).click()]);
+    await fcx.setFiles(csvFile); await page.waitForSelector('[data-act=commit]');
     await page.click('[data-act=commit]'); await page.click('.modal .btn:has-text("Import")'); await page.waitForSelector('[data-result]', { timeout: 30000 });
   };
   await runImport();
@@ -285,7 +292,9 @@ console.log('app.info', JSON.stringify(info.data.counts));
   ck(set1 && set1.min_kg === 50 && set1.max_kg === 100000, 'lưu ngưỡng KL: ' + JSON.stringify(set1));
   await page.fill('[data-f=kl-min]', '100'); await page.click('[data-act=save-kl]'); await page.waitForTimeout(600);   // trả về mặc định
   await page.evaluate(() => App.go('import'));
-  const [fcm] = await Promise.all([page.waitForEvent('filechooser'), page.click('[data-act=pick]')]); await fcm.setFiles(path.resolve('tests/fixtures/sample-v47.xlsx'));
+  const [fcm] = await Promise.all([page.waitForEvent('filechooser'), page.getByRole('button', { name: 'Chọn file phiếu cân' }).click()]); await fcm.setFiles(path.resolve('tests/fixtures/sample-v47.xlsx'));
+  await page.waitForSelector('[data-act=commit]');
+  await page.getByRole('button', { name: '‹ Quay lại' }).click();
   await page.waitForSelector('[data-f=multi-block]');
   ck((await page.locator('[data-f=multi-block]').isChecked()) === false, 'tùy chọn nhiều khối phải mặc định tắt');
   await page.evaluate(() => App.go('dashboard'));

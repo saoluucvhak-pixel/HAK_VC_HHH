@@ -39,21 +39,33 @@ class BackupService {
     this.applyRetention(file, protect);
 
     // Tự động sao chép sang thư mục thứ hai (Google Drive / NAS / Mạng nội bộ) nếu có cấu hình
-    this._mirrorToSecondary(file);
+    const secondary = this._mirrorToSecondary(file, sha);
+    if (secondary) {
+      try { fs.writeFileSync(this._secondaryStatusFile(), JSON.stringify(secondary)); } catch { /* trả trạng thái cho người gọi */ }
+    }
 
-    return { file, size, sha256: sha };
+    return { file, size, sha256: sha, secondary };
   }
 
-  _mirrorToSecondary(sourceFile) {
+  _secondaryStatusFile() { return path.join(this.backupsDir, 'secondary-status.json'); }
+
+  _mirrorToSecondary(sourceFile, sha256) {
+    let dir;
+    try { dir = String(this.settings?.get('backup')?.secondaryDir || '').trim(); } catch { return null; }
+    if (!dir) return null;
+    const at = new Date().toISOString();
+    const out = path.join(path.resolve(dir), path.basename(sourceFile));
+    const tmp = out + '.partial-' + require('node:crypto').randomUUID();
     try {
-      const cfg = (this.settings && this.settings.get ? this.settings.get('backup') : null) || {};
-      const sec = cfg.secondaryDir ? path.resolve(String(cfg.secondaryDir).trim()) : null;
-      if (sec && fs.existsSync(sec) && fs.statSync(sec).isDirectory() && sec !== path.resolve(this.backupsDir)) {
-        const out = path.join(sec, path.basename(sourceFile));
-        fs.copyFileSync(sourceFile, out);
-      }
-    } catch {
-      // Không chặn luồng chính nếu ổ mạng/cloud tạm thời mất kết nối
+      if (fs.realpathSync(dir) === fs.realpathSync(this.backupsDir)) throw new Error('Chọn thư mục phụ khác thư mục sao lưu chính');
+      fs.copyFileSync(sourceFile, tmp, fs.constants.COPYFILE_EXCL);
+      if (hashFile(tmp) !== sha256) throw new Error('SHA-256 của bản sao phụ không khớp');
+      if (fs.existsSync(out)) throw new Error('Thư mục phụ đã có tệp cùng tên');
+      fs.renameSync(tmp, out);
+      return { ok: true, dir, at, file: path.basename(out), sha256 };
+    } catch (e) {
+      try { fs.unlinkSync(tmp); } catch { /* tệp tạm chưa tạo */ }
+      return { ok: false, dir, at, error: e.code ? 'Không thể chép vào thư mục sao lưu phụ' : e.message };
     }
   }
 
@@ -145,7 +157,13 @@ class BackupService {
     const last = cands.length ? cands.sort((a, b) => Date.parse(b) - Date.parse(a))[0] : null;   // lấy mốc MỚI hơn trong DB và file
     const days = Number((get('backup') || {}).remindExportDays) || 7;
     const nhac = !last || Date.now() - Date.parse(last) > days * 24 * 3600 * 1000;
-    return { last, remindDays: days, nhac };
+    const secondaryDir = String((get('backup') || {}).secondaryDir || '').trim();
+    let secondary = null;
+    try {
+      const stored = JSON.parse(fs.readFileSync(this._secondaryStatusFile(), 'utf8'));
+      if (stored.dir === secondaryDir) secondary = stored;
+    } catch { /* chưa có kết quả */ }
+    return { last, remindDays: days, nhac, secondaryDir, secondary };
   }
 
   /**

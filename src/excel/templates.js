@@ -445,7 +445,7 @@ async function configuredTicketTemplate(config, { rows = 500 } = {}) {
     return {
       so_phieu: `0000${i + 1}`, bien_so: `92H-9000${i + 1}`, ngay_gio_can_1: columns.gio_can_1 ? '05/10/2026' : `05/10/2026 08:0${i}`, gio_can_1: `08:0${i}`,
       ngay_gio_can_2: columns.gio_can_2 ? '05/10/2026' : `05/10/2026 08:1${i}`, gio_can_2: `08:1${i}`, weight_unit: rowUnit === 't' ? 'tấn' : rowUnit,
-      noi_xuat: 'Kho mẫu', noi_den: 'Nơi đến mẫu', cong_ty_vc: 'Đơn vị mẫu', ghi_chu: 'Dữ liệu minh họa',
+      noi_xuat: 'Kho mẫu', noi_den: 'Nơi đến mẫu', tai_xe: 'Tài xế mẫu', cong_ty_vc: 'Đơn vị mẫu', ghi_chu: 'Dữ liệu minh họa',
       ...Object.fromEntries(weightFields.map((field) => [field, weightCell(field)])),
     };
   };
@@ -479,7 +479,7 @@ async function configuredTicketTemplate(config, { rows = 500 } = {}) {
     }
   }
 
-  if (headerRows === 2) data.getRow(header - 1).height = 18;
+  for (let row = header - headerRows + 1; row < header; row++) data.getRow(row).height = 18;
   data.getRow(header).height = 30;
   example.getCell(1, 1).value = 'Ba dòng minh họa để tham khảo khi điền phiếu';
   example.getCell(1, 1).font = F({ bold: true, color: { argb: BRAND_DARK } });

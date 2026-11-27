@@ -2,12 +2,13 @@
 const { fold, mapHeaders } = require('./columnMapping');
 const { ValidationError } = require('../services/CatalogService');
 
+const HEADER_DEPTHS = [1, 2, 3];
 const FIELDS = {
   so_phieu: 'Số phiếu', ngay_gio_can_1: 'Ngày giờ cân 1', ngay_gio_can_2: 'Ngày giờ cân 2',
   gio_can_1: 'Giờ cân 1 (cột riêng)', gio_can_2: 'Giờ cân 2 (cột riêng)',
   bien_so: 'Biển số', can_lan_1: 'Cân lần 1', can_lan_2: 'Cân lần 2', kl_hang_kg: 'KL hàng',
   weight_unit: 'Đơn vị khối lượng', cong_ty_vc: 'Đơn vị vận chuyển (nguồn)',
-  noi_xuat: 'Kho / nơi xuất', noi_den: 'Nơi đến', ghi_chu: 'Ghi chú',
+  noi_xuat: 'Kho / nơi xuất', noi_den: 'Nơi đến', ghi_chu: 'Ghi chú', tai_xe: 'Tài xế',
 };
 
 function requiredFields(mapping, optionalTicket = false) {
@@ -21,10 +22,13 @@ function requiredFields(mapping, optionalTicket = false) {
 function headersAt(aoa, row, depth, mergedHeader) {
   const current = aoa[row] || [];
   if (depth === 1) return current.map((cell) => String(cell ?? '').trim());
-  const previous = mergedHeader?.(row - 1) || aoa[row - 1] || [];
+  const levels = Array.from({ length: depth - 1 }, (_, i) => {
+    const index = row - depth + 1 + i;
+    return mergedHeader?.(index) || aoa[index] || [];
+  });
   return current.map((cell, index) => {
-    const parts = [previous[index], cell].map((part) => String(part ?? '').trim()).filter(Boolean);
-    return parts.length === 2 && fold(parts[0]) === fold(parts[1]) ? parts[0] : parts.join(' ');
+    const parts = [...levels.map((level) => level[index]), cell].map((part) => String(part ?? '').trim()).filter(Boolean);
+    return parts.filter((part, n) => n === 0 || fold(part) !== fold(parts[n - 1])).join(' ');
   });
 }
 
@@ -52,7 +56,7 @@ function validateTemplate(template) {
     throw new ValidationError('Tên mẫu phải có từ 1 đến 120 ký tự');
   }
   const { headerRow, headerRows, columns, fallbackUnit } = template;
-  if (!Number.isInteger(headerRow) || ![1, 2].includes(headerRows) || headerRow < headerRows - 1 || headerRow >= 300000) {
+  if (!Number.isInteger(headerRow) || !HEADER_DEPTHS.includes(headerRows) || headerRow < headerRows - 1 || headerRow >= 300000) {
     throw new ValidationError('Dòng tiêu đề không hợp lệ');
   }
   if (!['', 'kg', 't'].includes(fallbackUnit)) throw new ValidationError('Đơn vị dự phòng phải là kg hoặc tấn');
@@ -79,4 +83,4 @@ function validateTemplate(template) {
     ...(layout ? { layout: { sheetName: layout.sheetName, positions: layout.positions } } : {}) };
 }
 
-module.exports = { FIELDS, requiredFields, headersAt, resolveColumns, suggestColumns, validateTemplate };
+module.exports = { FIELDS, HEADER_DEPTHS, requiredFields, headersAt, resolveColumns, suggestColumns, validateTemplate };

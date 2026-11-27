@@ -5,7 +5,7 @@
     ['so_phieu', 'Số phiếu'], ['bien_so', 'Biển số *'], ['ngay_gio_can_1', 'Ngày giờ cân 1 *'],
     ['gio_can_1', 'Giờ cân 1 (cột riêng)'], ['ngay_gio_can_2', 'Ngày giờ cân 2'], ['gio_can_2', 'Giờ cân 2 (cột riêng)'], ['kl_hang_kg', 'KL hàng'], ['can_lan_1', 'Cân lần 1'],
     ['can_lan_2', 'Cân lần 2'], ['weight_unit', 'Đơn vị khối lượng'], ['noi_xuat', 'Kho / nơi xuất'],
-    ['noi_den', 'Nơi đến'], ['cong_ty_vc', 'Đơn vị vận chuyển (nguồn)'], ['ghi_chu', 'Ghi chú'],
+    ['noi_den', 'Nơi đến'], ['cong_ty_vc', 'Đơn vị vận chuyển (nguồn)'], ['tai_xe', 'Tài xế'], ['ghi_chu', 'Ghi chú'],
   ];
   const field = (label, control) => h('label', { class: 'field' }, label, control);
   const option = (value, label, selected) => h('option', { value, selected }, label);
@@ -16,7 +16,7 @@
   const kg = (value) => fmt.kgDecimal(value) + ' kg';
 
   function trial(result) {
-    const { sample, summary, readKg, fileKg, deltaKg, totalRow, problems } = result;
+    const { sample, summary, readKg, validKg, fileKg, deltaKg, totalRow, problems } = result;
     const weights = [
       ['can_lan_1', 'Cân lần 1 (kg)'], ['can_lan_2', 'Cân lần 2 (kg)'],
     ].filter(([key]) => sample.some((row) => row[key] != null))
@@ -27,6 +27,7 @@
       h('h3', {}, 'Kết quả đọc thử & Ghép dữ liệu'),
       h('p', { class: 'chk ' + (summary.dong_loi ? 'warn' : 'ok') },
         `${fmt.int(summary.tong_dong)} phiếu · ${kg(readKg)} · ${fmt.int(summary.dong_loi)} dòng có lỗi`),
+      validKg != null && h('p', { class: 'muted' }, `Khối lượng dòng hợp lệ: ${kg(validKg)}`),
       totalRow && h('p', { class: deltaKg ? 'chk warn' : 'muted' }, fileKg === null
         ? `Dòng Excel ${totalRow} có tổng công bố nhưng không đọc được giá trị.`
         : `Tổng công bố (dòng Excel ${totalRow}) ${kg(fileKg)} · Chênh lệch (đọc − công bố) ${kg(deltaKg)}`),
@@ -42,6 +43,7 @@
         ...weights, { key: 'noi_xuat_goc', label: 'Kho' },
         ...(hasDestination ? [{ key: 'noi_den_nhan_dang', label: 'Nơi đến', render: (row) => row.noi_den_nhan_dang || row.noi_den_goc }] : []),
         ...(sample.some((row) => row.cong_ty_vc_nguon) ? [{ key: 'cong_ty_vc_nguon', label: 'Đơn vị vận chuyển' }] : []),
+        ...(result.readConfig?.mapping?.tai_xe != null ? [{ key: 'tai_xe', label: 'Tài xế' }] : []),
         { key: 'ghi_chu', label: 'Ghi chú' },
       ], rows: sample }));
   }
@@ -174,7 +176,7 @@
         field('Số dòng tiêu đề', h('select', { onchange: changeSheet((value) => {
           draft.headerRows = Number(value);
           draft.headerRow = Math.max(draft.headerRows - 1, draft.headerRow);
-        }) }, [1, 2].map((count) => option(count, `${count} dòng`, count === draft.headerRows))))) : null;
+        }) }, [1, 2, 3].map((count) => option(count, `${count} dòng`, count === draft.headerRows))))) : null;
       editor.append(section('1. Chọn tệp và tiêu đề', source, ...(sheetFields ? [sheetFields] : [])));
       if (info) {
         const headerText = (key) => info.headers.find((column) => column.index === mapping[key])?.text || '—';

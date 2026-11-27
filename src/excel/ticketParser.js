@@ -156,6 +156,7 @@ function parseTickets(aoa, headerRow, mapping, {
       noi_xuat: get(row, 'noi_xuat') == null ? null : String(get(row, 'noi_xuat')).trim(),
       noi_den: get(row, 'noi_den') == null ? null : String(get(row, 'noi_den')).trim(),
       cong_ty_vc_nguon: get(row, 'cong_ty_vc') ?? null, // chỉ để đối chiếu, KHÔNG dùng để gán đơn vị
+      tai_xe: has(get(row, 'tai_xe')) ? String(get(row, 'tai_xe')).trim() : null,
       ghi_chu: has(get(row, 'ghi_chu')) ? String(get(row, 'ghi_chu')).trim() : null,
       errors,
     });

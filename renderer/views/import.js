@@ -44,17 +44,16 @@
         const o = await call('import.open', f); if (!o) return;
         if (S.open) await call('import.cancel', { token: S.open.token });
         S.open = o; S.sheet = o.suggestedSheet; S.templateId = o.defaultId;
-        S.strict = false; S.fallbackUnit = ''; S.headerRows = 1; S.readAfterTotal = false;
+        S.strict = false; S.fallbackUnit = ''; S.headerRows = 1; S.readAfterTotal = false; S.dotId = ''; S.noiDenId = '';
         await loadSheet();
 
         // 1-Click Smart Import: Nếu file hợp lệ và đủ cột chuẩn mà không có lỗi mapping, nhảy thẳng tới Bước 3 (Xem trước)
         try {
           const checkRes = await api('import.check', readOptions());
-          if (checkRes && !checkRes.blocking && checkRes.summary.tong_dong > 0) {
+          if (checkRes && !checkRes.blocking && checkRes.summary.tong_dong > 0 && !checkRes.summary.dong_loi) {
             const prev = await api('import.preview', previewOptions());
             if (prev) {
               S.prev = prev;
-              if (prev.suggestedDotId && !S.dotId) S.dotId = prev.suggestedDotId;
               S.filter = null;
               S.step = 3;
               draw();
@@ -70,7 +69,8 @@
       }
 
       function s1() {
-        const dropzone = h('div', { class: 'dropzone', 'data-act': 'dropzone',
+        const dropzone = h('div', { class: 'dropzone', 'data-act': 'dropzone', role: 'button', tabindex: '0', 'aria-label': 'Chọn file phiếu cân',
+          onkeydown: (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); dropzone.click(); } },
           ondragover: (e) => { e.preventDefault(); dropzone.classList.add('dragover'); },
           ondragleave: () => dropzone.classList.remove('dragover'),
           ondrop: async (e) => {
@@ -88,7 +88,7 @@
         },
           h('span', { class: 'dropzone-icon' }, '📂'),
           h('p', { class: 'dropzone-text' }, h('b', {}, 'Kéo & thả file Excel / CSV vào đây'), ' hoặc bấm để chọn file'),
-          h('p', { class: 'dropzone-sub' }, 'Hỗ trợ .xlsx, .xls, .csv · Tự động nhận diện cấu trúc và đọc thẳng Bước 3 nếu khớp mẫu')
+          h('p', { class: 'dropzone-sub' }, 'Hỗ trợ .xlsx và .csv · Tự động nhận diện cấu trúc và đọc thẳng Bước 3 nếu khớp mẫu')
         );
 
         root.append(h('div', { class: 'card' }, h('h3', {}, 'Chọn file phiếu cân (.xlsx / .csv)'),
@@ -230,7 +230,7 @@
               h('label', { class: 'field' }, 'Số dòng tiêu đề', h('select', { disabled: !!tpl, onchange: async (event) => {
                 S.headerRows = Number(event.target.value);
                 await loadSheet(Math.max(S.headerRow, S.headerRows - 1)); draw();
-              } }, [1, 2].map((count) => h('option', { value: count, selected: count === S.headerRows }, `${count} dòng`)))),
+              } }, [1, 2, 3].map((count) => h('option', { value: count, selected: count === S.headerRows }, `${count} dòng`)))),
               h('label', { class: 'field' }, 'Đơn vị dự phòng', h('select', { disabled: !!tpl, onchange: (e) => { S.fallbackUnit = e.target.value; runCheck(); } },
                 units(tpl?.fallbackUnit ?? S.fallbackUnit))),
               h('label', { class: 'field' }, 'Gán vào đợt / tàu', h('select', { 'data-f': 'dot', onchange: (e) => (S.dotId = e.target.value) }, h('option', { value: '' }, '— không gán —'), dots.map((d) => h('option', { value: d.id, selected: String(S.dotId) === String(d.id) }, d.label)))),
@@ -308,7 +308,15 @@
             )
           ));
         }
-        root.append(readingBadge(activeName()), h('div', { class: 'chk-verdict ' + klCls, 'data-kl-check': '1' },
+        root.append(readingBadge(activeName()),
+          h('div', { class: 'row gap-s', 'data-import-destination': '1' },
+            h('span', {}, S.prev.selectedDot ? `Đợt: ${S.prev.selectedDot.ma_dot}` : 'Chưa gán đợt'),
+            S.prev.suggestedDotId && h('button', { class: 'btn ghost sm', 'data-act': 'accept-dot', onclick: async () => {
+              const next = await call('import.preview', { ...previewOptions(), dotId: S.prev.suggestedDotId });
+              if (next) { S.dotId = next.selectedDot.id; S.prev = next; S.filter = null; draw(); }
+            } }, `Dùng đợt gợi ý ${S.prev.suggestedDotCode}`),
+            S.prev.noiDenId && h('span', {}, `Nơi đến mặc định: ${S.prev.noiDenName}`)),
+          h('div', { class: 'chk-verdict ' + klCls, 'data-kl-check': '1' },
           `Đọc ${fmt.int(T.so_dong)} dòng, tổng KL ${kgf(T.read_kg || 0)}. `,
           T.ignored_below_total > 0 ? `CÒN ${fmt.int(T.ignored_below_total)} dòng giống phiếu cân dưới dòng "Tổng cộng" (từ dòng ${T.ignored_first_row}) CHƯA được đọc — file có nhiều khối? `
             : '',
@@ -333,6 +341,7 @@
               return h('span', { class: 'mono' }, r.bien_so);
             } },
             { key: 'noi_xuat', label: 'Nơi xuất' }, { key: 'noi_den_ten', label: 'Nơi đến' },
+            ...(S.mapping.tai_xe != null ? [{ key: 'tai_xe', label: 'Tài xế' }] : []),
             { key: 'kl_hang_kg', label: 'KL (kg)', fmt: 'kg' }, { key: 'don_gia', label: 'Đơn giá', fmt: 'money' }, { key: 'tien_truoc_vat', label: 'Trước VAT', fmt: 'money' },
             { key: 'warnings', label: 'Ghi chú', render: (r) => h('span', {}, (r.errors || []).join('; '), (r.warnings || []).map((w) => h('span', { class: 'tag red', style: { marginRight: '3px' } }, (App.STATUS_TAG[w] || [0, w])[1]))) }],
           rows: d.rows, rowClass: (r) => (r.phan_loai === 'ERROR' ? 'err' : r.phan_loai === 'KEY_CONFLICT' ? 'flag' : r.phan_loai.includes('DUPLICATE') ? 'dup' : ''), wrapClass: 'tall' }),
@@ -348,7 +357,7 @@
               prog.update(2, 'Bước 2/4: Kiểm tra toàn vẹn các phiếu cân…');
               await new Promise((res) => setTimeout(res, 40));
               prog.update(3, 'Bước 3/4: Ghi nhận dữ liệu vào CSDL (Transaction)…');
-              const r = await call('import.commit', { token: S.open.token, dotId: S.dotId || null, noiDenId: S.noiDenId || null });
+              const r = await call('import.commit', { token: S.open.token });
               if (!r) return;
               prog.update(4, 'Bước 4/4: Hoàn tất import!');
               S.result = r; S.step = 4; if (r.copyWarning) App.toast(r.copyWarning, true); draw();
