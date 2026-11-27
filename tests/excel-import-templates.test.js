@@ -270,3 +270,41 @@ test('phiếu lỗi sau Tổng cộng được cảnh báo hoặc được liệ
   assert.equal(continued.summary.dong_loi, 1);
   assert.equal(continued.sample[1].source_row, 4);
 });
+
+test('mẫu ba dòng giữ tiêu đề gộp, tài xế và tổng kg hợp lệ riêng', async (t) => {
+  const app = createApp();
+  t.after(() => app.close());
+  const book = new ExcelJS.Workbook();
+  const sheet = book.addWorksheet('Cân');
+  sheet.addRow(['Số phiếu', 'Biển số', 'Ngày cân', 'Khối lượng', 'Thông tin']);
+  sheet.addRow([null, null, null, 'hàng', 'Tài xế']);
+  sheet.addRow([null, null, null, '(kg)', 'Họ tên']);
+  sheet.mergeCells('A1:A3');
+  sheet.addRow(['0007', '92H-00903', '05/10/2026', 15000, 'Nguyễn Văn A']);
+  sheet.addRow(['0008', 'Sai biển số', '05/10/2026', 12000, 'Nguyễn Văn B']);
+  const config = { name: 'Phiếu ba dòng', headerRow: 2, headerRows: 3, fallbackUnit: '',
+    columns: { so_phieu: 'Số phiếu', bien_so: 'Biển số', ngay_gio_can_1: 'Ngày cân', kl_hang_kg: 'Khối lượng hàng (kg)', tai_xe: 'Thông tin Tài xế Họ tên' } };
+  saveDefault(app, config);
+  const file = { fileName: 'ba-dong.xlsx', buffer: Buffer.from(await book.xlsx.writeBuffer()) };
+  const open = await app.imports.open(file);
+  const options = { sheetName: 'Cân' };
+  const check = app.imports.check(open.token, options);
+  assert.equal(check.blocking, false);
+  assert.equal(check.readKg, 27000);
+  assert.equal(check.validKg, 15000);
+  assert.equal(check.sample[0].tai_xe, 'Nguyễn Văn A');
+  assert.equal(app.imports.preview(open.token, options).counts.new, 1);
+  app.imports.commit(open.token);
+  assert.equal(app.db.get("SELECT tai_xe FROM phieu_can WHERE so_phieu='0007'").tai_xe, 'Nguyễn Văn A');
+
+  sheet.getCell('E4').value = 'Nguyễn Văn C';
+  const second = await app.imports.open({ ...file, buffer: Buffer.from(await book.xlsx.writeBuffer()) });
+  assert.equal(app.imports.preview(second.token, options).counts.conflict, 1);
+  const { batchId } = app.imports.commit(second.token);
+  const pending = app.imports.pendingReviews().find((row) => row.batch_id === batchId);
+  assert.ok(pending);
+  app.imports.resolveReview(pending.id, 'UPDATE', 'Sửa tên tài xế theo phiếu');
+  assert.equal(app.db.get("SELECT tai_xe FROM phieu_can WHERE so_phieu='0007'").tai_xe, 'Nguyễn Văn C');
+  app.imports.undoBatch(batchId, 'Hoàn tác kiểm thử');
+  assert.equal(app.db.get("SELECT tai_xe FROM phieu_can WHERE so_phieu='0007'").tai_xe, 'Nguyễn Văn A');
+});

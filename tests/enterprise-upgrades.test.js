@@ -22,10 +22,13 @@ test('enterprise upgrades: quickSearch returns tickets, vehicles, dots', async (
   app.db.run(`INSERT INTO phieu_can (so_phieu, bien_so, bien_so_chuan, business_key, strong_key, fingerprint, ngay_gio_can_1, kl_hang_kg, trang_thai, trang_thai_duyet)
               VALUES ('PHIEU_888', '92H-99999', '92H99999', 'PHIEU_888|KHO_A', 'sk1', 'fp1', '2026-10-10 08:00', 15000, 'ACTIVE', 'DA_DUYET')`);
 
+  app.db.run("UPDATE phieu_can SET tong_tien=1500000000 WHERE so_phieu='PHIEU_888'");
+
   // Tìm kiếm theo số phiếu
   const resTicket = handlers['app.quickSearch']({ q: '888' });
   assert.equal(resTicket.tickets.length, 1);
   assert.equal(resTicket.tickets[0].so_phieu, 'PHIEU_888');
+  assert.equal(resTicket.tickets[0].tong_tien, 1500000);
 
   // Tìm kiếm theo biển số
   const resXe = handlers['app.quickSearch']({ q: '92H99999' });
@@ -70,6 +73,14 @@ test('enterprise upgrades: secondary backup mirroring', async () => {
   assert.equal(files.length, 1);
   assert.equal(files[0], path.basename(snap.file));
 
+  assert.equal(snap.secondary.sha256, snap.sha256);
+  assert.equal(bk.exportStatus().secondary.ok, true);
+  app.settings.set('backup', { secondaryDir: path.join(tmpSecondary, 'missing') });
+  const whenMissing = bk.backupNow();
+  assert.ok(fs.existsSync(whenMissing.file));
+  assert.equal(whenMissing.secondary.ok, false);
+  assert.equal(bk.exportStatus().secondary.ok, false);
+
   // Đóng app trước khi xóa thư mục test trên Windows
   app.db.close();
   fs.rmSync(tmpSecondary, { recursive: true, force: true });
@@ -94,12 +105,16 @@ test('enterprise upgrades: paymentPackWorkbook generates full payment bundle', a
     benA: { ten: 'Công ty Đại Hiệp', nguoi_lap: 'Kế toán A' },
     benB: { ma: 'HAK', ten: 'Công ty HAK', dai_dien: 'Nguyễn Văn B' },
     period: 'Kỳ tháng 10/2026',
+    notice: 'THAM KHẢO · Phạm vi lọc có phiếu đã chốt.',
     bangChu: 'Ba mươi hai triệu bốn trăm nghìn đồng',
     tickets: []
   };
 
   const buf = await exporters.paymentPackWorkbook(doc);
   assert.ok(buf);
-  assert.ok(buf.length > 1000);
+  const book = new (require('exceljs').Workbook)();
+  await book.xlsx.load(buf);
+  assert.equal(book.worksheets[0].name, 'Bìa hồ sơ quyết toán');
+  assert.ok(book.worksheets[0].getColumn(1).values.includes(doc.notice));
 });
 

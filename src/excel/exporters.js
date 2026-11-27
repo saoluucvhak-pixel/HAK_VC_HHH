@@ -472,6 +472,10 @@ async function paymentPackWorkbook(doc) {
   mg0('HỒ SƠ THANH TOÁN CHI PHÍ VẬN CHUYỂN', { size: 18, bold: true, color: { argb: 'FF1F4E79' } });
   w0.getRow(r0 - 1).height = 32;
   mg0(doc.period || '', { size: 12, italic: true });
+  if (doc.notice) {
+    mg0(doc.notice, { size: 12, bold: true, color: { argb: 'FFB4453B' } });
+    w0.getRow(r0 - 1).height = 34;
+  }
   r0 += 2;
 
   mg0(`ĐƠN VỊ THỤ HƯỞNG (BÊN B): ${benB.ten.toUpperCase()} (${benB.ma})`, { size: 13, bold: true }, 'left');

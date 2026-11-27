@@ -15,6 +15,7 @@ const SYNONYMS = {
   can_lan_2: ['can lan 2', 'can 2', 'trong luong lan 2', 'trong luong can 2', 'kl lan 2', 'tl lan 2', 'tl can 2'],
   kl_hang_kg: ['kl hang (kg)', 'kl hang kg', 'kl hang', 'khoi luong hang', 'khoi luong', 'kl (kg)', 'trong luong hang', 'kl net', 'net'],
   weight_unit: ['don vi khoi luong', 'don vi tinh', 'dvt', 'weight unit'],
+  tai_xe: ['tai xe', 'lai xe', 'ho ten tai xe', 'ten tai xe', 'driver'],
   ghi_chu: ['ghi chu', 'notes'],
   noi_xuat: ['kho', 'noi xuat', 'diem xuat', 'kho xuat', 'tram can', 'nha may'],
   noi_den: ['noi den', 'noi nhan', 'diem den', 'cang'],

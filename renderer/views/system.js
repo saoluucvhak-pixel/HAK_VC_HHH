@@ -49,12 +49,18 @@
             body: h('div', {}, h('p', { class: 'muted' }, 'Chỉ kiểm tra, không tự sửa/xóa/gộp dữ liệu. Phiếu nghi trùng: kiểm tra rồi xóa mềm bản thừa tại màn Phiếu cân.'),
               table({ columns: [{ key: 'title', label: 'Mục kiểm tra' }, { key: 'count', label: 'Số bản ghi', num: true }, { key: 'severity', label: 'Mức', render: (c) => (c.count ? tag(c.severity === 'LOI' ? 'ERROR' : 'NHAP', c.severity === 'LOI' ? 'Lỗi' : 'Cảnh báo') : tag('OK', 'Đạt')) }], rows: r.checks }),
               ...r.checks.filter((c) => c.count).map((c) => h('details', {}, h('summary', {}, `${c.title} — ${c.count}`), c.hint ? h('p', { class: 'muted' }, c.hint) : null, h('pre', { class: 'json' }, JSON.stringify(c.sample, null, 1))))) });
-        } }, '🩺 Kiểm tra toàn vẹn'), h('button', { class: 'btn', 'data-act': 'backup', onclick: async () => { if (await call('backup.now', {}, 'Đã tạo backup')) App.reload(); } }, '💾 Backup ngay'))),
+        } }, '🩺 Kiểm tra toàn vẹn'), h('button', { class: 'btn', 'data-act': 'backup', onclick: async () => { const r = await call('backup.now', {}, 'Đã tạo bản sao lưu chính'); if (r) {
+          if (r.secondary) App.toast(r.secondary.ok ? 'Bản sao phụ đã được kiểm tra SHA-256' : r.secondary.error, !r.secondary.ok);
+          App.reload();
+        } } }, '💾 Backup ngay'))),
         h('div', { class: 'card' + (ex.nhac ? ' warn' : ''), 'data-export-status': ex.nhac ? 'nhac' : 'ok', style: ex.nhac ? { borderColor: 'var(--amber,#d4a017)', background: 'var(--amber-bg,#fff8e1)' } : {} },
           h('b', {}, 'Lần xuất ra ổ khác gần nhất: '), ex.last ? new Date(ex.last).toLocaleString('vi-VN', { hour12: false }) : 'chưa từng',
           ex.nhac ? h('p', { class: 'tag amber', style: { display: 'block', marginTop: '6px' } }, `⚠ ${ex.last ? `Đã quá ${ex.remindDays} ngày` : 'Chưa xuất lần nào'} — hãy xuất một bản sao lưu ra ổ khác (USB/ổ mạng) bằng nút "Xuất ra…" bên dưới. Sao lưu cùng ổ đĩa không bảo vệ khi hỏng ổ.`) : h('span', { class: 'muted' }, ` — nhắc lại sau ${ex.remindDays} ngày`),
           h('div', { style: { marginTop: '10px' } },
-            h('span', { class: 'muted sm' }, 'Thư mục sao lưu thứ hai (Google Drive / OneDrive / Mạng LAN): '),
+            h('p', { class: 'muted sm' }, ex.secondaryDir || 'Chưa chọn thư mục sao lưu phụ'),
+            ex.secondaryDir && h('p', { class: ex.secondary?.ok === false ? 'tag amber' : 'muted sm' }, ex.secondary
+              ? `${new Date(ex.secondary.at).toLocaleString('vi-VN')} · ${ex.secondary.ok ? 'Bản sao phụ đã khớp SHA-256' : ex.secondary.error}`
+              : 'Chưa có lần sao lưu tới thư mục này'),
             h('button', { class: 'btn ghost sm', onclick: async () => {
               const cur = ((await api('settings.all')).backup || {}).secondaryDir || '';
               const dir = window.vcApi && window.vcApi.pickFolder ? await window.vcApi.pickFolder() : await App.promptBox('Thư mục sao lưu thứ hai', 'Đường dẫn thư mục Google Drive / Mạng LAN', cur);

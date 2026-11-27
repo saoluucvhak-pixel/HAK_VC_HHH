@@ -344,7 +344,7 @@ const App = (() => {
             resultsBox.append(h('div', {
               class: 'row hoverable',
               style: { padding: '8px', borderBottom: '1px solid var(--border, #eee)', cursor: 'pointer' },
-              onclick: () => { close(); go('tickets', { search: t.so_phieu }); }
+              onclick: () => { close(); App.explainTicket(t.id); }
             },
               h('div', { class: 'grow' },
                 h('b', {}, `#${t.so_phieu}`), ` · Xe: ${t.bien_so} · Ngày: ${(t.ngay_gio_can_1 || '').slice(0, 16)}`,

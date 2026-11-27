@@ -10,13 +10,15 @@
     const t = e.ticket; const r = e.rule;
     const kv = (k, val) => h('div', { class: 'row gap-s' }, h('span', { class: 'muted', style: { width: '170px' } }, k), h('b', {}, val ?? '—'));
     App.modal({ title: `Vì sao phiếu ${t.so_phieu} có giá này?`, wide: true, actions: [{ label: 'Xóa phiếu này', cls: 'danger', onClick: () => { setTimeout(() => delTickets([t.id], () => { App.refreshInfo(); App.reload(); }), 0); } }, { label: 'Đóng', primary: false }],
-      body: h('div', {}, kv('Biển số', t.bien_so), kv('Khối lượng', `${fmt.kg(t.kl_hang_kg)} kg`), kv('Trạng thái', App.STATUS_TAG[t.trang_thai_tinh_gia] ? App.STATUS_TAG[t.trang_thai_tinh_gia][1] : t.trang_thai_tinh_gia),
+      body: h('div', {}, kv('Biển số', t.bien_so), t.tai_xe && kv('Tài xế', t.tai_xe), kv('Khối lượng', `${fmt.kg(t.kl_hang_kg)} kg`), kv('Trạng thái', App.STATUS_TAG[t.trang_thai_tinh_gia] ? App.STATUS_TAG[t.trang_thai_tinh_gia][1] : t.trang_thai_tinh_gia),
         kv('Đơn giá áp dụng', fmt.money(t.don_gia)), kv('Thành tiền trước VAT', fmt.money(t.tien_truoc_vat)), kv('VAT', `${t.ty_le_vat ?? ''}% = ${fmt.money(t.tien_vat)}`), kv('Tổng', fmt.money(t.tong_tien)),
         r ? h('div', { style: { marginTop: '10px' } }, h('h3', {}, 'Bảng giá áp dụng'), kv('Mã bảng giá', r.ma_bang_gia), kv('Hiệu lực', `${fmt.date(r.tu_ngay)} → ${r.den_ngay ? fmt.date(r.den_ngay) : 'nay'}`), kv('Phương thức', r.phuong_thuc),
           kv('Đơn giá gốc / điều chỉnh', `${fmt.money(r.don_gia_goc)} + ${fmt.money(r.don_gia_dieu_chinh)} = ${fmt.money(r.don_gia_ap_dung)}`),
           e.ky ? kv('Kỳ giá dầu', `${e.ky.ma_ky}: bình quân ${fmt.money(e.ky.gia_dau_binh_quan)} đ/lít`) : null,
           r.cong_thuc ? h('pre', { class: 'json' }, JSON.stringify(r.cong_thuc, null, 2)) : null) : h('p', { class: 'muted' }, 'Chưa gắn bảng giá.')) });
   }
+
+  App.explainTicket = explain;
 
   /** Xóa phiếu (xóa mềm, có lý do + audit). Hiện xem trước: bao nhiêu phiếu xóa được / đã áp giá / bị chặn. */
   async function delTickets(ids, onDone) {

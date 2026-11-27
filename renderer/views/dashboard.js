@@ -220,7 +220,7 @@
         body.append(h('div', { class: 'card stmt' },
           h('div', { class: 'row' }, h('div', { class: 'grow' }, h('h3', { style: { fontSize: '17px' } }, `BẢNG KÊ — ${st.don_vi.ten || st.don_vi.ma}`), h('div', { class: 'muted' }, `${st.ky_chot ? st.ky_chot.ma + ' · ' : ''}MST: ${st.don_vi.ma_so_thue || '—'} · ${st.so_chuyen} chuyến · ${st.so_xe} xe · ${fmt.tan(st.tong_tan)} tấn`)),
             h('span', { class: 'row gap-s' },
-              h('button', { class: 'btn primary', 'data-act': 'pack', onclick: () => App.exportXlsx('export.paymentPack', { filter: f, reconBatchId: rid }) }, '📦 Gói quyết toán 1-Click'),
+              h('button', { class: 'btn primary', 'data-act': 'pack', onclick: () => App.exportXlsx('export.paymentPack', { filter: f, reconBatchId: rid }) }, st.tham_khao ? '📦 Gói quyết toán tham khảo' : '📦 Gói quyết toán 1-Click'),
               h('button', { class: 'btn', 'data-act': 'xlsx', onclick: () => App.exportXlsx('export.statement', { filter: f, reconBatchId: rid }) }, st.tham_khao ? '⬇ Excel tham khảo' : '⬇ Excel (in/ký)'),
               h('button', { class: 'btn ghost', 'data-act': 'pdf', onclick: () => App.exportXlsx('export.statementPdf', { filter: f, reconBatchId: rid }) }, st.tham_khao ? '⬇ PDF tham khảo' : '⬇ PDF'))),
           st.tham_khao ? h('p', { class: 'tag amber' }, 'Tham khảo · Phạm vi lọc có phiếu đã chốt. ',

@@ -1,5 +1,11 @@
 # CHANGELOG
 
+## 0.8.14 — sửa lỗi nghiệp vụ và nâng cấp mẫu Excel (schema 10)
+- Nhập phiếu chỉ gợi ý đợt khi có một đợt mở bao phủ các ngày cân hợp lệ. Xác nhận đợt sẽ xem trước lại với nơi đến mặc định; ghi đúng các lựa chọn đã xem trước.
+- Mẫu nhập hỗ trợ tối đa ba dòng tiêu đề. Ghép và lưu tên tài xế, giữ số 0 đầu của mã phiếu, và tách tổng khối lượng đọc được khỏi khối lượng các dòng hợp lệ.
+- Tra cứu nhanh hiển thị tiền theo đồng và mở đúng phiếu. Bìa gói quyết toán hiển thị nhãn “THAM KHẢO” khi phạm vi lọc có phiếu đã chốt.
+- Sao lưu phụ báo trạng thái riêng, kiểm tra SHA-256 và chỉ đưa tệp hoàn chỉnh vào thư mục đích.
+
 ## 0.8.13 — Gói quyết toán 1-Click, Trợ lý rủi ro & Tìm kiếm thông minh (schema 9)
 - **Xuất Gói hồ sơ quyết toán 1-Click (`export.paymentPack`)**: Tự động đóng gói toàn bộ hồ sơ trong 1 file Excel đa-sheet gồm Bìa quyết toán & tóm tắt trình ký, Bảng kê thanh toán chính thức, Chi tiết theo xe, Đối chiếu khối lượng và Phụ lục phiếu cân (đầy đủ giờ cân 1 & 2).
 - **Trợ lý kiểm soát rủi ro & bất thường (Smart Accounting Auditor)**: Tích hợp nút `🛡 Kiểm soát rủi ro` tại Dashboard và hàm `reports.audit` quét tự động: phát hiện xe chạy siêu tốc (`SHORT_GAP`), thời gian cân nghịch đảo/bất thường, tải trọng đột biến (`OVERLOAD_SPIKE`) và lệch xác xe rỗng (`TARA_DRIFT` > 800kg).
