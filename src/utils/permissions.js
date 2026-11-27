@@ -7,7 +7,7 @@
 const ROLE_PERMS = { XEM: ['xem'], NHAP: ['xem', 'nhap'], DUYET: ['xem', 'nhap', 'duyet'], ADMIN: ['xem', 'nhap', 'duyet', 'admin'] };
 const ROLE_LABEL = { XEM: 'Chỉ xem & xuất báo cáo', NHAP: 'Người nhập liệu', DUYET: 'Người duyệt', ADMIN: 'Quản trị' };
 
-const PUBLIC = new Set(['auth.status', 'auth.login', 'auth.enable']);
+const PUBLIC = new Set(['auth.status', 'auth.login', 'auth.enable', 'auth.skipSetup']);
 const BY_PERM = {
   xem: ['app.info', 'app.quickSearch', 'settings.all', 'audit.list', 'alerts.list', 'alerts.types', 'catalog.config', 'catalog.list', 'catalog.get', 'catalog.options', 'import.batches', 'import.batchRows',
     'import.pending', 'import.pendingGroups', 'workflow.todo', 'tickets.count', 'tickets.periods', 'tickets.list', 'tickets.ids', 'tickets.removePreview', 'tickets.get', 'tickets.explain', 'reports.byVehicle',

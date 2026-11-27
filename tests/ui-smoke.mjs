@@ -5,7 +5,7 @@ const { chromium } = require('playwright-core');
 const { start } = require('../tools/dev-server.js');
 import fs from 'fs'; import path from 'path'; import os from 'os';
 const out = path.resolve('docs/screenshots'); fs.mkdirSync(out, { recursive: true });
-const srv = await start({ port: 5191 });
+const srv = await start({ port: 5191, firstRunSetup: true });
 const errors = [];
 const browser = await chromium.launch({ executablePath: process.env.CHROMIUM_PATH || '/opt/pw-browsers/chromium', args: ['--no-sandbox'] });
 const page = await browser.newPage({ viewport: { width: 1440, height: 900 } });
@@ -13,14 +13,43 @@ page.on('pageerror', (e) => errors.push('pageerror: ' + e.message));
 page.on('console', (m) => { if (m.type() === 'error') errors.push('console: ' + m.text()); });
 const shot = async (n) => { await page.waitForTimeout(250); await page.screenshot({ path: path.join(out, n + '.png') }); };
 const nav = async (id) => { await page.click(`[data-nav="${id}"]`); await page.waitForTimeout(400); };
+// Nhánh tạo tài khoản ở lần mở đầu dùng cơ sở dữ liệu riêng.
+{
+  const fresh = await start({ port: 0, firstRunSetup: true });
+  const setupPage = await browser.newPage();
+  try {
+    await setupPage.goto('http://127.0.0.1:' + fresh.server.address().port + '/');
+    await setupPage.locator('[data-account-setup]').getByRole('button', { name: 'Dùng tài khoản đăng nhập' }).click();
+    const create = setupPage.locator('.modal').filter({ has: setupPage.getByRole('heading', { name: 'Tạo tài khoản quản trị', exact: true }) });
+    await create.getByLabel('Tên đăng nhập quản trị').fill('quantri');
+    await create.getByLabel('Họ và tên (khi tạo mới)').fill('Quản trị kiểm thử');
+    await create.getByLabel('Mật khẩu', { exact: true }).fill('matkhau-manh-1');
+    await create.getByLabel('Nhập lại mật khẩu').fill('matkhau-khac-1');
+    await create.getByRole('button', { name: 'Lưu và bật đăng nhập' }).click();
+    await setupPage.getByText('Hai mật khẩu phải giống nhau', { exact: true }).waitFor();
+    await create.getByLabel('Nhập lại mật khẩu').fill('matkhau-manh-1');
+    await create.getByRole('button', { name: 'Lưu và bật đăng nhập' }).click();
+    await setupPage.locator('[data-user=quantri]').waitFor();
+    await setupPage.locator('[data-account-setup]').waitFor({ state: 'hidden' });
+  } finally {
+    await setupPage.close();
+    await new Promise((resolve) => fresh.server.close(resolve));
+    fresh.rt.close();
+    fs.rmSync(fresh.dir, { recursive: true, force: true });
+  }
+}
 await page.goto('http://127.0.0.1:5191/');
+await page.locator('[data-account-setup]').getByRole('button', { name: 'Bỏ qua' }).click();
 await page.waitForSelector('#sidebar .nav-item');
+await page.reload();
+await page.waitForSelector('#sidebar .nav-item');
+if (await page.locator('[data-account-setup], [data-login]').count()) errors.push('Bỏ qua phải được lưu sau khi mở lại');
 await shot('00-dashboard-empty');
 // seed
 await nav('settings');
 const settingsTabs = page.getByRole('tablist', { name: 'Nhóm cài đặt' });
 const excelTab = settingsTabs.getByRole('tab', { name: 'Mẫu nhập Excel' });
-if (await settingsTabs.getByRole('tab').count() !== 6) errors.push('Cài đặt: thiếu tab nhóm chức năng');
+if (await settingsTabs.getByRole('tab').count() !== 7) errors.push('Cài đặt: thiếu tab nhóm chức năng');
 await excelTab.press('ArrowRight');
 if (await settingsTabs.getByRole('tab', { name: 'Phiếu cân & duyệt' }).getAttribute('aria-selected') !== 'true' ||
     await page.getByRole('tabpanel').count() !== 1 ||
@@ -312,11 +341,18 @@ console.log('app.info', JSON.stringify(info.data.counts));
 // ---- Phân quyền tùy chọn: bật → đăng xuất → màn đăng nhập → đăng nhập → ẩn mục theo quyền → tắt
 {
   const ck = (ok, msg) => { if (!ok) errors.push('phân quyền: ' + msg); };
-  await page.evaluate(() => App.go('users')); await page.waitForSelector('[data-act=enable-auth]');
-  ck((await page.textContent('.card')).includes('Đang dùng 1 người'), 'mặc định không áp dụng phân quyền');
-  const inputs = page.locator('.card input');
-  await inputs.nth(0).fill('admin'); await inputs.nth(1).fill('Quản trị viên'); await inputs.nth(2).fill('matkhau-manh-1');
-  await page.click('[data-act=enable-auth]'); await page.click('.modal .btn:has-text("Bật")');
+  await nav('settings');
+  await page.getByRole('tab', { name: 'Tài khoản & đăng nhập' }).click();
+  ck((await page.locator('[data-account-mode]').textContent()).includes('Một người sử dụng'), 'mặc định là một người sử dụng');
+  await page.locator('[data-act=enable-auth]').click();
+  const create = page.locator('.modal').filter({ hasText: 'Tạo tài khoản quản trị' });
+  await create.getByLabel('Tên đăng nhập quản trị').fill('admin');
+  await create.getByLabel('Họ và tên (khi tạo mới)').fill('Quản trị viên');
+  await create.getByLabel('Mật khẩu', { exact: true }).fill('matkhau-manh-1');
+  await create.getByLabel('Nhập lại mật khẩu').fill('matkhau-manh-1');
+  await create.getByRole('button', { name: 'Lưu và bật đăng nhập' }).click();
+  await create.waitFor({ state: 'hidden' });
+  await nav('users');
   await page.waitForSelector('[data-user=admin]'); await shot('40-phan-quyen-bat');
   ck((await page.locator('[data-act=add-user]').count()) === 1, 'quản trị thấy nút thêm người dùng');
   await page.click('[data-act=logout]'); await page.waitForSelector('[data-login]');
@@ -325,8 +361,18 @@ console.log('app.info', JSON.stringify(info.data.counts));
   await page.click('[data-act=login]'); await page.waitForSelector('[data-login] .tag.red');
   await page.fill('[data-login] input[name=mk]', 'matkhau-manh-1'); await page.click('[data-act=login]');
   await page.waitForSelector('[data-user=admin]'); await page.waitForFunction(() => !document.querySelector('[data-login]'));
-  await page.evaluate(() => App.go('users')); await page.waitForSelector('[data-act=disable-auth]');
-  await page.click('[data-act=disable-auth]'); await page.fill('.modal input', 'matkhau-manh-1'); await page.click('.modal .btn.danger');
+  await nav('settings');
+  await page.getByRole('tab', { name: 'Tài khoản & đăng nhập' }).click();
+  await page.locator('[data-act=disable-auth]').click();
+  const disable = page.locator('.modal').filter({ hasText: 'Chuyển sang một người sử dụng' });
+  await disable.getByLabel('Tên đăng nhập quản trị').fill('admin-khac');
+  await disable.getByLabel('Mật khẩu quản trị').fill('matkhau-manh-1');
+  await disable.getByRole('button', { name: 'Chuyển chế độ' }).click();
+  await page.getByText('Nhập tên đăng nhập và mật khẩu của quản trị đang dùng', { exact: true }).waitFor();
+  ck(await disable.isVisible(), 'sai tài khoản phải giữ hộp xác thực');
+  await disable.getByLabel('Tên đăng nhập quản trị').fill('admin');
+  await disable.getByRole('button', { name: 'Chuyển chế độ' }).click();
+  await disable.waitFor({ state: 'hidden' });
   await page.waitForSelector('[data-act=enable-auth]');
   ck((await page.locator('[data-user]').count()) === 0, 'tắt phân quyền: không còn ô người dùng');
 }
@@ -439,7 +485,7 @@ await page.unroute('**/api/reports.dashboard');
   // dọn: đăng nhập admin, tắt phân quyền + duyệt
   await loginAs('admin');
   await api('settings.set', { key: 'duyet_phieu', value: { bat: false } }).catch(() => {});
-  await page.evaluate(async (pw) => { await App.api('auth.disable', { mat_khau: pw }); await App.refreshAuth(); await App.refreshInfo(); }, PW);
+  await page.evaluate(async (pw) => { await App.api('auth.disable', { ten_dang_nhap: 'admin', mat_khau: pw }); await App.refreshAuth(); await App.refreshInfo(); }, PW);
 }
 
 // ---- 0.8.2: cài đặt "Cho phép tự duyệt" + nhãn "Tự duyệt"

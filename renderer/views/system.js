@@ -159,6 +159,7 @@
         ['pricing', 'Tính cước & bảng kê', [priceCard, roundingCard]],
         ['company', 'Thông tin công ty', [companyCard]],
         ['storage', 'Dữ liệu & sao lưu', [await storageCard(), backupCard]],
+        ['account', 'Tài khoản & đăng nhập', [App.accountModeCard(App.auth, async () => { await App.refreshInfo(); App.reload(); })]],
         ['system', 'Hệ thống', [systemCard]],
       ];
       const tabs = h('div', { class: 'settings-tabs', role: 'tablist', 'aria-label': 'Nhóm cài đặt' });

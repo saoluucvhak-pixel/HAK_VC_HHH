@@ -12,7 +12,7 @@ const { loadInitialData, isFreshDb } = require('./services/InitialDataService');
 const { BackupService } = require('./services/BackupService');
 const { permissionFor, roleAllows } = require('./utils/permissions');
 
-function createRuntime({ dataDir, version = 'dev', driver = null, autoInit = false, renderPdf = null, idleMs = 30 * 60 * 1000, autoBackupMs = 60 * 60 * 1000 }) {
+function createRuntime({ dataDir, version = 'dev', driver = null, autoInit = false, firstRunSetup = false, renderPdf = null, idleMs = 30 * 60 * 1000, autoBackupMs = 60 * 60 * 1000 }) {
   const dirs = {
     dataDir,
     db: path.join(dataDir, 'data', 'app.db'),
@@ -38,7 +38,7 @@ function createRuntime({ dataDir, version = 'dev', driver = null, autoInit = fal
     // ID người dùng chỉ có ý nghĩa trong DB đã xác thực, phải đăng nhập lại sau khôi phục.
     rt.session.set(null);
     rt.app = createApp({ dbFile: dirs.db, driver, backupFn: preMigrationBackup, user: () => { const u = rt.session.get(); return u ? u.ten_dang_nhap : null; } });
-    if (process.env.VCCOST_RESET_AUTH === '1') { rt.app.auth.forceDisable(); log('VCCOST_RESET_AUTH=1: đã tắt phân quyền'); }
+    if (firstRunSetup && rt.app.db.migration.from === 0) rt.app.auth.prepareSetup();
     rt.handlers = createHandlers(rt.app, { exportsDir: dirs.exports, importsDir: dirs.imports, seedDir: SEED_DIR, backup: rt.backup, session: rt.session, log, version, dataDir, renderPdf: (...a) => { const f = rt.renderPdf || renderPdf; if (!f) throw new Error('Xuất PDF chưa khả dụng trong môi trường này'); return f(...a); } });
     log(`Mở DB (${rt.app.db.driver}), migration: ${JSON.stringify(rt.app.db.migration)}`);
   };
@@ -63,6 +63,9 @@ function createRuntime({ dataDir, version = 'dev', driver = null, autoInit = fal
     await rt.ready;
     const h = Object.hasOwn(rt.handlers, channel) ? rt.handlers[channel] : null;
     if (typeof h !== 'function') return { ok: false, error: `Kênh không tồn tại: ${channel}` };
+    if (rt.app.auth.setupRequired() && !['auth.status', 'auth.enable', 'auth.skipSetup'].includes(channel)) {
+      return { ok: false, error: 'Hãy chọn chế độ sử dụng VC Cost', type: 'SetupRequired' };
+    }
     // Phân quyền (chỉ khi được bật): chưa đăng nhập chỉ gọi được kênh công khai; còn lại theo vai trò; từ chối theo mặc định với kênh chưa khai báo
     if (rt.app.auth.enabled()) {
       const perm = permissionFor(channel, args);

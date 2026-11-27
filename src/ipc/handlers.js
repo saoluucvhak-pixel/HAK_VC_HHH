@@ -40,7 +40,7 @@ function createHandlers(app, env = {}) {
   const allStates = (f) => ({ moi_trang_thai: true, ...(f || {}) });   // Phiếu cân thấy cả phiếu Nháp (trừ khi lọc theo trạng thái duyệt)
   const session = env.session || { get: () => null, set: () => {} };
   const { ROLE_PERMS, ROLE_LABEL, CHANNEL_PERM, TABLE_PERM } = require('../utils/permissions');
-  const authStatus = () => { const u = session.get(); return { enabled: app.auth.enabled(), user: u ? { id: u.id, ten_dang_nhap: u.ten_dang_nhap, ho_ten: u.ho_ten, vai_tro: u.vai_tro } : null, perms: u ? ROLE_PERMS[u.vai_tro] : [], roles: ROLE_LABEL,
+  const authStatus = () => { const u = session.get(); return { enabled: app.auth.enabled(), setupRequired: app.auth.setupRequired(), user: u ? { id: u.id, ten_dang_nhap: u.ten_dang_nhap, ho_ten: u.ho_ten, vai_tro: u.vai_tro } : null, perms: u ? ROLE_PERMS[u.vai_tro] : [], roles: ROLE_LABEL,
     // nguồn quyền duy nhất là utils/permissions.js; giao diện chỉ ĐỌC để ẩn/hiện nút, máy chủ vẫn là nơi quyết định
     channelPerm: Object.fromEntries(CHANNEL_PERM), tablePerm: TABLE_PERM }; };
   const actor = () => { const u = session.get(); return u ? u.id : null; };
@@ -369,6 +369,7 @@ function createHandlers(app, env = {}) {
     'backup.restore': ({ file }) => (backup ? backup.restore(file) : null),
     // ---------------- phân quyền
     'auth.status': () => authStatus(),
+    'auth.skipSetup': () => { app.auth.skipSetup(); return authStatus(); },
     'auth.login': ({ ten_dang_nhap, mat_khau }) => { session.set(app.auth.login(ten_dang_nhap, mat_khau)); return authStatus(); },
     'auth.logout': () => { session.set(null); return authStatus(); },
     'auth.me': () => authStatus(),
@@ -385,7 +386,7 @@ function createHandlers(app, env = {}) {
       if (bat_tu_duyet && duyetBat(app.settings)) app.settings.set('duyet_phieu', { ...app.settings.get('duyet_phieu'), bat: true, cho_tu_duyet: true });
       session.set(u); return authStatus();
     },
-    'auth.disable': ({ mat_khau }) => { app.auth.disable(actor(), mat_khau); session.set(null); return authStatus(); },
+    'auth.disable': ({ ten_dang_nhap, mat_khau }) => { app.auth.disable(actor(), ten_dang_nhap, mat_khau); session.set(null); return authStatus(); },
     'auth.users': () => app.auth.list(),
     'auth.createUser': (o) => app.auth.createUser(actor(), o),
     'auth.updateUser': ({ id, xac_nhan, ...patch }) => {

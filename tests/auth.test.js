@@ -143,24 +143,73 @@ test('quản trị cuối cùng được bảo vệ; khóa tài khoản và đ�
   } finally { rt.close(); }
 });
 
-test('tắt phân quyền cần mật khẩu quản trị; VCCOST_RESET_AUTH=1 khôi phục khi mất mật khẩu; dữ liệu nghiệp vụ không đổi', async () => {
+test('tắt đăng nhập cần cả tên và mật khẩu của quản trị đang đăng nhập', async () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'vcauth-'));
   let rt = createRuntime({ dataDir: dir, driver: 'node:sqlite' });
   try {
     await withAdmin(rt);
-    const bad = await call(rt, 'auth.disable', { mat_khau: 'sai' }); assert.equal(bad.ok, false);
-    assert.equal((await call(rt, 'auth.status')).data.enabled, true);
+    await addUser(rt, 'admin2', 'ADMIN');
+    for (const args of [{ mat_khau: PW }, { ten_dang_nhap: 'admin2', mat_khau: PW }, { ten_dang_nhap: 'admin', mat_khau: 'sai' }]) {
+      assert.equal((await call(rt, 'auth.disable', args)).ok, false);
+      assert.equal((await call(rt, 'auth.status')).data.enabled, true);
+    }
     rt.close();
     process.env.VCCOST_RESET_AUTH = '1';
-    rt = createRuntime({ dataDir: dir, driver: 'node:sqlite' });
+    rt = createRuntime({ dataDir: dir, driver: 'node:sqlite', firstRunSetup: true });
     delete process.env.VCCOST_RESET_AUTH;
+    assert.equal((await call(rt, 'app.info')).type, 'AuthRequired');
+    assert.equal((await call(rt, 'auth.skipSetup')).ok, false);
+    await login(rt, 'admin');
+    assert.equal((await call(rt, 'auth.disable', { ten_dang_nhap: 'admin', mat_khau: PW })).ok, true);
     assert.equal((await call(rt, 'auth.status')).data.enabled, false);
     assert.equal((await call(rt, 'app.info')).ok, true);
-    assert.equal(rt.app.db.get(`SELECT COUNT(*) n FROM audit_log WHERE action='AUTH_RESET'`).n, 1);
-    await withAdmin(rt);                                  // bật lại bằng quản trị cũ (đúng mật khẩu)
-    assert.equal((await call(rt, 'auth.disable', { mat_khau: PW })).ok, true);
-    assert.equal((await call(rt, 'auth.status')).data.enabled, false);
-  } finally { delete process.env.VCCOST_RESET_AUTH; try { rt.close(); } catch { /* đã đóng */ } }
+    rt.close();
+    rt = createRuntime({ dataDir: dir, driver: 'node:sqlite', firstRunSetup: true });
+    assert.equal((await call(rt, 'auth.status')).data.setupRequired, false);
+    assert.equal((await call(rt, 'app.info')).ok, true);
+    await withAdmin(rt);
+    assert.equal((await call(rt, 'auth.users')).data.length, 2);
+  } finally { delete process.env.VCCOST_RESET_AUTH; try { rt.close(); } finally { fs.rmSync(dir, { recursive: true, force: true }); } }
+});
+
+test('lần mở đầu giữ lựa chọn qua khởi động lại và bảo toàn chế độ của dữ liệu cũ', async () => {
+  for (const enabled of [false, true]) {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'vc-first-run-'));
+    const options = { dataDir: dir, driver: 'node:sqlite', firstRunSetup: true };
+    let rt = createRuntime(options);
+    try {
+      assert.equal((await call(rt, 'auth.status')).data.setupRequired, true);
+      assert.equal((await call(rt, 'app.info')).type, 'SetupRequired');
+      rt.close();
+      rt = createRuntime(options);
+      assert.equal((await call(rt, 'auth.status')).data.setupRequired, true);
+      if (enabled) {
+        assert.equal((await call(rt, 'auth.enable', { ten_dang_nhap: 'admin', ho_ten: 'Quản trị' })).ok, false);
+        assert.equal((await call(rt, 'auth.status')).data.setupRequired, true);
+        assert.equal((await withAdmin(rt)).data.user.ten_dang_nhap, 'admin');
+      } else {
+        assert.equal((await call(rt, 'auth.skipSetup')).ok, true);
+      }
+      rt.close();
+      rt = createRuntime(options);
+      const state = (await call(rt, 'auth.status')).data;
+      assert.equal(state.setupRequired, false);
+      assert.equal(state.enabled, enabled);
+      assert.equal(state.user, null);
+      assert.equal((await call(rt, 'app.info')).ok, !enabled);
+      assert.equal((await call(rt, 'auth.skipSetup')).ok, false);
+    } finally { try { rt.close(); } finally { fs.rmSync(dir, { recursive: true, force: true }); } }
+  }
+
+  let old = mk();
+  const dir = old.dirs.dataDir;
+  try {
+    await old.ready;
+    old.close();
+    old = createRuntime({ dataDir: dir, driver: 'node:sqlite', firstRunSetup: true });
+    assert.equal((await call(old, 'auth.status')).data.setupRequired, false);
+    assert.equal((await call(old, 'app.info')).ok, true);
+  } finally { try { old.close(); } finally { fs.rmSync(dir, { recursive: true, force: true }); } }
 });
 
 test('phiên hết hạn khi không hoạt động quá thời gian cho phép', async () => {

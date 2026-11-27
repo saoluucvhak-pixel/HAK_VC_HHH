@@ -69,6 +69,15 @@ function runSmoke() {
     try {
       const initial = { migration: rt.app.db.migration, backups: rt.backup.list().map((b) => b.kind) };   // trạng thái ngay sau khi mở (trước sao lưu/khôi phục thử)
       const probe = `(async () => {
+        const status = await window.vcApi.invoke('auth.status', {});
+        if (status.data?.setupRequired) {
+          const selector = '[data-act=skip-account-setup]';
+          for (let i = 0; i < 50 && !document.querySelector(selector); i++) await new Promise((r) => setTimeout(r, 200));
+          document.querySelector(selector)?.click();
+          for (let i = 0; i < 50 && (await window.vcApi.invoke('auth.status', {})).data?.setupRequired; i++) {
+            await new Promise((r) => setTimeout(r, 200));
+          }
+        }
         const info = await window.vcApi.invoke('app.info', {});
         for (let i = 0; i < 50 && !(document.getElementById('view') && document.getElementById('view').childElementCount); i++) await new Promise((r) => setTimeout(r, 200));
         const v = document.getElementById('view');
@@ -216,7 +225,7 @@ app.whenReady().then(() => {
     } finally { pw.destroy(); try { fs.unlinkSync(tmp); } catch { /* bỏ qua */ } }
   };
   try {
-    rt = createRuntime({ dataDir: w.dir, version: app.getVersion(), autoInit: true, renderPdf });
+    rt = createRuntime({ dataDir: w.dir, version: app.getVersion(), autoInit: true, firstRunSetup: true, renderPdf });
   } catch (e) {
     // Không mở được CSDL (thiếu module native, file hỏng…): báo rõ thay vì treo không cửa sổ
     if (process.env.VCCOST_SMOKE) return smokeFail('createRuntime: ' + (e && e.stack || e));
@@ -226,6 +235,7 @@ app.whenReady().then(() => {
   ipcMain.handle('storage.info', () => ({ current: w.dir, default: w.defaultDir, source: w.source, size: dirSize(w.dir) }));
   ipcMain.handle('dialog.pickFolder', async () => { const r = await dialog.showOpenDialog(win, { properties: ['openDirectory', 'createDirectory'], title: 'Chọn thư mục' }); return r.canceled ? null : r.filePaths[0]; });
   ipcMain.handle('storage.change', (_e, { target, mode }) => {
+    if (rt.app.auth.setupRequired()) return { ok: false, error: 'Hãy chọn chế độ sử dụng VC Cost trước' };
     { const u = rt.session.get(); if (rt.app.auth.enabled() && !(u && u.vai_tro === 'ADMIN')) return { ok: false, error: 'Chỉ quản trị mới đổi được thư mục lưu trữ' }; }
     if (w.source === 'ENV') return { ok: false, error: 'Thư mục đang bị cố định bởi biến môi trường VCCOST_DATA_DIR' };
     const target_ = target === null ? w.defaultDir : target;
