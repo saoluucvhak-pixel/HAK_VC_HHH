@@ -71,7 +71,7 @@ test('CSP của giao diện chặn object/base/form', () => {
   assert.ok(!/unsafe-eval|script-src[^;]*unsafe-inline/.test(csp));
 });
 
-test('nâng cấp DB đang ở v4 (có dữ liệu) lên v9: giữ dữ liệu, có backup PRE_MIGRATION, chạy lại không đổi', () => {
+test('nâng cấp DB đang ở v4 (có dữ liệu) lên v10: giữ dữ liệu, có backup PRE_MIGRATION, chạy lại không đổi', () => {
   const { DatabaseSync } = require('node:sqlite');
   const os = require('os');
   const { migrate, currentVersion, listMigrations } = require('../src/database/migrator');
@@ -84,7 +84,7 @@ test('nâng cấp DB đang ở v4 (có dữ liệu) lên v9: giữ dữ liệu, 
   db.prepare(`INSERT INTO audit_log(action, entity) VALUES ('TEST','x')`).run();
   let backup = null;
   const r = migrate(db, { backupFn: (b) => { backup = b; } });
-  assert.deepEqual(r.applied, ['005_bat_bien.sql', '006_phan_quyen.sql', '007_duyet_phieu.sql', '008_pending_already.sql', '009_chot_ky_bang_ke.sql']);
+  assert.deepEqual(r.applied, ['005_bat_bien.sql', '006_phan_quyen.sql', '007_duyet_phieu.sql', '008_pending_already.sql', '009_chot_ky_bang_ke.sql', '010_tai_xe_phieu_can.sql']);
   assert.equal(backup.kind, 'PRE_MIGRATION');
   assert.equal(db.prepare('SELECT COUNT(*) n FROM audit_log').get().n, 1);
   assert.throws(() => db.exec('DELETE FROM audit_log'), /chỉ được thêm/);

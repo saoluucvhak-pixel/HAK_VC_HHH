@@ -296,7 +296,7 @@ class TicketImportService {
         if (calc.warnings.includes('NO_PRICE')) counts.noPrice++;
         if (calc.warnings.includes('MULTIPLE_PRICE')) counts.multiplePrice++;
       }
-      return { ...r, idx: i, noi_xuat_id: nx, noi_den_id: destination, noi_den_ten: locName.get(destination) ?? r.noi_den, existingFp: previous?.fingerprint, existingDestination: previous?.noi_den_id, phan_loai: phanLoai, existingId: c.existingId || null, diffs: c.diffs || null, pendingBatch,
+      return { ...r, idx: i, noi_xuat_id: nx, noi_den_id: destination, noi_den_ten: locName.get(destination) ?? r.noi_den, existingFp: previous?.fingerprint, existingDestination: previous?.noi_den_id, existingDriver: previous?.tai_xe, phan_loai: phanLoai, existingId: c.existingId || null, diffs: c.diffs || null, pendingBatch,
         engine_status: calc.status, warnings: calc.warnings, don_vi_van_chuyen_id: calc.don_vi_van_chuyen_id, don_gia: calc.don_gia,
         tien_truoc_vat: calc.tien_truoc_vat, tong_tien: calc.tong_tien, key: c.key, fp: c.fp };
     });
@@ -360,9 +360,9 @@ class TicketImportService {
     // Nếu cứ commit, dòng bị bỏ qua âm thầm và import báo thành công nhưng mất phiếu → bắt xem trước lại.
     for (const r of p.rows || []) {
       if (!['EXACT_DUPLICATE', 'KEY_CONFLICT', 'PENDING_ALREADY'].includes(r.phan_loai) || !r.existingId) continue;
-      const ex = this.db.get('SELECT id, so_phieu, trang_thai, fingerprint, noi_den_id FROM phieu_can WHERE id=?', [r.existingId]);
+      const ex = this.db.get('SELECT id, so_phieu, trang_thai, fingerprint, noi_den_id, tai_xe FROM phieu_can WHERE id=?', [r.existingId]);
       if (!ex || ex.trang_thai !== 'ACTIVE') throw new ValidationError(`Dữ liệu đã thay đổi sau khi xem trước: phiếu ${r.so_phieu} (dòng ${r.source_row}) đã bị xóa hoặc không còn hiệu lực. Hãy xem trước lại rồi import.`);
-      if (r.phan_loai === 'EXACT_DUPLICATE' && (ex.fingerprint !== (r.existingFp || r.fp) || (r.noi_den && ex.noi_den_id !== r.existingDestination))) throw new ValidationError(`Dữ liệu đã thay đổi sau khi xem trước: phiếu ${r.so_phieu} (dòng ${r.source_row}) đã được sửa. Hãy xem trước lại rồi import.`);
+      if (r.phan_loai === 'EXACT_DUPLICATE' && (ex.fingerprint !== (r.existingFp || r.fp) || (r.noi_den && ex.noi_den_id !== r.existingDestination) || (r.tai_xe && ex.tai_xe !== r.existingDriver))) throw new ValidationError(`Dữ liệu đã thay đổi sau khi xem trước: phiếu ${r.so_phieu} (dòng ${r.source_row}) đã được sửa. Hãy xem trước lại rồi import.`);
     }
     const chuaDuyet = duyetBat(this.settings);    // bật duyệt phiếu → phiếu mới là Nháp cho tới khi được duyệt
     const result = this.db.tx(() => {

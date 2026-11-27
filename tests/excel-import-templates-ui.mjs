@@ -13,6 +13,10 @@ const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'hak-excel-ui-'));
 const server = await dev.start({ port: 0, dataDir });
 let browser;
 try {
+  const { catalog } = server.rt.app;
+  const port = catalog.create('dia_diem', { ma: 'CANG-THU', ten: 'Cảng chạy thử', loai: 'CANG' });
+  const dot = catalog.create('dot_van_chuyen', { ma_dot: 'THU-10', tu_ngay: '2026-10-01',
+    den_ngay: '2026-10-31', noi_giao_id: port.id, trang_thai: 'MO' });
   browser = await chromium.launch({ executablePath: process.env.CHROMIUM_PATH || '/opt/pw-browsers/chromium', args: ['--no-sandbox'] });
   const page = await browser.newPage({ viewport: { width: 1440, height: 1380 } });
   const errors = [];
@@ -125,9 +129,15 @@ try {
   await page.locator('[data-import-reading]').getByText('Phiếu cân nhà cung cấp A').waitFor();
   await page.locator('[data-act=commit]').waitFor();
   await page.getByText('00007', { exact: true }).waitFor();
+  const destination = page.locator('[data-import-destination]');
+  await destination.getByText('Chưa gán đợt').waitFor();
+  await destination.getByRole('button', { name: 'Dùng đợt gợi ý THU-10' }).click();
+  await destination.getByText('Nơi đến mặc định: Cảng chạy thử').waitFor();
   await page.locator('[data-act=commit]').click();
   await page.locator('.modal').getByRole('button', { name: 'Import', exact: true }).click();
   await page.getByText('Import hoàn tất', { exact: false }).first().waitFor();
+  assert.deepEqual({ ...server.rt.app.db.get("SELECT dot_van_chuyen_id, noi_den_id FROM phieu_can WHERE so_phieu='00007'") },
+    { dot_van_chuyen_id: dot.id, noi_den_id: port.id });
 
   await page.locator('[data-nav=settings]').click();
   await card.getByRole('button', { name: 'Dùng Tự nhận diện' }).click();
