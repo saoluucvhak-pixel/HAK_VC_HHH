@@ -99,7 +99,31 @@
             h('div', { class: 'card' }, h('h3', {}, 'Chi phí theo đơn vị vận chuyển (đ, tham khảo)'), bars(d.byCarrier, 'tong_tien', 'label', fmt.money)),
             h('div', { class: 'card' }, h('h3', {}, 'Top xe nhiều chuyến'), table({ columns: [{ key: 'label', label: 'Biển số', mono: true }, { key: 'so_chuyen', label: 'Chuyến', fmt: 'int' }, { key: 'tong_kg', label: 'KL (tấn)', render: (r) => fmt.tan(r.tong_kg / 1000), num: true }], rows: d.topTrips }))));
       });
-      v.append(App.pageHead('Dashboard', 'Tổng quan chi phí vận chuyển theo kỳ / bộ lọc', h('label', { class: 'field' }, 'Kỳ thể hiện', sel)), await App.filterBar(load), body);
+      v.append(App.pageHead('Dashboard', 'Tổng quan chi phí vận chuyển theo kỳ / bộ lọc',
+        h('span', { class: 'row gap-s' },
+          h('button', { class: 'btn ghost', 'data-act': 'audit-modal', onclick: async () => {
+            const auditRes = await api('reports.audit', App.cleanFilter(App.state.filter));
+            App.modal({
+              title: `🛡 Trợ lý kiểm soát rủi ro & bất thường (${auditRes.anomalyCount} vấn đề phát hiện)`,
+              wide: true,
+              actions: [{ label: 'Đóng', primary: false }],
+              body: h('div', {},
+                h('p', { class: 'muted' }, `Đã kiểm tra ${auditRes.totalChecked} phiếu trong phạm vi bộ lọc. Tự động rà soát: chuyến quay vòng siêu tốc, thời gian cân nghịch đảo/bất thường, lệch xác xe rỗng và tải trọng đột biến.`),
+                auditRes.issues.length ? table({
+                  columns: [
+                    { key: 'so_phieu', label: 'Số phiếu', text: true },
+                    { key: 'bien_so', label: 'Biển số', mono: true },
+                    { key: 'ngay_gio_can_1', label: 'Ngày giờ cân', render: (r) => (r.ngay_gio_can_1 || '').slice(0, 16) },
+                    { key: 'flags', label: 'Dấu hiệu rủi ro / bất thường', render: (r) => h('div', {}, (r.flags || []).map((f) => h('span', { class: 'tag ' + (f.code === 'INVALID_TIME' || f.code === 'TARA_DRIFT' ? 'red' : 'amber'), style: { marginRight: '4px', marginBottom: '2px', display: 'inline-block' } }, f.text))) }
+                  ],
+                  rows: auditRes.issues,
+                  onRow: (r) => App.go('tickets', { search: r.so_phieu })
+                }) : h('p', { class: 'tag green' }, '✓ Không phát hiện bất thường nào về thời gian, xác xe hoặc tải trọng trong kỳ này.')
+              )
+            });
+          } }, '🛡 Kiểm soát rủi ro'),
+          h('label', { class: 'field' }, 'Kỳ thể hiện', sel)
+        )), await App.filterBar(load), body);
       await load();
     },
   });
@@ -195,7 +219,10 @@
           batches.map((b) => h('option', { value: b.id, selected: String(b.id) === String(rid) }, `#${b.id} ${b.ten}${b.don_vi ? ` (${b.don_vi})` : ''}`)));
         body.append(h('div', { class: 'card stmt' },
           h('div', { class: 'row' }, h('div', { class: 'grow' }, h('h3', { style: { fontSize: '17px' } }, `BẢNG KÊ — ${st.don_vi.ten || st.don_vi.ma}`), h('div', { class: 'muted' }, `${st.ky_chot ? st.ky_chot.ma + ' · ' : ''}MST: ${st.don_vi.ma_so_thue || '—'} · ${st.so_chuyen} chuyến · ${st.so_xe} xe · ${fmt.tan(st.tong_tan)} tấn`)),
-            h('span', { class: 'row gap-s' }, h('button', { class: 'btn', 'data-act': 'xlsx', onclick: () => App.exportXlsx('export.statement', { filter: f, reconBatchId: rid }) }, st.tham_khao ? '⬇ Excel tham khảo' : '⬇ Excel (in/ký)'), h('button', { class: 'btn ghost', 'data-act': 'pdf', onclick: () => App.exportXlsx('export.statementPdf', { filter: f, reconBatchId: rid }) }, st.tham_khao ? '⬇ PDF tham khảo' : '⬇ PDF'))),
+            h('span', { class: 'row gap-s' },
+              h('button', { class: 'btn primary', 'data-act': 'pack', onclick: () => App.exportXlsx('export.paymentPack', { filter: f, reconBatchId: rid }) }, '📦 Gói quyết toán 1-Click'),
+              h('button', { class: 'btn', 'data-act': 'xlsx', onclick: () => App.exportXlsx('export.statement', { filter: f, reconBatchId: rid }) }, st.tham_khao ? '⬇ Excel tham khảo' : '⬇ Excel (in/ký)'),
+              h('button', { class: 'btn ghost', 'data-act': 'pdf', onclick: () => App.exportXlsx('export.statementPdf', { filter: f, reconBatchId: rid }) }, st.tham_khao ? '⬇ PDF tham khảo' : '⬇ PDF'))),
           st.tham_khao ? h('p', { class: 'tag amber' }, 'Tham khảo · Phạm vi lọc có phiếu đã chốt. ',
             h('button', { class: 'btn ghost sm', onclick: () => App.go('lock') }, 'Mở Lịch sử chốt kỳ')) : null,
           st.ky_chot && !st.thong_tin_in ? h('p', { class: 'tag amber' }, 'Kỳ cũ: đối chiếu thông tin bên ký và hợp đồng với chứng từ gốc.') : null,

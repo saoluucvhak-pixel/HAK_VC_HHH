@@ -52,7 +52,19 @@
         } }, '🩺 Kiểm tra toàn vẹn'), h('button', { class: 'btn', 'data-act': 'backup', onclick: async () => { if (await call('backup.now', {}, 'Đã tạo backup')) App.reload(); } }, '💾 Backup ngay'))),
         h('div', { class: 'card' + (ex.nhac ? ' warn' : ''), 'data-export-status': ex.nhac ? 'nhac' : 'ok', style: ex.nhac ? { borderColor: 'var(--amber,#d4a017)', background: 'var(--amber-bg,#fff8e1)' } : {} },
           h('b', {}, 'Lần xuất ra ổ khác gần nhất: '), ex.last ? new Date(ex.last).toLocaleString('vi-VN', { hour12: false }) : 'chưa từng',
-          ex.nhac ? h('p', { class: 'tag amber', style: { display: 'block', marginTop: '6px' } }, `⚠ ${ex.last ? `Đã quá ${ex.remindDays} ngày` : 'Chưa xuất lần nào'} — hãy xuất một bản sao lưu ra ổ khác (USB/ổ mạng) bằng nút "Xuất ra…" bên dưới. Sao lưu cùng ổ đĩa không bảo vệ khi hỏng ổ.`) : h('span', { class: 'muted' }, ` — nhắc lại sau ${ex.remindDays} ngày`)),
+          ex.nhac ? h('p', { class: 'tag amber', style: { display: 'block', marginTop: '6px' } }, `⚠ ${ex.last ? `Đã quá ${ex.remindDays} ngày` : 'Chưa xuất lần nào'} — hãy xuất một bản sao lưu ra ổ khác (USB/ổ mạng) bằng nút "Xuất ra…" bên dưới. Sao lưu cùng ổ đĩa không bảo vệ khi hỏng ổ.`) : h('span', { class: 'muted' }, ` — nhắc lại sau ${ex.remindDays} ngày`),
+          h('div', { style: { marginTop: '10px' } },
+            h('span', { class: 'muted sm' }, 'Thư mục sao lưu thứ hai (Google Drive / OneDrive / Mạng LAN): '),
+            h('button', { class: 'btn ghost sm', onclick: async () => {
+              const cur = ((await api('settings.all')).backup || {}).secondaryDir || '';
+              const dir = window.vcApi && window.vcApi.pickFolder ? await window.vcApi.pickFolder() : await App.promptBox('Thư mục sao lưu thứ hai', 'Đường dẫn thư mục Google Drive / Mạng LAN', cur);
+              if (dir !== null) {
+                const s = await api('settings.all');
+                const b = { ...(s.backup || {}), secondaryDir: dir.trim() || null };
+                await call('settings.set', { key: 'backup', value: b }, 'Đã cập nhật thư mục sao lưu thứ hai');
+                App.reload();
+              }
+            } }, '⚙ Cấu hình thư mục sao lưu Cloud/Mạng'))),
         h('div', { class: 'card' }, table({ columns: [{ key: 'name', label: 'File', mono: true }, { key: 'kind', label: 'Loại', render: (b) => { const K = { AUTO: ['gray', 'Tự động', 'Sao lưu hằng ngày'], MANUAL: ['green', 'Thủ công', 'Bạn bấm Backup ngay'], PRE_IMPORT: ['gray', 'Trước import', 'Tự tạo trước mỗi lần nhập'], PRE_RESTORE: ['amber', 'Trước khôi phục', 'Bản an toàn của dữ liệu trước khi khôi phục'], PRE_MIGRATION: ['amber', 'Trước nâng cấp', 'Bản an toàn trước khi nâng cấp cơ sở dữ liệu — dùng để quay về nếu nâng cấp lỗi'] }[b.kind] || ['gray', b.kind, '']; return h('span', { title: K[2] }, h('span', { class: 'tag ' + K[0] }, K[1])); } }, { key: 'time', label: 'Thời gian', fmt: 'dt' }, { key: 'size', label: 'Dung lượng (KB)', fmt: (x) => fmt.int(x / 1024), num: true },
           { key: '_a', label: '', render: (b) => h('span', { class: 'row gap-s' }, h('button', { class: 'btn ghost sm', 'data-act': 'export-backup', onclick: async () => { const dir = window.vcApi && window.vcApi.pickFolder ? await window.vcApi.pickFolder() : await App.promptBox('Xuất bản sao lưu', 'Đường dẫn thư mục đích'); if (!dir) return; const r = await call('backup.export', { file: b.file, dir }); if (r) App.toast(`Đã xuất ra ${r.path}`); } }, 'Xuất ra…'), h('button', { class: 'btn danger sm', 'data-act': 'restore-backup', onclick: async () => { if (await App.confirmBox('Khôi phục', `Khôi phục dữ liệu từ ${b.name}? Dữ liệu hiện tại được backup lại trước.`, 'Khôi phục', 'danger')) { const result = await call('backup.restore', { file: b.file });
             if (result) { App.toast(result.importsRestored ? 'Đã khôi phục dữ liệu và tệp nguồn' : 'Đã khôi phục cơ sở dữ liệu. Bản này chỉ chứa dữ liệu SQLite.'); App.reload(); } } } }, 'Khôi phục')) }], rows, empty: 'Chưa có backup' })));

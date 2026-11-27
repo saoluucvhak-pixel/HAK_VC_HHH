@@ -445,4 +445,74 @@ async function importIssuesWorkbook(rows, meta = {}, issueWarn = {}) {
   return done(wb);
 }
 
-module.exports = { importIssuesWorkbook, FONT, FMT, BOX, PRINT_HEAD, newWb, done, signParties, partyLines, reportWorkbook, printTable, signatureBlock, printSetup, priceSheetWorkbook, reconWorkbook, ticketsWorkbook, statementWorkbook, timelineWorkbook, addTable };
+/**
+ * GÓI HỒ SƠ QUYẾT TOÁN 1-CLICK (Payment Pack):
+ * Gộp đầy đủ Trang bìa quyết toán, Bảng kê thanh toán, Chi tiết xe, Phụ lục phiếu cân (đầy đủ giờ cân 1 & 2),
+ * và Đối chiếu khối lượng (nếu có). Tất cả trong 1 file Excel đa-sheet chuyên nghiệp.
+ */
+async function paymentPackWorkbook(doc) {
+  const { st, benA, benB } = doc;
+  const wb = newWb();
+
+  // Sheet 1: Trang bìa quyết toán & tóm tắt trình ký
+  const w0 = wb.addWorksheet('Bìa hồ sơ quyết toán');
+  let r0 = 2;
+  const mg0 = (text, opts = {}, align = 'center') => {
+    w0.mergeCells(r0, 1, r0, 8);
+    const c = w0.getCell(r0, 1);
+    c.value = text;
+    c.font = { ...FONT, ...opts };
+    c.alignment = { horizontal: align, vertical: 'middle', wrapText: true };
+    r0++;
+  };
+  mg0(benA.ten ? benA.ten.toUpperCase() : 'BÊN THUÊ VẬN CHUYỂN', { size: 12, bold: true });
+  mg0('CỘNG HÒA XÃ HỘI CHỦ NGHĨA VIỆT NAM', { bold: true });
+  mg0('Độc lập – Tự do – Hạnh phúc', { bold: true });
+  r0 += 2;
+  mg0('HỒ SƠ THANH TOÁN CHI PHÍ VẬN CHUYỂN', { size: 18, bold: true, color: { argb: 'FF1F4E79' } });
+  w0.getRow(r0 - 1).height = 32;
+  mg0(doc.period || '', { size: 12, italic: true });
+  r0 += 2;
+
+  mg0(`ĐƠN VỊ THỤ HƯỞNG (BÊN B): ${benB.ten.toUpperCase()} (${benB.ma})`, { size: 13, bold: true }, 'left');
+  mg0(`Mã số thuế: ${benB.ma_so_thue || '—'} · Địa chỉ: ${benB.dia_chi || '—'}`, { size: 10, italic: true }, 'left');
+  if (benB.so_tai_khoan) mg0(`Tài khoản ngân hàng: ${benB.so_tai_khoan} ${benB.ngan_hang ? 'tại ' + benB.ngan_hang : ''}`, { size: 10 }, 'left');
+  r0++;
+
+  // Khung tóm tắt số liệu
+  w0.mergeCells(r0, 1, r0, 4); w0.getCell(r0, 1).value = 'Tổng số chuyến xe:'; w0.getCell(r0, 1).font = { ...FONT, bold: true };
+  w0.mergeCells(r0, 5, r0, 8); w0.getCell(r0, 5).value = `${st.so_chuyen} chuyến (${st.so_xe} xe)`; w0.getCell(r0, 5).font = { ...FONT, bold: true }; w0.getCell(r0, 5).alignment = { horizontal: 'right' };
+  r0++;
+  w0.mergeCells(r0, 1, r0, 4); w0.getCell(r0, 1).value = 'Tổng khối lượng vận chuyển:'; w0.getCell(r0, 1).font = { ...FONT, bold: true };
+  w0.mergeCells(r0, 5, r0, 8); w0.getCell(r0, 5).value = `${(st.tong_tan || 0).toLocaleString('vi-VN', { minimumFractionDigits: 3, maximumFractionDigits: 3 })} tấn (${(st.tong_kg || 0).toLocaleString('vi-VN')} kg)`; w0.getCell(r0, 5).font = { ...FONT, bold: true }; w0.getCell(r0, 5).alignment = { horizontal: 'right' };
+  r0++;
+  w0.mergeCells(r0, 1, r0, 4); w0.getCell(r0, 1).value = 'Cước vận chuyển trước thuế:'; w0.getCell(r0, 1).font = { ...FONT, bold: true };
+  w0.mergeCells(r0, 5, r0, 8); w0.getCell(r0, 5).value = `${(st.tien_truoc_vat || 0).toLocaleString('vi-VN')} đ`; w0.getCell(r0, 5).font = { ...FONT, bold: true }; w0.getCell(r0, 5).alignment = { horizontal: 'right' };
+  r0++;
+  w0.mergeCells(r0, 1, r0, 4); w0.getCell(r0, 1).value = 'Thuế GTGT (VAT):'; w0.getCell(r0, 1).font = { ...FONT, bold: true };
+  w0.mergeCells(r0, 5, r0, 8); w0.getCell(r0, 5).value = `${(st.tien_vat || 0).toLocaleString('vi-VN')} đ`; w0.getCell(r0, 5).font = { ...FONT, bold: true }; w0.getCell(r0, 5).alignment = { horizontal: 'right' };
+  r0++;
+  w0.mergeCells(r0, 1, r0, 4); w0.getCell(r0, 1).value = 'TỔNG CỘNG THANH TOÁN:'; w0.getCell(r0, 1).font = { ...FONT, size: 13, bold: true, color: { argb: 'FFB4453B' } };
+  w0.mergeCells(r0, 5, r0, 8); w0.getCell(r0, 5).value = `${(st.tong_tien || 0).toLocaleString('vi-VN')} đ`; w0.getCell(r0, 5).font = { ...FONT, size: 14, bold: true, color: { argb: 'FFB4453B' } }; w0.getCell(r0, 5).alignment = { horizontal: 'right' };
+  r0++;
+  mg0(`(Bằng chữ: ${doc.bangChu})`, { size: 11, italic: true, bold: true });
+  r0 += 3;
+
+  signatureBlock(w0, r0, { title: 'NGƯỜI LẬP HỒ SƠ', name: benA.nguoi_lap || '' }, { title: 'ĐẠI DIỆN ĐƠN VỊ VẬN CHUYỂN', name: benB.dai_dien || '' }, { span: [[1, 4], [5, 8]] });
+  printSetup(w0, { footer: `Bìa quyết toán — ${benB.ma} — ${doc.period}` });
+
+  // Tái sử dụng buffer từ statementWorkbook
+  const stmtBuf = await statementWorkbook(doc);
+  const fullDocWb = new ExcelJS.Workbook();
+  await fullDocWb.xlsx.load(stmtBuf);
+
+  // Copy các worksheets từ fullDocWb sang wb
+  fullDocWb.eachSheet((ws) => {
+    const targetWs = wb.addWorksheet(ws.name);
+    targetWs.model = ws.model;
+  });
+
+  return done(wb);
+}
+
+module.exports = { importIssuesWorkbook, paymentPackWorkbook, FONT, FMT, BOX, PRINT_HEAD, newWb, done, signParties, partyLines, reportWorkbook, printTable, signatureBlock, printSetup, priceSheetWorkbook, reconWorkbook, ticketsWorkbook, statementWorkbook, timelineWorkbook, addTable };

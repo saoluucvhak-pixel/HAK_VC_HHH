@@ -37,7 +37,24 @@ class BackupService {
     const sha = hashFile(file);
     if (logFn) { try { logFn(file, size, sha); } catch (e) { /* DB chỉ đọc / bảng chưa có */ } }
     this.applyRetention(file, protect);
+
+    // Tự động sao chép sang thư mục thứ hai (Google Drive / NAS / Mạng nội bộ) nếu có cấu hình
+    this._mirrorToSecondary(file);
+
     return { file, size, sha256: sha };
+  }
+
+  _mirrorToSecondary(sourceFile) {
+    try {
+      const cfg = (this.settings && this.settings.get ? this.settings.get('backup') : null) || {};
+      const sec = cfg.secondaryDir ? path.resolve(String(cfg.secondaryDir).trim()) : null;
+      if (sec && fs.existsSync(sec) && fs.statSync(sec).isDirectory() && sec !== path.resolve(this.backupsDir)) {
+        const out = path.join(sec, path.basename(sourceFile));
+        fs.copyFileSync(sourceFile, out);
+      }
+    } catch {
+      // Không chặn luồng chính nếu ổ mạng/cloud tạm thời mất kết nối
+    }
   }
 
   backupNow(kind = 'MANUAL', note = null, { protect = [] } = {}) {

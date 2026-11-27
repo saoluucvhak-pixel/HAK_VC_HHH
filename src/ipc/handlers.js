@@ -9,6 +9,7 @@ const path = require('path');
 const { CATALOGS } = require('../models/catalogs');
 const { ALERT_DEF } = require('../services/AlertService');
 const { ValidationError } = require('../services/CatalogService');
+const { normalizePlate } = require('../utils/plate');
 const { joinInside } = require('../utils/safePath');
 const { fromDb } = require('../utils/dbMoney');
 const exporters = require('../excel/exporters');
@@ -101,6 +102,36 @@ function createHandlers(app, env = {}) {
       counts: { phieu: app.db.get(`SELECT COUNT(*) n FROM phieu_can WHERE trang_thai='ACTIVE'`).n, xe: app.db.get('SELECT COUNT(*) n FROM xe').n },
       alertsOpen: app.alerts.countOpen(), pendingReviews: app.imports.pendingReviews().length,
       duyetBat: duyetBat(app.settings), choDuyet: app.db.get(`SELECT COUNT(*) n FROM phieu_can WHERE trang_thai='ACTIVE' AND trang_thai_duyet='NHAP'`).n }),
+
+    // Tìm kiếm nhanh toàn diện (Universal Quick Search - Ctrl + K)
+    'app.quickSearch': ({ q }) => {
+      if (!q || !String(q).trim()) return { tickets: [], vehicles: [], dots: [] };
+      const raw = String(q).trim();
+      const norm = normalizePlate(raw);
+      const like = `%${raw}%`;
+
+      // 1. Tìm phiếu cân (theo số phiếu hoặc biển số)
+      const tickets = app.db.all(`SELECT id, so_phieu, bien_so, ngay_gio_can_1, kl_hang_kg, tong_tien, trang_thai_tinh_gia, trang_thai_duyet
+                                  FROM phieu_can
+                                  WHERE trang_thai='ACTIVE' AND (so_phieu LIKE ? OR bien_so LIKE ? OR (length(?) >= 3 AND bien_so_chuan LIKE ?))
+                                  ORDER BY id DESC LIMIT 5`, [like, like, norm, `%${norm}%`]);
+
+      // 2. Tìm xe (theo biển số)
+      const vehicles = app.db.all(`SELECT x.id, x.bien_so_hien_thi AS bien_so, d.ma don_vi, d.ten don_vi_ten
+                                   FROM xe x LEFT JOIN don_vi_van_chuyen d ON d.id = (
+                                     SELECT don_vi_van_chuyen_id FROM xe_don_vi_lich_su WHERE xe_id = x.id ORDER BY tu_ngay DESC, id DESC LIMIT 1
+                                   )
+                                   WHERE x.bien_so_hien_thi LIKE ? OR (length(?) >= 3 AND x.bien_so_chuan LIKE ?)
+                                   LIMIT 5`, [like, norm, `%${norm}%`]);
+
+      // 3. Tìm đợt vận chuyển (theo mã hoặc tên tàu)
+      const dots = app.db.all(`SELECT id, ma_dot, ten_tau, voyage, tu_ngay, den_ngay, trang_thai
+                               FROM dot_van_chuyen
+                               WHERE ma_dot LIKE ? OR ten_tau LIKE ?
+                               LIMIT 5`, [like, like]);
+
+      return { tickets, vehicles, dots };
+    },
     'settings.all': () => app.settings.all(),
     'settings.set': ({ key, value, xac_nhan }) => {
       // Bật duyệt phiếu (hoặc tắt "cho tự duyệt") khi đã bật phân quyền mà còn < 2 người có quyền duyệt → phiếu có thể kẹt ở Nháp: hỏi xác nhận
@@ -236,6 +267,7 @@ function createHandlers(app, env = {}) {
     'reports.byDate': (f) => app.reports.byDate(f || {}),
     'reports.byDot': (f) => app.reports.byDot(f || {}),
     'reports.timeline': ({ bien_so, tu_ngay, den_ngay }) => app.reports.timeline(bien_so, { tu_ngay, den_ngay }),
+    'reports.audit': (f) => app.reports.audit(f || {}),
     'reports.statement': (f) => app.reports.statement(f),
     'reports.statements': (f) => app.reports.statements(f || {}),
     'reports.dashboard': (f) => app.reports.dashboard(f || {}),
@@ -303,6 +335,7 @@ function createHandlers(app, env = {}) {
     // Bảng kê (Excel in/ký + PDF) và báo cáo tổng hợp
     'export.statement': async ({ filter, reconBatchId }) => { const d = documents.statementDoc(app, filter || {}, { reconBatchId }); return writeExport(await exporters.statementWorkbook(d), `${d.file}_${stamp()}.xlsx`); },
     'export.statementPdf': async ({ filter, reconBatchId }) => { const d = documents.statementDoc(app, filter || {}, { reconBatchId }); return writePdf(templates.statementHtml(d), `${d.file}_${stamp()}.pdf`); },
+    'export.paymentPack': async ({ filter, reconBatchId }) => { const d = documents.statementDoc(app, filter || {}, { reconBatchId }); return writeExport(await exporters.paymentPackWorkbook(d), `HoSoQuyetToan_${d.st.don_vi.ma}_${stamp()}.xlsx`); },
     'export.report': async ({ kind, filter }) => { const d = documents.reportDoc(app, kind, filter || {}); return writeExport(await exporters.reportWorkbook(d), `${d.file}_${stamp()}.xlsx`); },
     'export.reportPdf': async ({ kind, filter }) => { const d = documents.reportDoc(app, kind, filter || {}); return writePdf(templates.reportHtml(d), `${d.file}_${stamp()}.pdf`, { landscape: true }); },
     'export.timeline': async ({ bien_so, tu_ngay, den_ngay }) => writeExport(await exporters.timelineWorkbook(bien_so, app.reports.timeline(bien_so, { tu_ngay, den_ngay }), { tu_ngay, den_ngay }), `ChiTietXe_${bien_so}_${stamp()}.xlsx`),

@@ -71,6 +71,7 @@ const VALIDATORS = {
     if (v.keepMonthly !== undefined) need(intIn(v.keepMonthly, 1, 240), 'Số bản sao lưu hằng tháng giữ lại phải từ 1 đến 240');
     if (v.auto !== undefined) need(['OFF', 'INTERVAL', 'DAILY'].includes(v.auto), 'Chế độ sao lưu tự động không hợp lệ');
     if (v.remindExportDays !== undefined) need(intIn(v.remindExportDays, 1, 365), 'Số ngày nhắc xuất sao lưu ra ổ khác phải từ 1 đến 365');
+    if (v.secondaryDir !== undefined) need(v.secondaryDir === null || (typeof v.secondaryDir === 'string' && v.secondaryDir.length <= 500), 'Thư mục sao lưu phụ (Cloud/Network) không hợp lệ');
   },
   /** Mốc lần xuất bản sao lưu ra ổ khác gần nhất — do máy chủ ghi khi backup.export thành công. */
   backup_export_last(v) { need(isObj(v) && typeof v.at === 'string' && !Number.isNaN(Date.parse(v.at)), 'Mốc xuất sao lưu không hợp lệ'); },

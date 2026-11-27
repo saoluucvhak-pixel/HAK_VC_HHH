@@ -1,7 +1,7 @@
 # EXCEL_VS_APP_VALIDATION
 
 File Excel: `sample-v47.xlsx`  
-Thời điểm chạy: 2026-11-26T22:44:14.074Z  
+Thời điểm chạy: 2026-11-27T02:48:17.977Z  
 Chế độ làm tròn: **Excel-compat** (cộng KG theo nhóm rồi × đơn giá, không làm tròn thành tiền/VAT — đúng như công thức Excel).
 
 ## 1. Module điều chỉnh giá cước theo giá dầu (sheet "Giá dầu + Giá VC")

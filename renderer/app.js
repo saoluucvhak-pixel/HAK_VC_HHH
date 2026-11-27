@@ -301,6 +301,107 @@ const App = (() => {
     .observe(document.documentElement, { childList: true, subtree: true });
   async function refreshAuth() { try { auth = await api('auth.status'); } catch (e) { /* bỏ qua */ } return auth; }
   let loginOpen = false;
+  let quickSearchOpen = false;
+  function showQuickSearch() {
+    if (quickSearchOpen) return;
+    quickSearchOpen = true;
+    const inp = h('input', {
+      type: 'text',
+      class: 'search',
+      placeholder: 'Tìm phiếu cân, biển số xe, mã đợt / tàu (Ctrl+K)...',
+      style: { width: '100%', fontSize: '16px', padding: '12px 14px', borderRadius: '8px', border: '2px solid var(--accent, #1F4E79)', outline: 'none' }
+    });
+    const resultsBox = h('div', { class: 'quick-results', style: { maxHeight: '380px', overflowY: 'auto', marginTop: '12px' } });
+
+    const close = () => { ov.remove(); quickSearchOpen = false; };
+    const ov = h('div', { class: 'overlay', onclick: (e) => { if (e.target === ov) close(); } },
+      h('div', { class: 'modal', style: { maxWidth: '640px', width: '90%', padding: '16px' } },
+        h('div', { class: 'row', style: { marginBottom: '8px' } },
+          h('h3', { class: 'grow', style: { margin: 0, fontSize: '16px' } }, '🔍 Tra cứu nhanh toàn diện (Ctrl + K)'),
+          h('button', { class: 'btn ghost sm', onclick: close }, '✕ Esc')
+        ),
+        inp,
+        resultsBox
+      )
+    );
+
+    let debounceTimer = null;
+    const doSearch = async () => {
+      const q = inp.value.trim();
+      clear(resultsBox);
+      if (!q) {
+        resultsBox.append(h('p', { class: 'muted', style: { textAlign: 'center', padding: '20px 0' } }, 'Nhập số phiếu (vd: 1688), biển số (vd: 92H-00903), hoặc mã đợt'));
+        return;
+      }
+      try {
+        const res = await api('app.quickSearch', { q });
+        let hasData = false;
+
+        if (res.tickets && res.tickets.length) {
+          hasData = true;
+          resultsBox.append(h('div', { class: 'sub', style: { fontWeight: 'bold', marginTop: '8px' } }, '🧾 Phiếu cân'));
+          for (const t of res.tickets) {
+            resultsBox.append(h('div', {
+              class: 'row hoverable',
+              style: { padding: '8px', borderBottom: '1px solid var(--border, #eee)', cursor: 'pointer' },
+              onclick: () => { close(); go('tickets', { search: t.so_phieu }); }
+            },
+              h('div', { class: 'grow' },
+                h('b', {}, `#${t.so_phieu}`), ` · Xe: ${t.bien_so} · Ngày: ${(t.ngay_gio_can_1 || '').slice(0, 16)}`,
+                h('div', { class: 'muted sm' }, `KL: ${(t.kl_hang_kg || 0).toLocaleString('vi-VN')} kg · Cước: ${(t.tong_tien || 0).toLocaleString('vi-VN')} đ`)
+              ),
+              h('span', { class: 'tag ' + (t.trang_thai_tinh_gia === 'OK' ? 'green' : 'amber') }, t.trang_thai_tinh_gia)
+            ));
+          }
+        }
+
+        if (res.vehicles && res.vehicles.length) {
+          hasData = true;
+          resultsBox.append(h('div', { class: 'sub', style: { fontWeight: 'bold', marginTop: '12px' } }, '🚛 Xe vận chuyển'));
+          for (const v of res.vehicles) {
+            resultsBox.append(h('div', {
+              class: 'row hoverable',
+              style: { padding: '8px', borderBottom: '1px solid var(--border, #eee)', cursor: 'pointer' },
+              onclick: () => { close(); go('vehicle', { bien_so: v.bien_so }); }
+            },
+              h('div', { class: 'grow' }, h('b', { style: { color: 'var(--green, #2e7d32)' } }, v.bien_so)),
+              h('span', { class: 'tag' }, v.don_vi ? `${v.don_vi} - ${v.don_vi_ten || ''}` : 'Chưa gán nhà xe')
+            ));
+          }
+        }
+
+        if (res.dots && res.dots.length) {
+          hasData = true;
+          resultsBox.append(h('div', { class: 'sub', style: { fontWeight: 'bold', marginTop: '12px' } }, '🚢 Đợt / Tàu'));
+          for (const d of res.dots) {
+            resultsBox.append(h('div', {
+              class: 'row hoverable',
+              style: { padding: '8px', borderBottom: '1px solid var(--border, #eee)', cursor: 'pointer' },
+              onclick: () => { close(); go('dashboard', { dot_id: d.id }); }
+            },
+              h('div', { class: 'grow' }, h('b', {}, d.ma_dot), ` · Tàu: ${d.ten_tau || '—'} (Voyage: ${d.voyage || '—'})`),
+              h('span', { class: 'tag ' + (d.trang_thai === 'MO' ? 'green' : 'gray') }, d.trang_thai === 'MO' ? 'Đang mở' : 'Đã khóa')
+            ));
+          }
+        }
+
+        if (!hasData) {
+          resultsBox.append(h('p', { class: 'muted', style: { textAlign: 'center', padding: '20px 0' } }, `Không tìm thấy kết quả nào cho "${q}"`));
+        }
+      } catch (err) {
+        resultsBox.append(h('p', { class: 'tag red' }, err.message));
+      }
+    };
+
+    inp.addEventListener('input', () => {
+      clearTimeout(debounceTimer);
+      debounceTimer = setTimeout(doSearch, 250);
+    });
+
+    document.body.append(ov);
+    inp.focus();
+    doSearch();
+  }
   function showLogin(msg) {
     if (loginOpen) return; loginOpen = true;
     const user = h('input', { name: 'ten', autocomplete: 'username', placeholder: 'Tên đăng nhập' }), pw = h('input', { name: 'mk', type: 'password', autocomplete: 'current-password', placeholder: 'Mật khẩu' });
@@ -400,6 +501,12 @@ const App = (() => {
         top();
         return;
       }
+    }
+    // Ctrl + K hoặc F3: Tìm kiếm nhanh toàn diện
+    if (((e.ctrlKey || e.metaKey) && (e.key === 'k' || e.key === 'K')) || e.key === 'F3') {
+      e.preventDefault();
+      showQuickSearch();
+      return;
     }
     if ((e.ctrlKey || e.metaKey) && (e.key === 'f' || e.key === 'F')) {
       const q = document.querySelector('[data-sf-q] input, input.search, .sf input[type="text"]');

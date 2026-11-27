@@ -1,5 +1,11 @@
 # CHANGELOG
 
+## 0.8.13 — Gói quyết toán 1-Click, Trợ lý rủi ro & Tìm kiếm thông minh (schema 9)
+- **Xuất Gói hồ sơ quyết toán 1-Click (`export.paymentPack`)**: Tự động đóng gói toàn bộ hồ sơ trong 1 file Excel đa-sheet gồm Bìa quyết toán & tóm tắt trình ký, Bảng kê thanh toán chính thức, Chi tiết theo xe, Đối chiếu khối lượng và Phụ lục phiếu cân (đầy đủ giờ cân 1 & 2).
+- **Trợ lý kiểm soát rủi ro & bất thường (Smart Accounting Auditor)**: Tích hợp nút `🛡 Kiểm soát rủi ro` tại Dashboard và hàm `reports.audit` quét tự động: phát hiện xe chạy siêu tốc (`SHORT_GAP`), thời gian cân nghịch đảo/bất thường, tải trọng đột biến (`OVERLOAD_SPIKE`) và lệch xác xe rỗng (`TARA_DRIFT` > 800kg).
+- **Sao lưu tự động sang Ổ mạng LAN / Cloud Drive**: Bổ sung cấu hình `secondaryDir` trong thiết lập sao lưu, tự động nhân bản file backup an toàn sang Google Drive, OneDrive hoặc thư mục mạng chia sẻ nội bộ.
+- **Tìm kiếm nhanh toàn diện (Universal Quick Search - Ctrl + K / F3)**: Hộp thoại tra cứu tức thời hỗ trợ tra cứu chéo số phiếu, biển số xe và mã đợt / tàu vận chuyển kèm phím tắt toàn cục.
+
 ## 0.8.12 — Tinh gọn quy trình nhập liệu & Xử lý thông minh (schema 9)
 - **Kéo - Thả file trực tiếp (Drag & Drop) & 1-Click Smart Import**: Vùng thả file trực quan, hỗ trợ kéo thả tệp Excel/CSV từ máy tính; tự động kiểm tra cấu trúc và chuyển thẳng tới Xem trước (Bước 3) khi file hợp lệ.
 - **Phân bổ / gán nhà xe nhanh tại chỗ (Quick Assign)**: Gán đơn vị vận chuyển cho xe lạ ngay tại bảng Xem trước thông qua popup tức thời, tự động lưu lịch sử xe và tính toán lại giá cước mà không cần rời màn hình Import.

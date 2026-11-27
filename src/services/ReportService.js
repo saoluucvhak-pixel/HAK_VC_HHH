@@ -4,7 +4,7 @@
  * Tiền theo phiếu/xe là giá trị chưa làm tròn (tham khảo); SỐ THANH TOÁN chính thức = bảng kê (StatementService).
  */
 const { fromDb, toDb } = require('../utils/dbMoney');
-const { buildTimeline } = require('./TimeAnomalyService');
+const { buildTimeline, auditAnomalies } = require('./TimeAnomalyService');
 const { buildStatement } = require('./StatementService');
 const { ValidationError } = require('./CatalogService');
 const { normalizePlate } = require('../utils/plate');
@@ -250,6 +250,19 @@ class ReportService {
       giamDinh: oneId(f.dot_id) !== null ? this.giamDinh(oneId(f.dot_id), k.tong_kg / 1000) : null,
       topTrips: top('so_chuyen'), topWeight: top('tong_kg'),
     };
+  }
+
+  /**
+   * Trợ lý kiểm soát rủi ro: quét toàn bộ phiếu trong phạm vi bộ lọc để phát hiện các dấu hiệu bất thường.
+   */
+  audit(filter = {}) {
+    const { sql, params } = this.approvedWhere(filter);
+    const rows = this.db.all(`SELECT p.id, p.so_phieu, p.ngay_can, p.ngay_gio_can_1, p.ngay_gio_can_2, p.bien_so, p.bien_so_chuan,
+        p.noi_xuat, p.noi_xuat_goc, p.noi_den, p.can_lan_1, p.can_lan_2, p.kl_hang_kg, p.kl_hang_tan, p.don_gia,
+        p.tien_truoc_vat, p.tien_vat, p.tong_tien, d.ma don_vi
+        FROM phieu_can p LEFT JOIN don_vi_van_chuyen d ON d.id=p.don_vi_van_chuyen_id
+        WHERE ${sql}`, params).map(conv);
+    return auditAnomalies(rows, this.settings.get('time_anomaly') || {});
   }
 }
 
